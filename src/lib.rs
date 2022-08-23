@@ -11,6 +11,7 @@ use recursion::{
     map_layer::{MapLayer, MapLayerRef},
     stack_machine_lazy::{unfold_and_fold, unfold_and_fold_short_circuit, ShortCircuit},
 };
+use regex::{Regex, RegexSet, RegexSetBuilder};
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
@@ -75,7 +76,7 @@ pub async fn eval_3<'a, File: FileLike>(f: &File, e: FileSetRef<'a>) -> std::io:
     // TODO: mutable - accepts set of regexes + listener, then runs async
     struct RegexWatcher<'a>(oneshot::Sender<std::io::Result<bool>>, AsyncRegex<'a>);
     // TODO: thing that grabs all the regexes and runs once so I don't need to etc
-    let mut regex_set: Vec<RegexWatcher<'a>> = vec![];
+    let mut regexes: Vec<RegexWatcher<'a>> = vec![];
 
     // build but do not run future - we need to run our regex set against the file first
     let f = unfold_and_fold::<_, BoxFuture<'a, std::io::Result<bool>>, _, _>(
@@ -86,7 +87,7 @@ pub async fn eval_3<'a, File: FileLike>(f: &File, e: FileSetRef<'a>) -> std::io:
             Intermediate::KnownResult(b) => async move { Ok(b) }.boxed(),
             Intermediate::AsyncRegex(r) => {
                 let (send, receive) = oneshot::channel();
-                regex_set.push(RegexWatcher(send, r));
+                regexes.push(RegexWatcher(send, r));
                 async move {
                     match receive.await {
                         Ok(msg) => msg,
@@ -97,9 +98,19 @@ pub async fn eval_3<'a, File: FileLike>(f: &File, e: FileSetRef<'a>) -> std::io:
             }
         },
     );
-    
-    
-    
+
+    // TODO: handle? precompile? can't really precompile b/c the set of regexes changes based on the run
+    let regex_set = RegexSet::new(regexes.iter().map(|x| (x.1).regex)).unwrap();
+    let contents: String = "".to_string(); // run streaming or w/e
+    let matches: Vec<_> = regex_set.matches(&contents).into_iter().collect();
+    for (idx, watcher) in regexes.into_iter().enumerate() {
+        if matches.contains(&idx) {
+            watcher.0.send(Ok(true)).unwrap();
+        } else {
+            watcher.0.send(Ok(false)).unwrap();
+        }
+    }
+
     f.await
 }
 
@@ -171,13 +182,12 @@ async fn eval_async_predicate<'a, File: FileLike>(
     todo!()
 }
 
-fn eval_predicate<File: FileLike>(f: &File, p: MetadataPredicateRef) -> bool {
+fn eval_predicate<File: FileLike>(f: &File, p: MetadataPredicate) -> bool {
     match p {
-        MetadataPredicateRef::Binary => todo!(),
-        MetadataPredicateRef::Exec => todo!(),
-        MetadataPredicateRef::Grep { regex } => todo!(),
-        MetadataPredicateRef::Size { allowed: size } => todo!(),
-        MetadataPredicateRef::Symlink => todo!(),
+        MetadataPredicate::Binary => todo!(),
+        MetadataPredicate::Exec => todo!(),
+        MetadataPredicate::Size { allowed: size } => todo!(),
+        MetadataPredicate::Symlink => todo!(),
     }
 }
 
@@ -194,7 +204,7 @@ pub enum FilesetExpr<Recurse> {
 
 pub enum FilesetExprRef<'a, Recurse> {
     Operator(Operator<Recurse>),
-    Predicate(MetadataPredicateRef<'a>),
+    Predicate(MetadataPredicate),
     AsyncPredicate(AsyncRegex<'a>),
 }
 
@@ -273,15 +283,6 @@ pub enum Operator<Recurse> {
 pub enum MetadataPredicate {
     Binary,
     Exec,
-    Grep { regex: String }, // TODO: parsed regex type
-    Size { allowed: Range<usize> },
-    Symlink,
-}
-
-pub enum MetadataPredicateRef<'a> {
-    Binary,
-    Exec,
-    Grep { regex: &'a str }, // TODO: parsed regex type
     Size { allowed: Range<usize> },
     Symlink,
 }
