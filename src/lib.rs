@@ -1,78 +1,28 @@
 #![feature(box_patterns)]
 
-use std::{
-    convert::Infallible,
-    future::{self, Future},
-    marker::PhantomData,
-    ops::Range,
-};
+use std::ops::Range;
 
+use futures::{
+    channel::oneshot::{self, Canceled},
+    future::BoxFuture,
+    FutureExt,
+};
 use recursion::{
     map_layer::{MapLayer, MapLayerRef},
-    stack_machine_lazy::{
-        unfold_and_fold, unfold_and_fold_annotate_result, unfold_and_fold_short_circuit,
-        ShortCircuit,
-    },
+    stack_machine_lazy::{unfold_and_fold, unfold_and_fold_short_circuit, ShortCircuit},
 };
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
-// idea: can I just grab the fast traversal engine out of fd or similar? would be nice af
-
-// idea: do annotate pass and annotate with pure res off of metadata, then build async tree
-// pub fn eval_2<'a, File: FileLike>(
-//     f: &File,
-//     e: FileSetRef<'a>,
-// ) -> Box<dyn Future<Output = std::io::Result<bool>>> {
-//     unfold_and_fold_annotate_result::<
-//         Infallible,                                      // pure eval pass is infalible
-//         FileSetRef<'a>,                                  // input expr that is folded over
-//         Box<dyn Future<Output = std::io::Result<bool>>>, // async eval tree (for content search)
-//         Option<bool>,                                    // annotation - in-memory-only eval pass
-//         FilesetExprRef<'a, FileSetRef<'a>>,
-//         FilesetExprRef<'a, Box<dyn Future<Output = std::io::Result<bool>>>>,
-//         FilesetExprRef<'a, Option<bool>>,
-//     >(
-//         e,
-//         |x| Ok(x.map_layer(|x| x)),
-//         |annotated| {
-//             use crate::Operator::*;
-//             use FilesetExprRef::*;
-//             Ok(match annotated {
-//                 Operator(o) => match o {
-//                     Not(Some(x)) => Some(!x),
-//                     And(Some(false), _) | And(_, Some(false)) => Some(false),
-//                     Or(Some(true), _) | Or(_, Some(true)) => Some(true),
-//                     _ => None,
-//                 },
-//                 FilesetExprRef::Predicate(_) => todo!(), // eval where possible
-//             })
-//         },
-//         |annotation, x| match annotation {
-//             Some(res) => Ok(Box::new(future::ready(Ok(res)))), // anything already finished just gets an 'ok' future
-//             None => {
-//                 // NOTE: can simplify my life drastically with one unreachable!, specifically _here we only eval async predicates_
-//                 // if we're in this branch with a pure metadata query predicate it's a KNOWN ERROR STATE
-//                 // ALSO: this is all re: the same file, can just fuze the regexes (galaxy brain vibes holy shit)
-//                 todo!()
-//             }
-//         },
-//     )
-//     .unwrap()
-// }
-
 // two passes, better types!
-pub fn eval_3<'a, File: FileLike>(
-    f: &File,
-    e: FileSetRef<'a>,
-) -> Box<dyn Future<Output = std::io::Result<bool>>> {
+pub async fn eval_3<'a, File: FileLike>(f: &File, e: FileSetRef<'a>) -> std::io::Result<bool> {
     // intermediate state
     enum Intermediate<'a, Recurse> {
         Operator(Operator<Recurse>),
         KnownResult(bool), // pure code leading to result via previous stage of processing
-        AsyncPredicate(AsyncPredicate<'a>), // async predicate, not yet run
+        AsyncRegex(AsyncRegex<'a>), // async predicate, not yet run
     }
 
     // from expr to expr
@@ -83,7 +33,7 @@ pub fn eval_3<'a, File: FileLike>(
             match self {
                 Intermediate::Operator(o) => Intermediate::Operator(o.map_layer(f)),
                 Intermediate::KnownResult(k) => Intermediate::KnownResult(k),
-                Intermediate::AsyncPredicate(a) => Intermediate::AsyncPredicate(a),
+                Intermediate::AsyncRegex(a) => Intermediate::AsyncRegex(a),
             }
         }
     }
@@ -116,23 +66,37 @@ pub fn eval_3<'a, File: FileLike>(
                     }
                     x => Intermediate::Operator(x),
                 },
-                FilesetExprRef::Predicate(p) => {
-                    Intermediate::KnownResult(eval_predicate(f, p))
-                }
-                FilesetExprRef::AsyncPredicate(x) => Intermediate::AsyncPredicate(x),
+                FilesetExprRef::Predicate(p) => Intermediate::KnownResult(eval_predicate(f, p)),
+                FilesetExprRef::AsyncPredicate(x) => Intermediate::AsyncRegex(x),
             }))
         },
     );
 
-    unfold_and_fold::<_, Box<dyn Future<Output = std::io::Result<bool>>>, _, _>(
+    // TODO: mutable - accepts set of regexes + listener, then runs async
+    struct RegexWatcher<'a>(oneshot::Sender<std::io::Result<bool>>, AsyncRegex<'a>);
+    // TODO: thing that grabs all the regexes and runs once so I don't need to etc
+    let mut regex_set: Vec<RegexWatcher<'a>> = vec![];
+
+    unfold_and_fold::<_, BoxFuture<'a, std::io::Result<bool>>, _, _>(
         x,
         |fseri| *fseri.0,
         |collapse| match collapse {
-            Intermediate::Operator(o) => eval_operator_async(o),
-            Intermediate::KnownResult(b) => Box::new(async move { Ok(b) }),
-            Intermediate::AsyncPredicate(p) => eval_async_predicate(f, p),
+            Intermediate::Operator(o) => eval_operator_async(o).boxed(),
+            Intermediate::KnownResult(b) => async move { Ok(b) }.boxed(),
+            Intermediate::AsyncRegex(r) => {
+                let (send, receive) = oneshot::channel();
+                regex_set.push(RegexWatcher(send, r));
+                async move {
+                    match receive.await {
+                        Ok(msg) => msg,
+                        Err(oneshot::Canceled) => todo!(),
+                    }
+                }
+                .boxed()
+            }
         },
     )
+    .await
 }
 
 // pause - should I be running this with result of a set of files or of a bool for a single file
@@ -178,12 +142,15 @@ fn eval_layer<File: FileLike>(f: &File, e: FilesetExprRef<bool>) -> bool {
     }
 }
 
-fn eval_operator_async(o: Operator<Box<dyn Future<Output = std::io::Result<bool>>>>) -> Box<dyn Future<Output = std::io::Result<bool>>> {
-    Box::new(async { todo!()} )
+async fn eval_operator_async<'a>(
+    o: Operator<BoxFuture<'a, std::io::Result<bool>>>,
+) -> std::io::Result<bool> {
+    match o {
+        Operator::Not(a) => Ok(!a.await?),
+        Operator::And(a, b) => todo!(),
+        Operator::Or(a, b) => todo!(),
+    }
 }
-
-
-
 
 fn eval_operator(o: Operator<bool>) -> bool {
     match o {
@@ -193,8 +160,10 @@ fn eval_operator(o: Operator<bool>) -> bool {
     }
 }
 
-
-fn eval_async_predicate<File: FileLike>(f: &File, p: AsyncPredicate) -> Box<dyn Future<Output = std::io::Result<bool>>> {
+async fn eval_async_predicate<'a, File: FileLike>(
+    f: &File,
+    p: AsyncRegex<'a>,
+) -> std::io::Result<bool> {
     todo!()
 }
 
@@ -222,13 +191,11 @@ pub enum FilesetExpr<Recurse> {
 pub enum FilesetExprRef<'a, Recurse> {
     Operator(Operator<Recurse>),
     Predicate(MetadataPredicateRef<'a>),
-    AsyncPredicate(AsyncPredicate<'a>),
+    AsyncPredicate(AsyncRegex<'a>),
 }
 
-
-
 // TODO: regex and etc
-pub struct AsyncPredicate<'a> {
+pub struct AsyncRegex<'a> {
     regex: &'a str,
 }
 
