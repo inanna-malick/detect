@@ -77,7 +77,8 @@ pub async fn eval_3<'a, File: FileLike>(f: &File, e: FileSetRef<'a>) -> std::io:
     // TODO: thing that grabs all the regexes and runs once so I don't need to etc
     let mut regex_set: Vec<RegexWatcher<'a>> = vec![];
 
-    unfold_and_fold::<_, BoxFuture<'a, std::io::Result<bool>>, _, _>(
+    // build but do not run future - we need to run our regex set against the file first
+    let f = unfold_and_fold::<_, BoxFuture<'a, std::io::Result<bool>>, _, _>(
         x,
         |fseri| *fseri.0,
         |collapse| match collapse {
@@ -95,8 +96,11 @@ pub async fn eval_3<'a, File: FileLike>(f: &File, e: FileSetRef<'a>) -> std::io:
                 .boxed()
             }
         },
-    )
-    .await
+    );
+    
+    
+    
+    f.await
 }
 
 // pause - should I be running this with result of a set of files or of a bool for a single file
