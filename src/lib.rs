@@ -3,6 +3,7 @@
 mod expr;
 mod file;
 mod operator;
+mod parser;
 
 use std::io;
 use expr::MetadataPredicate;
