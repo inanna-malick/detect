@@ -1,7 +1,6 @@
+use futures::future::BoxFuture;
+use recursion::map_layer::MapLayer;
 use std::io;
-use futures::{future::BoxFuture};
-use recursion::{map_layer::MapLayer};
-
 
 #[derive(Debug)]
 pub enum Operator<Recurse> {
@@ -22,7 +21,6 @@ impl<A, B> MapLayer<B> for Operator<A> {
         }
     }
 }
-
 
 impl<'a> Operator<BoxFuture<'a, io::Result<bool>>> {
     pub(crate) async fn eval_async(self) -> io::Result<bool> {

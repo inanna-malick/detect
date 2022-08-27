@@ -5,14 +5,17 @@ mod file;
 mod operator;
 mod parser;
 
-use std::io;
 use expr::MetadataPredicate;
 use file::{FileLike, FileType};
 use futures::{channel::oneshot, future::BoxFuture, FutureExt};
 use recursion::{map_layer::MapLayer, stack_machine_lazy::unfold_and_fold};
 use regex::RegexSet;
+use std::io;
 
-use crate::{operator::Operator, expr::{ExprTree, ExprRef, RegexPredicate}};
+use crate::{
+    expr::{ExprRef, ExprTree, RegexPredicate},
+    operator::Operator,
+};
 
 // runs a two-pass eval process, first attempting to find a pure answer and then
 // running the async portion of the expr language against the file's contents (expensive, best avoided)
@@ -21,44 +24,40 @@ pub async fn eval<'a, File: FileLike>(f: &'a File, e: &'a ExprTree) -> io::Resul
 
     // First pass: evaluate as much of the expression tree as we can without running async grep operations,
     // short circuiting on AND and OR and pruning async grep operations in short-circuited subtrees
-    let intermediate: Fix<'a> = unfold_and_fold::<
-        &'a ExprTree,
-        Fix<'a>,
-        ExprRef<'a, &'a ExprTree>,
-        ExprRef<'a, Fix<'a>>,
-    >(
-        e,
-        |x| x.fs_ref.as_ref_expr(),
-        |layer| {
-            Fix(Box::new(match layer {
-                ExprRef::Operator(x) => match x {
-                    // short circuit
-                    Operator::And(Fix(box Intermediate::KnownResult(false)), _)
-                    | Operator::And(_, Fix(box Intermediate::KnownResult(false))) => {
-                        Intermediate::KnownResult(false)
-                    }
-                    Operator::Or(Fix(box Intermediate::KnownResult(true)), _)
-                    | Operator::Or(_, Fix(box Intermediate::KnownResult(true))) => {
-                        Intermediate::KnownResult(true)
-                    }
-                    x => match x.known() {
-                        None => Intermediate::Operator(x),
-                        // if all sub-exprs have known results, so does this operator expr
-                        Some(o) => Intermediate::KnownResult(o.eval()),
+    let intermediate: Fix<'a> =
+        unfold_and_fold::<&'a ExprTree, Fix<'a>, ExprRef<'a, &'a ExprTree>, ExprRef<'a, Fix<'a>>>(
+            e,
+            |x| x.fs_ref.as_ref_expr(),
+            |layer| {
+                Fix(Box::new(match layer {
+                    ExprRef::Operator(x) => match x {
+                        // short circuit
+                        Operator::And(Fix(box Intermediate::KnownResult(false)), _)
+                        | Operator::And(_, Fix(box Intermediate::KnownResult(false))) => {
+                            Intermediate::KnownResult(false)
+                        }
+                        Operator::Or(Fix(box Intermediate::KnownResult(true)), _)
+                        | Operator::Or(_, Fix(box Intermediate::KnownResult(true))) => {
+                            Intermediate::KnownResult(true)
+                        }
+                        x => match x.known() {
+                            None => Intermediate::Operator(x),
+                            // if all sub-exprs have known results, so does this operator expr
+                            Some(o) => Intermediate::KnownResult(o.eval()),
+                        },
                     },
-                },
-                ExprRef::Predicate(p) => Intermediate::KnownResult(eval_predicate(f, p)),
-                ExprRef::RegexPredicate(x) => {
-                    if f.filetype() == FileType::Text {
-                        Intermediate::RegexPredicate(x)
-                    } else {
-                        // not a text file, no possiblity of match
-                        Intermediate::KnownResult(false)
+                    ExprRef::Predicate(p) => Intermediate::KnownResult(eval_predicate(f, p)),
+                    ExprRef::RegexPredicate(x) => {
+                        if f.filetype() == FileType::Text {
+                            Intermediate::RegexPredicate(x)
+                        } else {
+                            // not a text file, no possiblity of match
+                            Intermediate::KnownResult(false)
+                        }
                     }
-                }
-            }))
-        },
-    );
+                }))
+            },
+        );
 
     // short circuit if we have a known result at the root node
     if let Fix(box Intermediate::KnownResult(x)) = intermediate {
@@ -107,8 +106,11 @@ pub async fn eval<'a, File: FileLike>(f: &'a File, e: &'a ExprTree) -> io::Resul
         let matching_idxs = regex_set.matches(&contents);
         // let each watcher know if it has a match or not
         for (idx, watcher) in regexes.into_iter().enumerate() {
-            let is_match = matching_idxs.iter().any( |i| i == idx);
-            watcher.sender.send(Ok(is_match)).expect("just assume this always succeeds for now");
+            let is_match = matching_idxs.iter().any(|i| i == idx);
+            watcher
+                .sender
+                .send(Ok(is_match))
+                .expect("just assume this always succeeds for now");
         }
     }
 

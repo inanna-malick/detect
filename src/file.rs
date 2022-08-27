@@ -1,5 +1,5 @@
+use futures::future::BoxFuture;
 use std::io;
-use futures::{future::BoxFuture};
 
 pub trait FileLike {
     fn size(&self) -> usize;

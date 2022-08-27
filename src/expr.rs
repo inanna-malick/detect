@@ -1,8 +1,7 @@
+use recursion::map_layer::MapLayer;
 use std::ops::Range;
-use recursion::{map_layer::MapLayer};
 
-use crate::{operator::Operator};
-
+use crate::operator::Operator;
 
 pub struct ExprTree {
     pub fs_ref: Box<Expr<ExprTree>>,
@@ -20,8 +19,7 @@ impl<X> Expr<X> {
             Expr::Operator(o) => ExprRef::Operator(o.as_ref_op()),
             // TODO: clone is fine but could be removed mb (also, why is Range not Copy (???) - literally 2x usize!)
             Expr::Predicate(mp) => ExprRef::Predicate(mp.clone()),
-            Expr::RegexPredicate { regex } =>
-                ExprRef::RegexPredicate(RegexPredicate { regex })
+            Expr::RegexPredicate { regex } => ExprRef::RegexPredicate(RegexPredicate { regex }),
         }
     }
 }
@@ -51,7 +49,6 @@ impl<'a, A, B> MapLayer<B> for ExprRef<'a, A> {
         }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub enum MetadataPredicate {
