@@ -1,12 +1,12 @@
-use futures::future::BoxFuture;
+use futures::future::{join_all, try_join_all, BoxFuture};
 use recursion::map_layer::MapLayer;
 use std::io;
 
 #[derive(Debug)]
 pub enum Operator<Recurse> {
     Not(Recurse),
-    And(Recurse, Recurse),
-    Or(Recurse, Recurse),
+    And(Vec<Recurse>),
+    Or(Vec<Recurse>),
 }
 
 impl<A, B> MapLayer<B> for Operator<A> {
@@ -16,8 +16,8 @@ impl<A, B> MapLayer<B> for Operator<A> {
         use Operator::*;
         match self {
             Not(a) => Not(f(a)),
-            And(a, b) => And(f(a), f(b)),
-            Or(a, b) => Or(f(a), f(b)),
+            And(xs) => And(xs.into_iter().map(f).collect()),
+            Or(xs) => Or(xs.into_iter().map(f).collect()),
         }
     }
 }
@@ -27,15 +27,13 @@ impl<'a> Operator<BoxFuture<'a, io::Result<bool>>> {
         use Operator::*;
         match self {
             Not(a) => Ok(!a.await?),
-            And(a, b) => {
-                let a = a.await?;
-                let b = b.await?;
-                Ok(a && b)
+            And(xs) => {
+                let xs = try_join_all(xs).await?;
+                Ok(xs.into_iter().all(|b| b))
             }
-            Or(a, b) => {
-                let a = a.await?;
-                let b = b.await?;
-                Ok(a || b)
+            Or(xs) => {
+                let xs = try_join_all(xs).await?;
+                Ok(xs.into_iter().any(|b| b))
             }
         }
     }
@@ -46,8 +44,8 @@ impl Operator<bool> {
         use Operator::*;
         match self {
             Not(x) => !x,
-            And(x, y) => x && y,
-            Or(x, y) => x || y,
+            And(xs) => xs.into_iter().all(|b| b),
+            Or(xs) => xs.into_iter().any(|b| b),
         }
     }
 }
@@ -57,8 +55,8 @@ impl<X> Operator<X> {
         use Operator::*;
         match self {
             Not(a) => Not(a),
-            And(a, b) => And(a, b),
-            Or(a, b) => Or(a, b),
+            And(xs) => And(xs.iter().collect()),
+            Or(xs) => Or(xs.iter().collect()),
         }
     }
 }

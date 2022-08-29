@@ -32,12 +32,10 @@ pub async fn eval<'a, File: FileLike>(f: &'a File, e: &'a ExprTree) -> io::Resul
                 Fix(Box::new(match layer {
                     ExprRef::Operator(x) => match x {
                         // short circuit
-                        Operator::And(Fix(box Intermediate::KnownResult(false)), _)
-                        | Operator::And(_, Fix(box Intermediate::KnownResult(false))) => {
+                        Operator::And(xs) if xs.iter().any(|b| b.0.known() == Some(false)) => {
                             Intermediate::KnownResult(false)
                         }
-                        Operator::Or(Fix(box Intermediate::KnownResult(true)), _)
-                        | Operator::Or(_, Fix(box Intermediate::KnownResult(true))) => {
+                        Operator::Or(xs) if xs.iter().any(|b| b.0.known() == Some(true)) => {
                             Intermediate::KnownResult(true)
                         }
                         x => match x.known() {
@@ -128,6 +126,15 @@ mod eval_internal {
         RegexPredicate(RegexPredicate<'a>), // async predicate, not yet run
     }
 
+    impl<'a, X> Intermediate<'a, X> {
+        pub fn known(&self) -> Option<bool> {
+            match self {
+                Intermediate::KnownResult(x) => Some(*x),
+                _ => None,
+            }
+        }
+    }
+
     // from expr to expr
     impl<'a, A, B> MapLayer<B> for Intermediate<'a, A> {
         type Unwrapped = A;
@@ -157,14 +164,20 @@ mod eval_internal {
         pub(crate) fn known(&self) -> Option<Operator<bool>> {
             match self {
                 Operator::Not(a) => a.known().map(Operator::Not),
-                Operator::And(a, b) => match (a.known(), b.known()) {
-                    (Some(a), Some(b)) => Some(Operator::And(a, b)),
-                    _ => None,
-                },
-                Operator::Or(a, b) => match (a.known(), b.known()) {
-                    (Some(a), Some(b)) => Some(Operator::Or(a, b)),
-                    _ => None,
-                },
+                Operator::And(xs) => {
+                    if let Some(all_known) = xs.iter().map(|x| x.known()).collect() {
+                        Some(Operator::And(all_known))
+                    } else {
+                        None
+                    }
+                }
+                Operator::Or(xs) => {
+                    if let Some(all_known) = xs.iter().map(|x| x.known()).collect() {
+                        Some(Operator::And(all_known))
+                    } else {
+                        None
+                    }
+                }
             }
         }
     }

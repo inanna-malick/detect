@@ -1,27 +1,31 @@
 // #[macro_use]
 // extern crate combine;
 // use crate::{expr::*, operator::Operator};
-use combine::error::{ParseError, StdParseResult};
-use combine::parser::char::{char, letter, spaces, string};
+use combine::error::{ParseError, StdParseResult, UnexpectedParse};
+use combine::parser::char::{char, letter, spaces, string, digit};
+use combine::parser::combinator::recognize;
 use combine::stream::position;
 use combine::stream::{Positioned, Stream};
 use combine::{
-    attempt, between, choice, easy, many1, parser, sep_by, sep_by1, token, EasyParser, Parser,
+    attempt, between, choice, easy, many1, parser, sep_by, sep_by1, token, EasyParser, Parser, skip_many1,
 };
 
-use combine_language::{expression_parser, Assoc, Fixity};
 
-#[derive(Debug, PartialEq)]
-pub enum Expr {
-    Id(String), // replace this with terminating predicate thingies
-    Array(Vec<Expr>),
-    Parens(Box<Expr>),
-    Pair(Box<Expr>, Box<Expr>),
-    And(Vec<Expr>),
-    Or(Vec<Expr>),
-}
 
-fn and_<Input>() -> impl Parser<Input, Output = Expr>
+use crate::expr::{Expr, ExprTree, MetadataPredicate};
+use crate::operator::Operator;
+
+// #[derive(Debug, PartialEq)]
+// pub enum Expr {
+//     Id(String), // replace this with terminating predicate thingies
+//     Array(Vec<Expr>),
+//     Parens(Box<Expr>),
+//     Pair(Box<Expr>, Box<Expr>),
+//     And(Vec<Expr>),
+//     Or(Vec<Expr>),
+// }
+
+fn and_<Input>() -> impl Parser<Input, Output = ExprTree>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -30,14 +34,16 @@ where
     let skip_spaces = || spaces().silent();
     sep_by1(base().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
-            Expr::And(xs)
+            ExprTree {
+                fs_ref: Box::new(Expr::Operator(Operator::Or(xs))),
+            }
         } else {
             xs.pop().unwrap()
         }
     })
 }
 
-fn or_<Input>() -> impl Parser<Input, Output = Expr>
+fn or_<Input>() -> impl Parser<Input, Output = ExprTree>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -45,19 +51,19 @@ where
 {
     let skip_spaces = || spaces().silent();
     sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
-        .map(|xs| Expr::Or(xs))
+        .map(|xs| ExprTree {
+            fs_ref: Box::new(Expr::Operator(Operator::Or(xs))),
+        })
         .skip(skip_spaces())
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<Input, Output = Expr>
+fn base_<Input>() -> impl Parser<Input, Output = ExprTree>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
-    let word = many1(letter());
-
     // A parser which skips past whitespace.
     // Since we aren't interested in knowing that our expression parser
     // could have accepted additional whitespace between the tokens we also silence the error.
@@ -66,10 +72,39 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
+
+    let num = || {
+        recognize(
+            skip_many1(digit())
+        )
+        // .and_then(|s: String| {
+        .map(|s: String| {
+            // `bs` only contains digits which are ascii and thus UTF-8
+            s.parse::<usize>().unwrap() // TODO: figure out andthen/error parsing, this will only trigger w/ ints greater than usize
+        })
+    };
+
+    // starting with hardcoded size, I think. also, TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
+    let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')')).map(|(_, d1,_, d2, _)| MetadataPredicate::Size { allowed: d1..d2 });
+
+    let predicate = choice((
+        string("binary()").map(|_| MetadataPredicate::Binary),
+        string("symlink()").map(|_| MetadataPredicate::Symlink),
+        string("exec()").map(|_| MetadataPredicate::Exec),
+        size_predicate,
+        // TODO: content search predicate implies file (could later expand to binary search and etc) so if that's present filter on type there too
+        // also, decide on correct name - eg might _not_ be file
+        // string("file()").map(|_| MetadataPredicate::Exec),
+        // TODO: add this I think?
+        // string("dir()").map(|_| MetadataPredicate::Exec),
+    ));
+
     // I don't think order matters here, inside the choice combinator? idk
     choice((
         // attempt(and_operator),
-        word.map(Expr::Id),
+        predicate.map(|x| ExprTree {
+            fs_ref: Box::new(Expr::Predicate(x)),
+        }),
         // array.map(Expr::Array),
         parens,
         // attempt(pair),
@@ -85,7 +120,7 @@ where
 // mutually recursive ordering defines precedence
 
 parser! {
-    fn and[Input]()(Input) -> Expr
+    fn and[Input]()(Input) -> ExprTree
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -93,7 +128,7 @@ parser! {
 }
 
 parser! {
-    fn or[Input]()(Input) -> Expr
+    fn or[Input]()(Input) -> ExprTree
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -101,7 +136,7 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> Expr
+    fn base[Input]()(Input) -> ExprTree
     where [Input: Stream<Token = char>]
     {
         base_()
@@ -113,7 +148,7 @@ fn test_test_test() {
     let result: Result<_, easy::ParseError<&str>> =
         // or().easy_parse("");
         or().easy_parse("foo && bar && (foo || bar) && (foo && (bar || bar))");
-        // or().easy_parse("a || b");
+    // or().easy_parse("a || b");
 
     let expr = Expr::Array(vec![
         Expr::Array(Vec::new()),

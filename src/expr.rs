@@ -54,6 +54,6 @@ impl<'a, A, B> MapLayer<B> for ExprRef<'a, A> {
 pub enum MetadataPredicate {
     Binary,
     Exec,
-    Size { allowed: Range<usize> },
     Symlink,
+    Size { allowed: Range<usize> },
 }
