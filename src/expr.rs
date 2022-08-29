@@ -55,5 +55,5 @@ pub enum MetadataPredicate {
     Binary,
     Exec,
     Symlink,
-    Size { allowed: Range<usize> },
+    Size { allowed: Range<u64> },
 }

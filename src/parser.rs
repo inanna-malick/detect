@@ -2,15 +2,14 @@
 // extern crate combine;
 // use crate::{expr::*, operator::Operator};
 use combine::error::{ParseError, StdParseResult, UnexpectedParse};
-use combine::parser::char::{char, letter, spaces, string, digit};
+use combine::parser::char::{char, digit, letter, spaces, string};
 use combine::parser::combinator::recognize;
 use combine::stream::position;
 use combine::stream::{Positioned, Stream};
 use combine::{
-    attempt, between, choice, easy, many1, parser, sep_by, sep_by1, token, EasyParser, Parser, skip_many1,
+    attempt, between, choice, easy, many1, parser, sep_by, sep_by1, skip_many1, token, EasyParser,
+    Parser,
 };
-
-
 
 use crate::expr::{Expr, ExprTree, MetadataPredicate};
 use crate::operator::Operator;
@@ -72,20 +71,18 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
-
     let num = || {
-        recognize(
-            skip_many1(digit())
-        )
-        // .and_then(|s: String| {
-        .map(|s: String| {
-            // `bs` only contains digits which are ascii and thus UTF-8
-            s.parse::<usize>().unwrap() // TODO: figure out andthen/error parsing, this will only trigger w/ ints greater than usize
-        })
+        recognize(skip_many1(digit()))
+            // .and_then(|s: String| {
+            .map(|s: String| {
+                // `bs` only contains digits which are ascii and thus UTF-8
+                s.parse::<u64>().unwrap() // TODO: figure out andthen/error parsing, this will only trigger w/ ints greater than usize
+            })
     };
 
     // starting with hardcoded size, I think. also, TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
-    let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')')).map(|(_, d1,_, d2, _)| MetadataPredicate::Size { allowed: d1..d2 });
+    let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
+        .map(|(_, d1, _, d2, _)| MetadataPredicate::Size { allowed: d1..d2 });
 
     let predicate = choice((
         string("binary()").map(|_| MetadataPredicate::Binary),
@@ -119,19 +116,25 @@ where
 
 // mutually recursive ordering defines precedence
 
+// pub fn expr(s: &str) -> impl Parser<> {
+//     let e = or().easy_parse(s)?;
+//     Ok(e.0) // TODO: assert no remaining string left to parse
+// }
+
+// entry point
+parser! {
+    pub fn or[Input]()(Input) -> ExprTree
+    where [Input: Stream<Token = char>]
+    {
+        or_()
+    }
+}
+
 parser! {
     fn and[Input]()(Input) -> ExprTree
     where [Input: Stream<Token = char>]
     {
         and_()
-    }
-}
-
-parser! {
-    fn or[Input]()(Input) -> ExprTree
-    where [Input: Stream<Token = char>]
-    {
-        or_()
     }
 }
 

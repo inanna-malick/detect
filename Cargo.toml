@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
 combine = "4.6.6"
 futures = "0.3.23"
 recursion = {path = "../rust-schemes", version = "0.2.0"}
 regex = "1.6.0"
+structopt = "0.3"
+walkdir = "2.3"
