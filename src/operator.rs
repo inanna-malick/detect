@@ -2,7 +2,7 @@ use futures::future::{join_all, try_join_all, BoxFuture};
 use recursion::map_layer::MapLayer;
 use std::io;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
     Not(Recurse),
     And(Vec<Recurse>),

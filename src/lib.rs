@@ -31,7 +31,7 @@ impl MetadataLike for fs::Metadata {
 
     fn filetype(&self) -> FileType {
         let ft = self.file_type();
-        if ft.is_dir() {
+        let res = if ft.is_dir() {
             FileType::Dir
         } else if ft.is_file() {
             FileType::File
@@ -39,7 +39,11 @@ impl MetadataLike for fs::Metadata {
             FileType::Symlink
         } else {
             FileType::Unknown
-        }
+        };
+
+        // println!("metadata filetype res: {:?}", res);
+
+        res
     }
 }
 
@@ -49,11 +53,12 @@ impl FileLike for DirEntry {
     }
 }
 
-pub async fn parse_and_run(s:String) -> Result<(), anyhow::Error> {
-    let e = parser::or().parse(position::Stream::new(&s[..]))?;
+pub async fn parse_and_run(s: String) -> Result<(), anyhow::Error> {
+    let res = parser::or().parse(position::Stream::new(&s[..]));
+    println!("parsed expr: {:?}", res);
+    let e = res?;
     run(&e.0).await // NOTE: having this be async is kinda fucky, rust file io is all sync AFAIK
 }
-
 
 pub async fn run(e: &ExprTree) -> Result<(), anyhow::Error> {
     use walkdir::WalkDir;
@@ -61,11 +66,16 @@ pub async fn run(e: &ExprTree) -> Result<(), anyhow::Error> {
     fn traverse(e: &ExprTree, entry: &DirEntry) -> Result<bool, anyhow::Error> {
         let metadata = entry.metadata()?;
 
+        if metadata.is_dir() {
+            // short circuit for directories - always continue here
+            return Ok(true);
+        }
+
         let res = block_on(eval(entry, &metadata, e))?;
         Ok(res)
     }
 
-    let walker = WalkDir::new(".").into_iter();
+    let walker = WalkDir::new("./src").into_iter();
     for entry in walker.filter_entry(|entry| {
         // just default to skip if it fails (todo - could just panic, no other error reporting mechanism here tho)
         traverse(e, entry).unwrap_or(false)
@@ -84,6 +94,8 @@ pub async fn eval<'a, File: FileLike, Metadata: MetadataLike>(
     e: &'a ExprTree,
 ) -> io::Result<bool> {
     use eval_internal::*;
+
+    println!("eval {:?}", e);
 
     // First pass: evaluate as much of the expression tree as we can without running async grep operations,
     // short circuiting on AND and OR and pruning async grep operations in short-circuited subtrees
@@ -247,10 +259,14 @@ mod eval_internal {
 }
 
 fn eval_predicate<Metadata: MetadataLike>(m: &Metadata, p: MetadataPredicate) -> bool {
-    match p {
+    let res = match &p {
         MetadataPredicate::Binary => m.filetype() == FileType::Binary,
         MetadataPredicate::Exec => m.filetype() == FileType::Exec,
         MetadataPredicate::Size { allowed } => allowed.contains(&m.size()),
         MetadataPredicate::Symlink => m.filetype() == FileType::Symlink,
-    }
+    };
+
+    println!("eval predicate {:?} yielding {:?}", p, res);
+
+    res
 }

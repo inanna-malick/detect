@@ -10,7 +10,7 @@ pub trait MetadataLike {
     fn filetype(&self) -> FileType;
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 pub enum FileType {
     Binary,
     Exec,

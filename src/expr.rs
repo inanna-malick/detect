@@ -3,10 +3,12 @@ use std::ops::Range;
 
 use crate::operator::Operator;
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct ExprTree {
     pub fs_ref: Box<Expr<ExprTree>>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum Expr<Recurse> {
     Operator(Operator<Recurse>),
     Predicate(MetadataPredicate),
@@ -50,7 +52,7 @@ impl<'a, A, B> MapLayer<B> for ExprRef<'a, A> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MetadataPredicate {
     Binary,
     Exec,

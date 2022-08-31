@@ -4,12 +4,8 @@
 use combine::error::{ParseError, StdParseResult, UnexpectedParse};
 use combine::parser::char::{char, digit, letter, spaces, string};
 use combine::parser::combinator::recognize;
-use combine::stream::position;
 use combine::stream::{Positioned, Stream};
-use combine::{
-    attempt, between, choice, easy, many1, parser, sep_by, sep_by1, skip_many1, token, EasyParser,
-    Parser,
-};
+use combine::{choice, easy, parser, sep_by1, skip_many1, token, EasyParser, Parser, attempt};
 
 use crate::expr::{Expr, ExprTree, MetadataPredicate};
 use crate::operator::Operator;
@@ -34,7 +30,7 @@ where
     sep_by1(base().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
             ExprTree {
-                fs_ref: Box::new(Expr::Operator(Operator::Or(xs))),
+                fs_ref: Box::new(Expr::Operator(Operator::And(xs))),
             }
         } else {
             xs.pop().unwrap()
@@ -50,8 +46,14 @@ where
 {
     let skip_spaces = || spaces().silent();
     sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
-        .map(|xs| ExprTree {
-            fs_ref: Box::new(Expr::Operator(Operator::Or(xs))),
+        .map(|mut xs: Vec<_>| {
+            if xs.len() > 1 {
+                ExprTree {
+                    fs_ref: Box::new(Expr::Operator(Operator::Or(xs))),
+                }
+            } else {
+                xs.pop().unwrap()
+            }
         })
         .skip(skip_spaces())
 }
@@ -85,10 +87,10 @@ where
         .map(|(_, d1, _, d2, _)| MetadataPredicate::Size { allowed: d1..d2 });
 
     let predicate = choice((
-        string("binary()").map(|_| MetadataPredicate::Binary),
-        string("symlink()").map(|_| MetadataPredicate::Symlink),
-        string("exec()").map(|_| MetadataPredicate::Exec),
-        size_predicate,
+        attempt(string("binary()").map(|_| MetadataPredicate::Binary)),
+        attempt(string("symlink()").map(|_| MetadataPredicate::Symlink)),
+        attempt(string("exec()").map(|_| MetadataPredicate::Exec)),
+        attempt(size_predicate),
         // TODO: content search predicate implies file (could later expand to binary search and etc) so if that's present filter on type there too
         // also, decide on correct name - eg might _not_ be file
         // string("file()").map(|_| MetadataPredicate::Exec),
@@ -150,18 +152,14 @@ parser! {
 fn test_test_test() {
     let result: Result<_, easy::ParseError<&str>> =
         // or().easy_parse("");
-        or().easy_parse("foo && bar && (foo || bar) && (foo && (bar || bar))");
+        or().easy_parse("size(1..2)");
     // or().easy_parse("a || b");
 
-    let expr = Expr::Array(vec![
-        Expr::Array(Vec::new()),
-        Expr::Pair(
-            Box::new(Expr::Id("hello".to_string())),
-            Box::new(Expr::Id("world".to_string())),
-        ),
-        Expr::Array(vec![Expr::Id("rust".to_string())]),
-    ]);
-    assert_eq!(result.map(|x| x.0), Ok(expr));
+    let expected = ExprTree {
+        fs_ref: Box::new(Expr::Predicate(MetadataPredicate::Size { allowed: 1..2 })),
+    };
+
+    assert_eq!(result.map(|x| x.0), Ok(expected));
 }
 
 // fn mt(e: Expr<ExprTree>) -> ExprTree {
