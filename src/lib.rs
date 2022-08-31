@@ -75,12 +75,15 @@ pub async fn run(e: &ExprTree) -> Result<(), anyhow::Error> {
         Ok(res)
     }
 
-    let walker = WalkDir::new("./src").into_iter();
+    let walker = WalkDir::new(".").into_iter();
     for entry in walker.filter_entry(|entry| {
         // just default to skip if it fails (todo - could just panic, no other error reporting mechanism here tho)
         traverse(e, entry).unwrap_or(false)
     }) {
-        println!("{}", entry?.path().display());
+        let entry = entry?;
+        if !entry.metadata()?.is_dir() {
+            println!("{}", entry.path().display());
+        }
     }
 
     Ok(())
@@ -95,7 +98,7 @@ pub async fn eval<'a, File: FileLike, Metadata: MetadataLike>(
 ) -> io::Result<bool> {
     use eval_internal::*;
 
-    println!("eval {:?}", e);
+    // println!("eval {:?}", e);
 
     // First pass: evaluate as much of the expression tree as we can without running async grep operations,
     // short circuiting on AND and OR and pruning async grep operations in short-circuited subtrees
@@ -134,6 +137,7 @@ pub async fn eval<'a, File: FileLike, Metadata: MetadataLike>(
 
     // short circuit if we have a known result at the root node
     if let Fix(box Intermediate::KnownResult(x)) = intermediate {
+        println!("short circuit");
         return Ok(x);
     }
 

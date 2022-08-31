@@ -8,6 +8,12 @@ pub struct ExprTree {
     pub fs_ref: Box<Expr<ExprTree>>,
 }
 
+impl ExprTree {
+    pub fn new(x: Expr<ExprTree>) -> Self {
+        ExprTree { fs_ref: Box::new(x) }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum Expr<Recurse> {
     Operator(Operator<Recurse>),

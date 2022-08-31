@@ -2,10 +2,10 @@
 // extern crate combine;
 // use crate::{expr::*, operator::Operator};
 use combine::error::{ParseError, StdParseResult, UnexpectedParse};
-use combine::parser::char::{char, digit, letter, spaces, string};
+use combine::parser::char::{char, digit, letter, spaces, string, alpha_num};
 use combine::parser::combinator::recognize;
 use combine::stream::{Positioned, Stream};
-use combine::{choice, easy, parser, sep_by1, skip_many1, token, EasyParser, Parser, attempt};
+use combine::*;
 
 use crate::expr::{Expr, ExprTree, MetadataPredicate};
 use crate::operator::Operator;
@@ -82,7 +82,11 @@ where
             })
     };
 
-    // starting with hardcoded size, I think. also, TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
+
+    let contains_predicate = (string("contains("), many1(alpha_num()), lex_char(')'))
+        .map(|(_, s, _)| ExprTree::new(Expr::RegexPredicate { regex: s }) );
+
+    // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
         .map(|(_, d1, _, d2, _)| MetadataPredicate::Size { allowed: d1..d2 });
 
@@ -100,14 +104,11 @@ where
 
     // I don't think order matters here, inside the choice combinator? idk
     choice((
-        // attempt(and_operator),
+        attempt(contains_predicate),
         predicate.map(|x| ExprTree {
             fs_ref: Box::new(Expr::Predicate(x)),
         }),
-        // array.map(Expr::Array),
         parens,
-        // attempt(pair),
-        // attempt(binop),
     ))
     .skip(skip_spaces())
 }
