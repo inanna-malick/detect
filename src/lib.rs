@@ -24,6 +24,10 @@ use crate::{
 
 use combine::stream::position;
 
+// TODO:
+// - filename search pattern - name(...)
+// - extension searcher (shorthand) - ext(...)
+
 impl MetadataLike for fs::Metadata {
     fn size(&self) -> u64 {
         self.len()
@@ -89,8 +93,6 @@ pub async fn run(e: &ExprTree) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// runs a two-pass eval process, first attempting to find a pure answer and then
-// running the async portion of the expr language against the file's contents (expensive, best avoided)
 pub async fn eval<'a, File: FileLike, Metadata: MetadataLike>(
     f: &'a File,
     m: &Metadata,
@@ -122,7 +124,7 @@ pub async fn eval<'a, File: FileLike, Metadata: MetadataLike>(
                             Some(o) => Intermediate::KnownResult(o.eval()),
                         },
                     },
-                    ExprRef::Predicate(p) => Intermediate::KnownResult(eval_predicate(m, p)),
+                    ExprRef::MetadataPredicate(p) => Intermediate::KnownResult(eval_predicate(m, p)),
                     ExprRef::RegexPredicate(x) => {
                         if m.filetype() == FileType::File {
                             Intermediate::RegexPredicate(x)
@@ -193,6 +195,175 @@ pub async fn eval<'a, File: FileLike, Metadata: MetadataLike>(
 
     // now we can await - the oneshot channels have their results
     eval_fut.await
+}
+
+
+
+// runs a two-pass eval process, first attempting to find a pure answer and then
+// running the async portion of the expr language against the file's contents (expensive, best avoided)
+pub fn eval_ex(
+    e: &ExprTree,
+) -> io::Result<bool> {
+    use eval_experimental::*;
+
+
+    type FileName = ();
+    type Metadata = ();
+    type Contents = ();
+
+    // First pass: convert to intermediate expr type, no short circuiting or anything yet
+    let stage1: Fix<FileName, Metadata, Contents> =
+        unfold_and_fold(
+            e,
+            |x| x.fs_ref.as_ref_expr(),
+            |layer| {
+                Fix(Box::new(match layer {
+                    ExprRef::Operator(o) => Intermediate::Operator(o),
+                    ExprRef::MetadataPredicate(_) => todo!(), // metadata, first pass
+                    ExprRef::RegexPredicate(_) => todo!(), // regex (file content read) pass
+                }))
+            },
+        );
+
+
+    let stage2: Fix<Done, Metadata, Contents> = run_stage()
+        unfold_and_fold(
+            e,
+            |x| x.fs_ref.as_ref_expr(),
+            |layer| {
+                Fix(Box::new(match layer {
+                    ExprRef::Operator(o) => Intermediate::Operator(o),
+                    ExprRef::MetadataPredicate(_) => todo!(), // metadata, first pass
+                    ExprRef::RegexPredicate(_) => todo!(), // regex (file content read) pass
+                }))
+            },
+        );
+
+
+        todo!("")
+}
+
+mod eval_experimental {
+    use super::*;
+
+    pub(crate) enum Done {}
+
+    pub(crate) fn never<A, B>(a: A) -> B {
+        unreachable!("never")
+    }
+
+
+    pub(crate) fn identity<A>(a: A) -> A {
+        a
+    }
+
+    // NOTE! metadata predicates are actually a second pass stage in their own right b/c getting them is a syscall (I think, lol)
+    // NOTE(cont)! run name predicate first, the rest are packed into stages
+    // NOTE(cont)! I think last stage is probably just arbitrary process execution
+    pub(crate) enum Intermediate<Recurse, Stage1, Stage2, Stage3> {
+        Operator(Operator<Recurse>),
+        KnownResult(bool), // pure code leading to result via previous stage of processing
+        Stage1(Stage1),    // async predicate, not yet run
+        Stage2(Stage2),    // async predicate, not yet run
+        Stage3(Stage3),    // async predicate, not yet run
+    }
+
+    // NOTE: we are not running this async by default because all this filesystem stuff is really just synchronous
+    // NOTE: even the async stuff tends to run against, like, one thing and can thus be done _in between_ run_stage calls
+    // NOTE: like, even regexset, watchers can be replaced with indexes. also I think I can drop the abstraction boundary and just
+    // NOTE: write this over, specifically, unix files
+    pub(crate) fn run_stage<S1A, S2A, S3A, S1B, S2B, S3B, F1, F2, F3>(
+        e: Fix<S1A, S2A, S3A>,
+        f1: F1,
+        f2: F2,
+        f3: F3,
+    ) -> Fix<S1B, S2B, S3B>
+    where
+        F1: Fn(S1A) -> S1B,
+        F2: Fn(S2A) -> S2B,
+        F3: Fn(S3A) -> S3B,
+    {
+        unfold_and_fold(
+            e,
+            |Fix(box x)| x,
+            |layer| {
+                Fix(Box::new(match layer {
+                    Intermediate::Operator(x) => match x {
+                        // short circuit
+                        Operator::And(xs)
+                            if xs.iter().any(|b: &Fix<_, _, _>| b.known() == Some(false)) =>
+                        {
+                            Intermediate::KnownResult(false)
+                        }
+                        Operator::Or(xs)
+                            if xs.iter().any(|b: &Fix<_, _, _>| b.known() == Some(true)) =>
+                        {
+                            Intermediate::KnownResult(true)
+                        }
+                        x => match x.known() {
+                            None => Intermediate::Operator(x),
+                            // if all sub-exprs have known results, so does this operator expr
+                            Some(o) => Intermediate::KnownResult(o.eval()),
+                        },
+                    },
+                    Intermediate::KnownResult(x) => todo!(),
+                    Intermediate::Stage1(s1) => Intermediate::Stage1(f1(s1)),
+                    Intermediate::Stage2(s2) => Intermediate::Stage2(f2(s2)),
+                    Intermediate::Stage3(s3) => Intermediate::Stage3(f3(s3)),
+                }))
+            },
+        )
+    }
+
+    impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for Intermediate<A, Stage1, Stage2, Stage3> {
+        type Unwrapped = A;
+        type To = Intermediate<B, Stage1, Stage2, Stage3>;
+        fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, f: F) -> Self::To {
+            use Intermediate::*;
+            match self {
+                Operator(o) => Operator(o.map_layer(f)),
+                KnownResult(k) => KnownResult(k),
+                Stage1(x) => Stage1(x),
+                Stage2(x) => Stage2(x),
+                Stage3(x) => Stage3(x),
+            }
+        }
+    }
+
+    pub(crate) struct Fix<S1, S2, S3>(pub(crate) Box<Intermediate<Fix<S1, S2, S3>, S1, S2, S3>>);
+
+    impl<S1, S2, S3> Fix<S1, S2, S3> {
+        fn known(&self) -> Option<bool> {
+            match *self.0 {
+                Intermediate::KnownResult(b) => Some(b),
+                _ => None,
+            }
+        }
+    }
+
+
+    impl<S1, S2, S3> Operator<Fix<S1, S2, S3>> {
+        pub(crate) fn known(&self) -> Option<Operator<bool>> {
+            match self {
+                Operator::Not(a) => a.known().map(Operator::Not),
+                Operator::And(xs) => {
+                    if let Some(all_known) = xs.iter().map(|x| x.known()).collect() {
+                        Some(Operator::And(all_known))
+                    } else {
+                        None
+                    }
+                }
+                Operator::Or(xs) => {
+                    if let Some(all_known) = xs.iter().map(|x| x.known()).collect() {
+                        Some(Operator::And(all_known))
+                    } else {
+                        None
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 mod eval_internal {

@@ -2,7 +2,7 @@
 // extern crate combine;
 // use crate::{expr::*, operator::Operator};
 use combine::error::{ParseError, StdParseResult, UnexpectedParse};
-use combine::parser::char::{char, digit, letter, spaces, string, alpha_num};
+use combine::parser::char::{alpha_num, char, digit, letter, spaces, string};
 use combine::parser::combinator::recognize;
 use combine::stream::{Positioned, Stream};
 use combine::*;
@@ -82,9 +82,8 @@ where
             })
     };
 
-
     let contains_predicate = (string("contains("), many1(alpha_num()), lex_char(')'))
-        .map(|(_, s, _)| ExprTree::new(Expr::RegexPredicate { regex: s }) );
+        .map(|(_, s, _)| ExprTree::new(Expr::RegexPredicate { regex: s }));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))

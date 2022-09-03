@@ -10,7 +10,9 @@ pub struct ExprTree {
 
 impl ExprTree {
     pub fn new(x: Expr<ExprTree>) -> Self {
-        ExprTree { fs_ref: Box::new(x) }
+        ExprTree {
+            fs_ref: Box::new(x),
+        }
     }
 }
 
@@ -26,7 +28,7 @@ impl<X> Expr<X> {
         match self {
             Expr::Operator(o) => ExprRef::Operator(o.as_ref_op()),
             // TODO: clone is fine but could be removed mb (also, why is Range not Copy (???) - literally 2x usize!)
-            Expr::Predicate(mp) => ExprRef::Predicate(mp.clone()),
+            Expr::Predicate(mp) => ExprRef::MetadataPredicate(mp.clone()),
             Expr::RegexPredicate { regex } => ExprRef::RegexPredicate(RegexPredicate { regex }),
         }
     }
@@ -34,7 +36,7 @@ impl<X> Expr<X> {
 
 pub enum ExprRef<'a, Recurse> {
     Operator(Operator<Recurse>),
-    Predicate(MetadataPredicate),
+    MetadataPredicate(MetadataPredicate),
     RegexPredicate(RegexPredicate<'a>),
 }
 
@@ -52,7 +54,7 @@ impl<'a, A, B> MapLayer<B> for ExprRef<'a, A> {
         use ExprRef::*;
         match self {
             Operator(o) => Operator(o.map_layer(f)),
-            Predicate(p) => Predicate(p),
+            MetadataPredicate(p) => MetadataPredicate(p),
             RegexPredicate(a) => RegexPredicate(a),
         }
     }
