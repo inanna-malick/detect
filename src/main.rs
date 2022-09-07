@@ -1,6 +1,5 @@
-use fileset_expr::parse_and_run;
-
 use clap::Parser;
+use fileset_expr::parse_and_run;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -13,5 +12,5 @@ struct Args {
 pub fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
-    parse_and_run(args.expr)
+    parse_and_run(".".to_owned(), args.expr, |s| println!("{s}"))
 }

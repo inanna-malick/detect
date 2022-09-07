@@ -3,8 +3,6 @@ name = "fileset-expr"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 anyhow = "1"
 clap = {version = "3.2", features = ["derive"]}
@@ -12,5 +10,7 @@ combine = "4.6.6"
 futures = "0.3.23"
 recursion = {path = "../rust-schemes", version = "0.2.0"}
 regex = "1.6.0"
-tokio = {version = "1.19", features = ["rt", "rt-multi-thread", "fs", "macros", "io-util"]}
 walkdir = "2.3"
+
+[dev-dependencies]
+tempdir = "0.3.7"
