@@ -1,6 +1,4 @@
-use futures::future::{join_all, try_join_all, BoxFuture};
 use recursion::map_layer::MapLayer;
-use std::io;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
@@ -18,23 +16,6 @@ impl<A, B> MapLayer<B> for Operator<A> {
             Not(a) => Not(f(a)),
             And(xs) => And(xs.into_iter().map(f).collect()),
             Or(xs) => Or(xs.into_iter().map(f).collect()),
-        }
-    }
-}
-
-impl<'a> Operator<BoxFuture<'a, io::Result<bool>>> {
-    pub(crate) async fn eval_async(self) -> io::Result<bool> {
-        use Operator::*;
-        match self {
-            Not(a) => Ok(!a.await?),
-            And(xs) => {
-                let xs = try_join_all(xs).await?;
-                Ok(xs.into_iter().all(|b| b))
-            }
-            Or(xs) => {
-                let xs = try_join_all(xs).await?;
-                Ok(xs.into_iter().any(|b| b))
-            }
         }
     }
 }

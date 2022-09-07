@@ -1,24 +1,13 @@
 // #[macro_use]
-// extern crate combine;
-// use crate::{expr::*, operator::Operator};
-use combine::error::{ParseError, StdParseResult, UnexpectedParse};
-use combine::parser::char::{alpha_num, char, digit, letter, spaces, string};
+use combine::error::ParseError;
+use combine::parser::char::{alpha_num, char, digit, spaces, string};
 use combine::parser::combinator::recognize;
-use combine::stream::{Positioned, Stream};
+use combine::stream::Stream;
 use combine::*;
+use regex::Regex;
 
-use crate::expr::{Expr, ExprTree, MetadataPredicate};
+use crate::expr::*;
 use crate::operator::Operator;
-
-// #[derive(Debug, PartialEq)]
-// pub enum Expr {
-//     Id(String), // replace this with terminating predicate thingies
-//     Array(Vec<Expr>),
-//     Parens(Box<Expr>),
-//     Pair(Box<Expr>, Box<Expr>),
-//     And(Vec<Expr>),
-//     Or(Vec<Expr>),
-// }
 
 fn and_<Input>() -> impl Parser<Input, Output = ExprTree>
 where
@@ -27,15 +16,28 @@ where
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
     let skip_spaces = || spaces().silent();
-    sep_by1(base().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
+    sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
-            ExprTree {
-                fs_ref: Box::new(Expr::Operator(Operator::And(xs))),
-            }
+            ExprTree::new(Expr::Operator(Operator::And(xs)))
         } else {
             xs.pop().unwrap()
         }
     })
+}
+
+fn not_<Input>() -> impl Parser<Input, Output = ExprTree>
+where
+    Input: Stream<Token = char>,
+    // Necessary due to rust-lang/rust#24159
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    let skip_spaces = || spaces().silent();
+    let lex_char = |c| char(c).skip(skip_spaces());
+
+    choice((
+        (lex_char('!'), base()).map(|(_, x)| ExprTree::new(Expr::Operator(Operator::Not(x)))),
+        base(),
+    ))
 }
 
 fn or_<Input>() -> impl Parser<Input, Output = ExprTree>
@@ -48,9 +50,7 @@ where
     sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
         .map(|mut xs: Vec<_>| {
             if xs.len() > 1 {
-                ExprTree {
-                    fs_ref: Box::new(Expr::Operator(Operator::Or(xs))),
-                }
+                ExprTree::new(Expr::Operator(Operator::Or(xs)))
             } else {
                 xs.pop().unwrap()
             }
@@ -82,31 +82,27 @@ where
             })
     };
 
-    let contains_predicate = (string("contains("), many1(alpha_num()), lex_char(')'))
-        .map(|(_, s, _)| ExprTree::new(Expr::RegexPredicate { regex: s }));
+    let regex = || many1(alpha_num()).map(|s: String| Regex::new(&s).unwrap());
+    let contains_predicate =
+        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentsMatcher::Regex(s));
+    let contents_predicate = choice((
+        attempt(contains_predicate),
+        string("utf8()").map(|_| ContentsMatcher::Utf8),
+    ))
+    .map(|p| ExprTree::new(Expr::ContentsMatcher(p)));
+
+    let filename_predicate = (string("filename("), regex(), lex_char(')'))
+        .map(|(_, s, _)| ExprTree::new(Expr::NameMatcher(NameMatcher::Regex(s))));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
-        .map(|(_, d1, _, d2, _)| MetadataPredicate::Size { allowed: d1..d2 });
-
-    let predicate = choice((
-        attempt(string("binary()").map(|_| MetadataPredicate::Binary)),
-        attempt(string("symlink()").map(|_| MetadataPredicate::Symlink)),
-        attempt(string("exec()").map(|_| MetadataPredicate::Exec)),
-        attempt(size_predicate),
-        // TODO: content search predicate implies file (could later expand to binary search and etc) so if that's present filter on type there too
-        // also, decide on correct name - eg might _not_ be file
-        // string("file()").map(|_| MetadataPredicate::Exec),
-        // TODO: add this I think?
-        // string("dir()").map(|_| MetadataPredicate::Exec),
-    ));
+        .map(|(_, d1, _, d2, _)| MetadataMatcher::Filesize(d1..d2));
 
     // I don't think order matters here, inside the choice combinator? idk
     choice((
-        attempt(contains_predicate),
-        predicate.map(|x| ExprTree {
-            fs_ref: Box::new(Expr::Predicate(x)),
-        }),
+        attempt(contents_predicate),
+        attempt(filename_predicate),
+        attempt(size_predicate).map(|x| ExprTree::new(Expr::MetadataMatcher(x))),
         parens,
     ))
     .skip(skip_spaces())
@@ -117,11 +113,6 @@ where
 // or expr: not a choice - sep_by_1 w/ and expr
 
 // mutually recursive ordering defines precedence
-
-// pub fn expr(s: &str) -> impl Parser<> {
-//     let e = or().easy_parse(s)?;
-//     Ok(e.0) // TODO: assert no remaining string left to parse
-// }
 
 // entry point
 parser! {
@@ -141,29 +132,17 @@ parser! {
 }
 
 parser! {
+    fn not[Input]()(Input) -> ExprTree
+    where [Input: Stream<Token = char>]
+    {
+        not_()
+    }
+}
+
+parser! {
     fn base[Input]()(Input) -> ExprTree
     where [Input: Stream<Token = char>]
     {
         base_()
     }
 }
-
-#[test]
-fn test_test_test() {
-    let result: Result<_, easy::ParseError<&str>> =
-        // or().easy_parse("");
-        or().easy_parse("size(1..2)");
-    // or().easy_parse("a || b");
-
-    let expected = ExprTree {
-        fs_ref: Box::new(Expr::Predicate(MetadataPredicate::Size { allowed: 1..2 })),
-    };
-
-    assert_eq!(result.map(|x| x.0), Ok(expected));
-}
-
-// fn mt(e: Expr<ExprTree>) -> ExprTree {
-//     ExprTree {
-//         fs_ref: Box::new(e),
-//     }
-// }
