@@ -1,5 +1,7 @@
 use recursion::map_layer::MapLayer;
 
+use crate::expr::ExprTree;
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
     Not(Recurse),
@@ -20,8 +22,49 @@ impl<A, B> MapLayer<B> for Operator<A> {
     }
 }
 
+impl<A, B, C> Operator<ExprTree<A, B, C>> {
+    pub(crate) fn short_circuit(&self) -> Option<bool> {
+        match self {
+            Operator::And(ands)
+                if ands
+                    .iter()
+                    .any(|b: &ExprTree<_, _, _>| b.known() == Some(false)) =>
+            {
+                Some(false)
+            }
+            Operator::Or(xs)
+                if xs
+                    .iter()
+                    .any(|b: &ExprTree<_, _, _>| b.known() == Some(true)) =>
+            {
+                Some(true)
+            }
+            x => match x.known() {
+                None => None,
+                Some(o) => Some(o.eval()),
+            },
+        }
+    }
+
+    fn known(&self) -> Option<Operator<bool>> {
+        match self {
+            Operator::Not(a) => a.known().map(Operator::Not),
+            Operator::And(xs) => xs
+                .iter()
+                .map(|x| x.known())
+                .collect::<Option<_>>()
+                .map(Operator::And),
+            Operator::Or(xs) => xs
+                .iter()
+                .map(|x| x.known())
+                .collect::<Option<_>>()
+                .map(Operator::Or),
+        }
+    }
+}
+
 impl Operator<bool> {
-    pub(crate) fn eval(self) -> bool {
+    fn eval(self) -> bool {
         use Operator::*;
         match self {
             Not(x) => !x,

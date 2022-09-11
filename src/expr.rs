@@ -41,25 +41,9 @@ where
         |layer| {
             ExprTree(Box::new(match layer {
                 // attempt to short circuit operators
-                Expr::Operator(x) => match x {
-                    Operator::And(ands)
-                        if ands
-                            .iter()
-                            .any(|b: &ExprTree<_, _, _>| b.known() == Some(false)) =>
-                    {
-                        Expr::KnownResult(false)
-                    }
-                    Operator::Or(xs)
-                        if xs
-                            .iter()
-                            .any(|b: &ExprTree<_, _, _>| b.known() == Some(true)) =>
-                    {
-                        Expr::KnownResult(true)
-                    }
-                    x => match x.known() {
-                        None => Expr::Operator(x),
-                        Some(o) => Expr::KnownResult(o.eval()),
-                    },
+                Expr::Operator(x) => match x.short_circuit() {
+                    None => Expr::Operator(x),
+                    Some(k) => Expr::KnownResult(k),
                 },
                 Expr::KnownResult(x) => Expr::KnownResult(x),
                 Expr::NameMatcher(s1) => f1(s1),
@@ -111,24 +95,6 @@ impl<S1, S2, S3> ExprTree<S1, S2, S3> {
             Expr::NameMatcher(n) => Expr::NameMatcher(n),
             Expr::MetadataMatcher(m) => Expr::MetadataMatcher(m),
             Expr::ContentsMatcher(c) => Expr::ContentsMatcher(c),
-        }
-    }
-}
-
-impl<S1, S2, S3> Operator<ExprTree<S1, S2, S3>> {
-    pub(crate) fn known(&self) -> Option<Operator<bool>> {
-        match self {
-            Operator::Not(a) => a.known().map(Operator::Not),
-            Operator::And(xs) => xs
-                .iter()
-                .map(|x| x.known())
-                .collect::<Option<_>>()
-                .map(Operator::And),
-            Operator::Or(xs) => xs
-                .iter()
-                .map(|x| x.known())
-                .collect::<Option<_>>()
-                .map(Operator::Or),
         }
     }
 }
