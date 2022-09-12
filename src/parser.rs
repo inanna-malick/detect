@@ -1,4 +1,4 @@
-// #[macro_use]
+use bumpalo::Bump;
 use combine::error::ParseError;
 use combine::parser::char::{alpha_num, char, digit, spaces, string};
 use combine::parser::combinator::recognize;
@@ -9,7 +9,7 @@ use regex::Regex;
 use crate::expr::*;
 use crate::operator::Operator;
 
-fn and_<Input>() -> impl Parser<Input, Output = ExprTree>
+fn and_<'a, Input>(arena: &'a Bump) -> impl Parser<Input, Output = ExprTree>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -17,14 +17,18 @@ where
 {
     use Operator::*;
     let skip_spaces = || spaces().silent();
-    sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
+    sep_by1(
+        not(arena).skip(skip_spaces()),
+        string("&&").skip(skip_spaces()),
+    )
+    .map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
             let mut it = xs.into_iter();
             // grab the first two elements, which we know exist
             let fst = it.next().unwrap();
             let snd = it.next().unwrap();
-            it.fold(ExprTree::new(Expr::Op(And(fst, snd))), |x, y| {
-                ExprTree::new(Expr::Op(And(x, y)))
+            it.fold(ExprTree::new(arena, Expr::Op(And(fst, snd))), |x, y| {
+                ExprTree::new(arena, Expr::Op(And(x, y)))
             })
         } else {
             xs.pop().unwrap()
@@ -32,7 +36,7 @@ where
     })
 }
 
-fn or_<Input>() -> impl Parser<Input, Output = ExprTree>
+fn or_<'a, Input>(arena: &'a Bump) -> impl Parser<Input, Output = ExprTree<'a>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -40,24 +44,27 @@ where
 {
     use Operator::*;
     let skip_spaces = || spaces().silent();
-    sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
-        .map(|mut xs: Vec<_>| {
-            if xs.len() > 1 {
-                let mut it = xs.into_iter();
-                // grab the first two elements, which we know exist
-                let fst = it.next().unwrap();
-                let snd = it.next().unwrap();
-                it.fold(ExprTree::new(Expr::Op(Or(fst, snd))), |x, y| {
-                    ExprTree::new(Expr::Op(Or(x, y)))
-                })
-            } else {
-                xs.pop().unwrap()
-            }
-        })
-        .skip(skip_spaces())
+    sep_by1(
+        and(arena).skip(skip_spaces()),
+        string("||").skip(skip_spaces()),
+    )
+    .map(|mut xs: Vec<_>| {
+        if xs.len() > 1 {
+            let mut it = xs.into_iter();
+            // grab the first two elements, which we know exist
+            let fst = it.next().unwrap();
+            let snd = it.next().unwrap();
+            it.fold(ExprTree::new(arena, Expr::Op(Or(fst, snd))), |x, y| {
+                ExprTree::new(arena, Expr::Op(Or(x, y)))
+            })
+        } else {
+            xs.pop().unwrap()
+        }
+    })
+    .skip(skip_spaces())
 }
 
-fn not_<Input>() -> impl Parser<Input, Output = ExprTree>
+fn not_<'a, Input>(arena: &'a Bump) -> impl Parser<Input, Output = ExprTree<'a>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -67,13 +74,13 @@ where
     let lex_char = |c| char(c).skip(skip_spaces());
 
     choice((
-        (lex_char('!'), base()).map(|(_, x)| ExprTree::new(Expr::Op(Operator::Not(x)))),
-        base(),
+        (lex_char('!'), base(arena)).map(|(_, x)| ExprTree::new(arena, Expr::Op(Operator::Not(x)))),
+        base(arena),
     ))
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<Input, Output = ExprTree>
+fn base_<'a, Input>(arena: &'a Bump) -> impl Parser<Input, Output = ExprTree<'a>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -85,7 +92,7 @@ where
     let skip_spaces = || spaces().silent();
     let lex_char = |c| char(c).skip(skip_spaces());
 
-    let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
+    let parens = (lex_char('('), or(arena), lex_char(')')).map(|(_, e, _)| e);
 
     let num = || {
         recognize(skip_many1(digit()))
@@ -103,10 +110,10 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentsMatcher::Utf8),
     ))
-    .map(|p| ExprTree::new(Expr::ContentsMatcher(p)));
+    .map(|p| ExprTree::new(arena, Expr::ContentsMatcher(p)));
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| ExprTree::new(Expr::NameMatcher(NameMatcher::Regex(s))));
+        .map(|(_, s, _)| ExprTree::new(arena, Expr::NameMatcher(NameMatcher::Regex(s))));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
@@ -116,7 +123,7 @@ where
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
-        attempt(size_predicate).map(|x| ExprTree::new(Expr::MetadataMatcher(x))),
+        attempt(size_predicate).map(|x| ExprTree::new(arena, Expr::MetadataMatcher(x))),
         parens,
     ))
     .skip(skip_spaces())
@@ -130,33 +137,33 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> ExprTree
+    pub fn or['a, Input](arena: &'a Bump)(Input) -> ExprTree<'a>
     where [Input: Stream<Token = char>]
     {
-        or_()
+        or_(arena)
     }
 }
 
 parser! {
-    fn and[Input]()(Input) -> ExprTree
+    fn and['a, Input](arena: &'a Bump)(Input) -> ExprTree<'a>
     where [Input: Stream<Token = char>]
     {
-        and_()
+        and_(arena)
     }
 }
 
 parser! {
-    fn not[Input]()(Input) -> ExprTree
+    fn not['a, Input](arena: &'a Bump)(Input) -> ExprTree<'a>
     where [Input: Stream<Token = char>]
     {
-        not_()
+        not_(arena)
     }
 }
 
 parser! {
-    fn base[Input]()(Input) -> ExprTree
+    fn base['a, Input](arena: &'a Bump)(Input) -> ExprTree<'a>
     where [Input: Stream<Token = char>]
     {
-        base_()
+        base_(arena)
     }
 }

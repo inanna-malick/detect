@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 clap = {version = "3.2", features = ["derive"]}
+bumpalo = {version = "3.11", features = ["boxed"]} 
 combine = "4.6.6"
 futures = "0.3.23"
 recursion = {path = "../rust-schemes", version = "0.2.0"}

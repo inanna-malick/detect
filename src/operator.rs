@@ -1,4 +1,3 @@
-use crate::expr::ExprTree;
 use recursion::map_layer::MapLayer;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -8,10 +7,10 @@ pub enum Operator<Recurse> {
     Or(Recurse, Recurse),
 }
 
-impl<A, B, C> Operator<ExprTree<A, B, C>> {
+impl Operator<Option<bool>> {
     pub(crate) fn eval(&self) -> Option<bool> {
         use Operator::*;
-        match self.as_ref_op().map_layer(|x| x.known()) {
+        match self {
             And(Some(false), _) | And(_, Some(false)) => Some(false),
             And(Some(true), Some(true)) => Some(true),
             Or(Some(true), _) | Or(_, Some(true)) => Some(true),

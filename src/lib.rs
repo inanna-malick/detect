@@ -15,7 +15,8 @@ pub fn parse_and_run<F: FnMut(String)>(
 ) -> Result<(), anyhow::Error> {
     use walkdir::WalkDir;
 
-    let e = parser::or()
+    let expr_arena = bumpalo::Bump::new();
+    let e = parser::or(&expr_arena)
         .parse(position::Stream::new(&s[..]))
         .expect("parse fail")
         .0;
