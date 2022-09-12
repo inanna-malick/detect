@@ -81,8 +81,6 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
         })
     });
 
-    // (assert) result is known at this point, no remaining branches
-
     Ok(e.known()
         .expect("all predicates evaluated, should have known result"))
 }
