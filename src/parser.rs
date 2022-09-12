@@ -15,14 +15,46 @@ where
     // Necessary due to rust-lang/rust#24159
     Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
 {
+    use Operator::*;
     let skip_spaces = || spaces().silent();
     sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
-            ExprTree::new(Expr::Operator(Operator::And(xs)))
+            let mut it = xs.into_iter();
+            // grab the first two elements, which we know exist
+            let fst = it.next().unwrap();
+            let snd = it.next().unwrap();
+            it.fold(ExprTree::new(Expr::Op(And(fst, snd))), |x, y| {
+                ExprTree::new(Expr::Op(And(x, y)))
+            })
         } else {
             xs.pop().unwrap()
         }
     })
+}
+
+fn or_<Input>() -> impl Parser<Input, Output = ExprTree>
+where
+    Input: Stream<Token = char>,
+    // Necessary due to rust-lang/rust#24159
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    use Operator::*;
+    let skip_spaces = || spaces().silent();
+    sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
+        .map(|mut xs: Vec<_>| {
+            if xs.len() > 1 {
+                let mut it = xs.into_iter();
+                // grab the first two elements, which we know exist
+                let fst = it.next().unwrap();
+                let snd = it.next().unwrap();
+                it.fold(ExprTree::new(Expr::Op(Or(fst, snd))), |x, y| {
+                    ExprTree::new(Expr::Op(Or(x, y)))
+                })
+            } else {
+                xs.pop().unwrap()
+            }
+        })
+        .skip(skip_spaces())
 }
 
 fn not_<Input>() -> impl Parser<Input, Output = ExprTree>
@@ -35,27 +67,9 @@ where
     let lex_char = |c| char(c).skip(skip_spaces());
 
     choice((
-        (lex_char('!'), base()).map(|(_, x)| ExprTree::new(Expr::Operator(Operator::Not(x)))),
+        (lex_char('!'), base()).map(|(_, x)| ExprTree::new(Expr::Op(Operator::Not(x)))),
         base(),
     ))
-}
-
-fn or_<Input>() -> impl Parser<Input, Output = ExprTree>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    let skip_spaces = || spaces().silent();
-    sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
-        .map(|mut xs: Vec<_>| {
-            if xs.len() > 1 {
-                ExprTree::new(Expr::Operator(Operator::Or(xs)))
-            } else {
-                xs.pop().unwrap()
-            }
-        })
-        .skip(skip_spaces())
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead

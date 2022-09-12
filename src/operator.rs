@@ -4,32 +4,20 @@ use recursion::map_layer::MapLayer;
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
     Not(Recurse),
-    And(Vec<Recurse>),
-    Or(Vec<Recurse>),
+    And(Recurse, Recurse),
+    Or(Recurse, Recurse),
 }
 
 impl<A, B, C> Operator<ExprTree<A, B, C>> {
     pub(crate) fn eval(&self) -> Option<bool> {
-        match self {
-            Operator::And(ands) => {
-                if ands.iter().any(|b| b.known() == Some(false)) {
-                    Some(false)
-                } else if ands.iter().all(|b| b.known() == Some(true)) {
-                    Some(true)
-                } else {
-                    None
-                }
-            }
-            Operator::Or(ors) => {
-                if ors.iter().any(|b| b.known() == Some(true)) {
-                    Some(true)
-                } else if ors.iter().all(|b| b.known() == Some(false)) {
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            Operator::Not(x) => x.known().map(|b| !b),
+        use Operator::*;
+        match self.as_ref_op().map_layer(|x| x.known()) {
+            And(Some(false), _) | And(_, Some(false)) => Some(false),
+            And(Some(true), Some(true)) => Some(true),
+            Or(Some(true), _) | Or(_, Some(true)) => Some(true),
+            Or(Some(false), Some(false)) => Some(false),
+            Operator::Not(Some(x)) => Some(!x),
+            _ => None,
         }
     }
 }
@@ -39,8 +27,8 @@ impl<X> Operator<X> {
         use Operator::*;
         match self {
             Not(a) => Not(a),
-            And(xs) => And(xs.iter().collect()),
-            Or(xs) => Or(xs.iter().collect()),
+            And(a, b) => And(a, b),
+            Or(a, b) => Or(a, b),
         }
     }
 }
@@ -52,8 +40,8 @@ impl<A, B> MapLayer<B> for Operator<A> {
         use Operator::*;
         match self {
             Not(a) => Not(f(a)),
-            And(xs) => And(xs.into_iter().map(f).collect()),
-            Or(xs) => Or(xs.into_iter().map(f).collect()),
+            And(a, b) => And(f(a), f(b)),
+            Or(a, b) => Or(f(a), f(b)),
         }
     }
 }

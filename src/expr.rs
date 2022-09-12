@@ -13,7 +13,7 @@ pub(crate) enum Expr<
     Metadata = MetadataMatcher,
     Contents = ContentsMatcher,
 > {
-    Operator(Operator<Recurse>),
+    Op(Operator<Recurse>),
     KnownResult(bool),
     NameMatcher(Name),
     MetadataMatcher(Metadata),
@@ -36,8 +36,8 @@ where
 {
     unfold_and_fold(e, ExprTree::as_ref, |layer| {
         ExprTree(Box::new(match layer {
-            Expr::Operator(x) => match x.eval() {
-                None => Expr::Operator(x),
+            Expr::Op(x) => match x.eval() {
+                None => Expr::Op(x),
                 Some(k) => Expr::KnownResult(k),
             },
             Expr::KnownResult(x) => Expr::KnownResult(x),
@@ -54,7 +54,7 @@ impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for Expr<A, Stage1, Stage2, Stage
     fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, f: F) -> Self::To {
         use Expr::*;
         match self {
-            Operator(o) => Operator(o.map_layer(f)),
+            Op(o) => Op(o.map_layer(f)),
             KnownResult(k) => KnownResult(k),
             NameMatcher(x) => NameMatcher(x),
             MetadataMatcher(x) => MetadataMatcher(x),
@@ -83,7 +83,7 @@ impl<S1, S2, S3> ExprTree<S1, S2, S3> {
 
     pub(crate) fn as_ref(&self) -> Expr<&Self, &S1, &S2, &S3> {
         match self.0.as_ref() {
-            Expr::Operator(o) => Expr::Operator(o.as_ref_op()),
+            Expr::Op(o) => Expr::Op(o.as_ref_op()),
             Expr::KnownResult(b) => Expr::KnownResult(*b),
             Expr::NameMatcher(n) => Expr::NameMatcher(n),
             Expr::MetadataMatcher(m) => Expr::MetadataMatcher(m),
