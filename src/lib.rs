@@ -5,10 +5,12 @@ mod operator;
 mod parser;
 mod util;
 
+use std::path::Path;
+
 use crate::eval::eval;
 
 use combine::{stream::position, Parser};
-pub fn parse_and_run<F: FnMut(String)>(
+pub fn parse_and_run<F: FnMut(&Path)>(
     root: String,
     s: String,
     mut on_match: F,
@@ -27,10 +29,8 @@ pub fn parse_and_run<F: FnMut(String)>(
     for entry in walker {
         let entry = entry?;
         if !entry.metadata()?.is_dir() {
-            // hacky, will panic sometimes if bad OsStr (FIXME)
-            let path = entry.path().to_str().unwrap().to_owned();
-            if eval(&e, entry)? {
-                on_match(path);
+            if eval(&e, &entry)? {
+                on_match(entry.path());
             }
         }
     }

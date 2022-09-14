@@ -56,8 +56,8 @@ impl Case {
             // println!("yield: {:?}", p);
             // let contents = std::fs::read_to_string(p.clone()).unwrap();
             // println!("yield w/ contents: {:?}", contents);
-            let s = p.strip_prefix(&format!("{tmp_path}/")).unwrap().to_string();
-            out.push(s)
+            let s = p.strip_prefix(&format!("{tmp_path}/")).unwrap().to_str().unwrap();
+            out.push(s.to_owned())
         })
         .unwrap();
         assert_eq!(self.expected, out)
@@ -79,6 +79,16 @@ fn test_size() {
     Case {
         expr: "filename(foo) && size(0..5)",
         expected: &["foo"],
+        files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
+    }
+    .run()
+}
+
+#[test]
+fn test_size_and_name_and_contents() {
+    Case {
+        expr: "filename(foo) && size(0..5) && !contains(smol)",
+        expected: &[],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
     .run()

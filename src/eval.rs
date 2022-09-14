@@ -12,10 +12,10 @@ use walkdir::DirEntry;
 // - file name matchers
 // - metadata matchers
 // - file content matchers
-pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
-    let arena = Bump::new();
+pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> {
+    let scratchpad_arena = Bump::new();
     let e: ExprTree<Done, &MetadataMatcher, &ContentsMatcher> = run_stage(
-        &arena,
+        &scratchpad_arena,
         e,
         |name_matcher| match dir_entry.file_name().to_str() {
             Some(s) => match name_matcher {
@@ -35,7 +35,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
     let metadata = dir_entry.metadata()?;
 
     let e: ExprTree<Done, Done, &ContentsMatcher> = run_stage(
-        &arena,
+        &scratchpad_arena,
         &e,
         never,
         |metadata_matcher| match metadata_matcher {
@@ -56,7 +56,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
 
     // harvest regexes, then read and run
     let e: ExprTree<Done, Done, ContentMatcherInternal> =
-        run_stage(&arena, &e, never, never, |contents_matcher| {
+        run_stage(&scratchpad_arena, &e, never, never, |contents_matcher| {
             Expr::ContentsMatcher(match contents_matcher {
                 ContentsMatcher::Regex(r) => {
                     regexes.push(r.as_str());
@@ -78,7 +78,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
         is_utf8 = true;
     }
 
-    let e: ExprTree<Done, Done, Done> = run_stage(&arena, &e, never, never, |c| {
+    let e: ExprTree<Done, Done, Done> = run_stage(&scratchpad_arena, &e, never, never, |c| {
         Expr::KnownResult(match c {
             ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
             ContentMatcherInternal::IsUtf8 => is_utf8,
