@@ -56,7 +56,11 @@ impl Case {
             // println!("yield: {:?}", p);
             // let contents = std::fs::read_to_string(p.clone()).unwrap();
             // println!("yield w/ contents: {:?}", contents);
-            let s = p.strip_prefix(&format!("{tmp_path}/")).unwrap().to_str().unwrap();
+            let s = p
+                .strip_prefix(&format!("{tmp_path}/"))
+                .unwrap()
+                .to_str()
+                .unwrap();
             out.push(s.to_owned())
         })
         .unwrap();

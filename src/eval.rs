@@ -16,10 +16,11 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
     let scratchpad_arena = Bump::new();
     let e: ExprTree<Done, &MetadataMatcher, &ContentsMatcher> = run_stage(
         &scratchpad_arena,
+        "match name",
         e,
         |name_matcher| match dir_entry.file_name().to_str() {
             Some(s) => match name_matcher {
-                NameMatcher::Regex(r) => Expr::KnownResult(r.is_match(s)),
+                NameMatcher::Filename(r) => Expr::KnownResult(r.is_match(s)),
             },
             None => Expr::KnownResult(false),
         },
@@ -36,6 +37,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
 
     let e: ExprTree<Done, Done, &ContentsMatcher> = run_stage(
         &scratchpad_arena,
+        "match metadata",
         &e,
         never,
         |metadata_matcher| match metadata_matcher {
@@ -48,6 +50,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
         return Ok(b);
     }
 
+    #[derive(Debug, PartialEq, Eq, Clone)]
     enum ContentMatcherInternal {
         RegexIndex(usize),
         IsUtf8,
@@ -56,13 +59,13 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
 
     // harvest regexes, then read and run
     let e: ExprTree<Done, Done, ContentMatcherInternal> =
-        run_stage(&scratchpad_arena, &e, never, never, |contents_matcher| {
+        run_stage(&scratchpad_arena, "harvest regexes", &e, never, never, |contents_matcher| {
             Expr::ContentsMatcher(match contents_matcher {
-                ContentsMatcher::Regex(r) => {
+                ContentsMatcher::FileContents(r) => {
                     regexes.push(r.as_str());
                     ContentMatcherInternal::RegexIndex(regexes.len() - 1)
                 }
-                ContentsMatcher::Utf8 => ContentMatcherInternal::IsUtf8,
+                ContentsMatcher::IsUtf8 => ContentMatcherInternal::IsUtf8,
             })
         });
 
@@ -78,7 +81,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
         is_utf8 = true;
     }
 
-    let e: ExprTree<Done, Done, Done> = run_stage(&scratchpad_arena, &e, never, never, |c| {
+    let e: ExprTree<Done, Done, Done> = run_stage(&scratchpad_arena, "check regexset matches", &e, never, never, |c| {
         Expr::KnownResult(match c {
             ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
             ContentMatcherInternal::IsUtf8 => is_utf8,

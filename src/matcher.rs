@@ -1,12 +1,12 @@
 use regex::Regex;
 use std::ops::Range;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NameMatcher {
-    Regex(Regex),
+    Filename(Regex),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MetadataMatcher {
     Filesize(Range<u64>),
 }
@@ -14,8 +14,8 @@ pub enum MetadataMatcher {
 // predicates based on, eg, exif data or w/e also go here
 // could get silly with it and run, eg, 'strings' (like the cmd) or w/e
 // NOTE: could even abstract such that ppl can add their own functionality like this
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ContentsMatcher {
-    Regex(Regex),
-    Utf8,
+    FileContents(Regex),
+    IsUtf8,
 }

@@ -105,15 +105,15 @@ where
 
     let regex = || many1(alpha_num()).map(|s: String| Regex::new(&s).unwrap());
     let contains_predicate =
-        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentsMatcher::Regex(s));
+        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentsMatcher::FileContents(s));
     let contents_predicate = choice((
         attempt(contains_predicate),
-        string("utf8()").map(|_| ContentsMatcher::Utf8),
+        string("utf8()").map(|_| ContentsMatcher::IsUtf8),
     ))
     .map(|p| ExprTree::new(arena, Expr::ContentsMatcher(p)));
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| ExprTree::new(arena, Expr::NameMatcher(NameMatcher::Regex(s))));
+        .map(|(_, s, _)| ExprTree::new(arena, Expr::NameMatcher(NameMatcher::Filename(s))));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))

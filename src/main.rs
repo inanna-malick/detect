@@ -14,7 +14,7 @@ pub fn main() -> Result<(), anyhow::Error> {
 
     parse_and_run(".".to_owned(), args.expr, |path| {
         if let Some(path) = path.to_str() {
-                println!("{path}")
+            println!("{path}")
         }
     })
 }

@@ -1,13 +1,16 @@
+use std::fmt::Debug;
+
 pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
 pub(crate) use crate::operator::Operator;
 use bumpalo::{boxed::Box, Bump};
-use recursion::{map_layer::MapLayer, stack_machine_lazy::unfold_and_fold};
+use recursion::stack_machine::{expand_and_collapse_v, serialize_json};
+use recursion::{map_layer::MapLayer, stack_machine::expand_and_collapse};
 
 /// Generic expression type, with branches for matchers on
 /// - file name
 /// - file metadata
 /// - file contents
-#[derive(Debug)]
+#[derive(Clone)]
 pub(crate) enum Expr<
     Recurse,
     Name = NameMatcher,
@@ -21,22 +24,43 @@ pub(crate) enum Expr<
     ContentsMatcher(Contents),
 }
 
+impl<R: Debug, N: Debug, M: Debug, C: Debug> std::fmt::Debug for Expr<R, N, M, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Op(arg0) => arg0.fmt(f),
+            Self::KnownResult(arg0) => f.debug_tuple("Known").field(arg0).finish(),
+            Self::NameMatcher(arg0) => arg0.fmt(f),
+            Self::MetadataMatcher(arg0) => arg0.fmt(f),
+            Self::ContentsMatcher(arg0) => arg0.fmt(f),
+        }
+    }
+}
+
+
+
 /// abstracts over building and running a stack machine to
 /// process some stage of expression evaluation with short-circuiting
 /// where applicable - eg, And(false, *, *), Or(*, *, true, *)
 pub(crate) fn run_stage<'a, NameA, MetadataA, ContentsA, NameB, MetadataB, ContentsB, F1, F2, F3>(
     arena: &'a Bump,
+    name: &'static str,
     e: &'a ExprTree<NameA, MetadataA, ContentsA>,
     mut map_name: F1,
     mut map_metadata: F2,
     mut map_contents: F3,
 ) -> ExprTree<'a, NameB, MetadataB, ContentsB>
 where
+    NameA: std::fmt::Debug,
+    MetadataA: std::fmt::Debug,
+    ContentsA: std::fmt::Debug,
+    NameB: std::fmt::Debug,
+    MetadataB: std::fmt::Debug,
+    ContentsB: std::fmt::Debug,
     F1: FnMut(&'a NameA) -> ExprLayer<NameB, MetadataB, ContentsB>,
     F2: FnMut(&'a MetadataA) -> ExprLayer<NameB, MetadataB, ContentsB>,
     F3: FnMut(&'a ContentsA) -> ExprLayer<NameB, MetadataB, ContentsB>,
 {
-    unfold_and_fold(
+    let (out, viz) = expand_and_collapse_v(
         e,
         ExprTree::as_ref,
         |layer: Expr<ExprTree<NameB, MetadataB, ContentsB>, &NameA, &MetadataA, &ContentsA>| {
@@ -54,7 +78,13 @@ where
                 },
             )
         },
-    )
+    );
+
+    println!("visualized stack machine {}!", name);
+    let serialized = serialize_json(viz).unwrap();
+    println!("{}", serialized);
+
+    out
 }
 
 impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for Expr<A, Stage1, Stage2, Stage3> {
@@ -73,10 +103,16 @@ impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for Expr<A, Stage1, Stage2, Stage
 }
 
 type ExprLayer<'a, A, B, C> = Expr<ExprTree<'a, A, B, C>, A, B, C>;
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct ExprTree<'a, Name = NameMatcher, Metadata = MetadataMatcher, Contents = ContentsMatcher>(
     pub(crate) Box<'a, ExprLayer<'a, Name, Metadata, Contents>>,
 );
+
+impl<'a, N: Debug, M: Debug, C: Debug> std::fmt::Debug for ExprTree<'a, N, M, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl<'a, S1, S2, S3> ExprTree<'a, S1, S2, S3> {
     pub(crate) fn new(arena: &'a Bump, e: ExprLayer<'a, S1, S2, S3>) -> Self {

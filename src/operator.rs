@@ -1,11 +1,24 @@
 use recursion::map_layer::MapLayer;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum Operator<Recurse> {
     Not(Recurse),
     And(Recurse, Recurse),
     Or(Recurse, Recurse),
 }
+
+impl<R: std::fmt::Debug> std::fmt::Debug for Operator<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Not(arg0) => write!(f, "! {:?}", arg0),
+            Self::And(arg0, arg1) => write!(f, "{:?} && {:?}", arg0, arg1),
+            Self::Or(arg0, arg1) => write!(f, "{:?} || {:?}", arg0, arg1),
+        }
+    }
+}
+
+
+
 use Operator::*;
 
 impl Operator<Option<bool>> {
