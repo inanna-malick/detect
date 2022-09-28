@@ -17,8 +17,6 @@ impl<R: std::fmt::Debug> std::fmt::Debug for Operator<R> {
     }
 }
 
-
-
 use Operator::*;
 
 impl Operator<Option<bool>> {

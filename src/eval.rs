@@ -16,7 +16,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
     let scratchpad_arena = Bump::new();
     let e: ExprTree<Done, &MetadataMatcher, &ContentsMatcher> = run_stage(
         &scratchpad_arena,
-        "match name",
+        format!("{}_match_name", dir_entry.file_name().to_str().unwrap()),
         e,
         |name_matcher| match dir_entry.file_name().to_str() {
             Some(s) => match name_matcher {
@@ -37,7 +37,7 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
 
     let e: ExprTree<Done, Done, &ContentsMatcher> = run_stage(
         &scratchpad_arena,
-        "match metadata",
+        format!("{}_match_metadata", dir_entry.file_name().to_str().unwrap()),
         &e,
         never,
         |metadata_matcher| match metadata_matcher {
@@ -58,8 +58,16 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
     let mut regexes = Vec::new();
 
     // harvest regexes, then read and run
-    let e: ExprTree<Done, Done, ContentMatcherInternal> =
-        run_stage(&scratchpad_arena, "harvest regexes", &e, never, never, |contents_matcher| {
+    let e: ExprTree<Done, Done, ContentMatcherInternal> = run_stage(
+        &scratchpad_arena,
+        format!(
+            "{}_harvest_regexes",
+            dir_entry.file_name().to_str().unwrap()
+        ),
+        &e,
+        never,
+        never,
+        |contents_matcher| {
             Expr::ContentsMatcher(match contents_matcher {
                 ContentsMatcher::FileContents(r) => {
                     regexes.push(r.as_str());
@@ -67,7 +75,8 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
                 }
                 ContentsMatcher::IsUtf8 => ContentMatcherInternal::IsUtf8,
             })
-        });
+        },
+    );
 
     let mut matching_idxs = Vec::new();
     let mut is_utf8 = false;
@@ -81,12 +90,19 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: &DirEntry) -> std::io::Result<bool> 
         is_utf8 = true;
     }
 
-    let e: ExprTree<Done, Done, Done> = run_stage(&scratchpad_arena, "check regexset matches", &e, never, never, |c| {
-        Expr::KnownResult(match c {
-            ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
-            ContentMatcherInternal::IsUtf8 => is_utf8,
-        })
-    });
+    let e: ExprTree<Done, Done, Done> = run_stage(
+        &scratchpad_arena,
+        format!("{}_check_regexes", dir_entry.file_name().to_str().unwrap()),
+        &e,
+        never,
+        never,
+        |c| {
+            Expr::KnownResult(match c {
+                ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
+                ContentMatcherInternal::IsUtf8 => is_utf8,
+            })
+        },
+    );
 
     Ok(e.known()
         .expect("all predicates evaluated, should have known result"))

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
 pub(crate) use crate::operator::Operator;
 use bumpalo::{boxed::Box, Bump};
-use recursion::stack_machine::{expand_and_collapse_v, serialize_json};
+use recursion::stack_machine::{expand_and_collapse_v, serialize_html, serialize_json};
 use recursion::{map_layer::MapLayer, stack_machine::expand_and_collapse};
 
 /// Generic expression type, with branches for matchers on
@@ -36,14 +36,12 @@ impl<R: Debug, N: Debug, M: Debug, C: Debug> std::fmt::Debug for Expr<R, N, M, C
     }
 }
 
-
-
 /// abstracts over building and running a stack machine to
 /// process some stage of expression evaluation with short-circuiting
 /// where applicable - eg, And(false, *, *), Or(*, *, true, *)
 pub(crate) fn run_stage<'a, NameA, MetadataA, ContentsA, NameB, MetadataB, ContentsB, F1, F2, F3>(
     arena: &'a Bump,
-    name: &'static str,
+    name: String,
     e: &'a ExprTree<NameA, MetadataA, ContentsA>,
     mut map_name: F1,
     mut map_metadata: F2,
@@ -81,11 +79,13 @@ where
     );
 
     println!("visualized stack machine {}!", name);
-    let serialized = serialize_json(viz).unwrap();
-    println!("{}", serialized);
+    let serialized = serialize_html(viz).unwrap();
+    std::fs::write(format!("{}.html", name), serialized).unwrap();
+    println!("wrote to {}.html", name);
 
     out
 }
+
 
 impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for Expr<A, Stage1, Stage2, Stage3> {
     type Unwrapped = A;

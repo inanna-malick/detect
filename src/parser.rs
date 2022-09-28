@@ -104,8 +104,8 @@ where
     };
 
     let regex = || many1(alpha_num()).map(|s: String| Regex::new(&s).unwrap());
-    let contains_predicate =
-        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentsMatcher::FileContents(s));
+    let contains_predicate = (string("contains("), regex(), lex_char(')'))
+        .map(|(_, s, _)| ContentsMatcher::FileContents(s));
     let contents_predicate = choice((
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentsMatcher::IsUtf8),
