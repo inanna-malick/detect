@@ -1,6 +1,6 @@
 pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
 pub(crate) use crate::operator::Operator;
-use recursion::{map_layer::MapLayer, stack_machine_lazy::unfold_and_fold};
+use recursion::{map_layer::MapLayer, stack_machine::expand_and_collapse};
 
 /// Generic expression type, with branches for matchers on
 /// - file name
@@ -34,7 +34,7 @@ where
     F2: FnMut(&'a MetadataA) -> ExprLayer<NameB, MetadataB, ContentsB>,
     F3: FnMut(&'a ContentsA) -> ExprLayer<NameB, MetadataB, ContentsB>,
 {
-    unfold_and_fold(e, ExprTree::as_ref, |layer| {
+    expand_and_collapse(e, ExprTree::as_ref, |layer| {
         ExprTree(Box::new(match layer {
             Expr::Operator(x) => match x.eval() {
                 None => Expr::Operator(x),
