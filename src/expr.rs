@@ -16,12 +16,10 @@ pub enum Expr<Name, Metadata, Contents> {
     Contents(Contents),
 }
 
-/// Single layer of a filesystem entity matcher expression, with branches for matchers on
-/// - file name
-/// - file metadata
-/// - file contents
+/// short-lived single layer of a filesystem entity matcher expression, used for
+/// expressing recursive algorithms over a single layer of a borrowed Expr
 #[derive(Debug)]
-pub enum ExprLayer<
+pub enum ExprLayer<'a,
     Recurse,
     Name = NameMatcher,
     Metadata = MetadataMatcher,
@@ -29,14 +27,14 @@ pub enum ExprLayer<
 > {
     Operator(Operator<Recurse>),
     KnownResult(bool),
-    Name(Name),
-    Metadata(Metadata),
-    Contents(Contents),
+    Name(&'a Name),
+    Metadata(&'a Metadata),
+    Contents(&'a Contents),
 }
 
-impl<Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<A, Name, Meta, Content> {
+impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta, Content> {
     type Unwrapped = A;
-    type To = ExprLayer<B, Name, Meta, Content>;
+    type To = ExprLayer<'a, B, Name, Meta, Content>;
     fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, f: F) -> Self::To {
         use ExprLayer::*;
         match self {
@@ -50,7 +48,7 @@ impl<Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<A, Name, Meta, Content
 }
 
 impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
-    type To = ExprLayer<Self, &'a S1, &'a S2, &'a S3>;
+    type To = ExprLayer<'a, Self, S1, S2, S3>;
 
     // project into ExprLayer
     fn project(self) -> Self::To {

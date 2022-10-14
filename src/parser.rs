@@ -89,7 +89,7 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentsMatcher::Utf8),
     ))
-    .map(|p| Expr::Contents(p));
+    .map(Expr::Contents);
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
         .map(|(_, s, _)| Expr::Name(NameMatcher::Regex(s)));
@@ -102,7 +102,7 @@ where
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
-        attempt(size_predicate).map(|x| Expr::Metadata(x)),
+        attempt(size_predicate).map(Expr::Metadata),
         parens,
     ))
     .skip(skip_spaces())

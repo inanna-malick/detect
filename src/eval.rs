@@ -81,7 +81,7 @@ pub(crate) fn eval(
             Contents(p) => Expr::KnownResult({
                 if let Some(utf8_contents) = utf8_contents.as_ref() {
                     match p {
-                        ContentsMatcher::Regex(regex) => regex.is_match(&utf8_contents),
+                        ContentsMatcher::Regex(regex) => regex.is_match(utf8_contents),
                         ContentsMatcher::Utf8 => true,
                     }
                 } else {
@@ -98,7 +98,7 @@ pub(crate) fn eval(
 
 
     if let Expr::KnownResult(b) = e {
-        return Ok(b);
+        Ok(b)
     } else {
         panic!("programmer error, should have known result after all predicates evaluated")
     }
