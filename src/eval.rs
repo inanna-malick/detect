@@ -1,4 +1,4 @@
-use crate::expr::{ContentsMatcher, ExprLayer, ExprTree, MetadataMatcher, NameMatcher};
+use crate::expr::{ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher};
 use crate::util::Done;
 use recursion::Collapse;
 use regex::RegexSet;
@@ -12,10 +12,10 @@ use walkdir::DirEntry;
 // - file name matchers
 // - metadata matchers
 // - file content matchers
-pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
+pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
     use ExprLayer::*;
-    let e: ExprTree<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
-        ExprTree::new(match layer {
+    let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
+        Expr::new(match layer {
             Operator(x) => match x.eval() {
                 None => Operator(x),
                 Some(k) => KnownResult(k),
@@ -41,8 +41,8 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
     // short circuit or query metadata (expensive)
     let metadata = dir_entry.metadata()?;
 
-    let e: ExprTree<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
-        ExprTree::new(match layer {
+    let e: Expr<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
+        Expr::new(match layer {
             Operator(x) => match x.eval() {
                 None => Operator(x),
                 Some(k) => KnownResult(k),
@@ -69,8 +69,8 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
     let mut regexes = Vec::new();
 
     // harvest regexes so we can run a single fused RegexSet pass
-    let e: ExprTree<Done, Done, ContentMatcherInternal> = e.collapse_layers(|layer| {
-        ExprTree::new(match layer {
+    let e: Expr<Done, Done, ContentMatcherInternal> = e.collapse_layers(|layer| {
+        Expr::new(match layer {
             Operator(x) => match x.eval() {
                 None => Operator(x),
                 Some(k) => KnownResult(k),
@@ -102,8 +102,8 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
         is_utf8 = true;
     }
 
-    let e: ExprTree<Done, Done, Done> = e.collapse_layers(|layer| {
-        ExprTree::new(match layer {
+    let e: Expr<Done, Done, Done> = e.collapse_layers(|layer| {
+        Expr::new(match layer {
             Operator(x) => match x.eval() {
                 None => Operator(x),
                 Some(k) => KnownResult(k),

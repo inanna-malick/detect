@@ -3,7 +3,21 @@ pub(crate) use crate::operator::Operator;
 use recursion::map_layer::MapLayer;
 use recursion::map_layer::Project;
 
-/// Generic expression type, with branches for matchers on
+/// Filesystem entity matcher expression, with branches for matchers on
+/// - file name
+/// - file metadata
+/// - file contents
+#[derive(Debug)]
+pub enum Expr<Name = NameMatcher, Metadata = MetadataMatcher, Contents = ContentsMatcher> {
+    Operator(Operator<Box<Self>>),
+    KnownResult(bool),
+    Name(Name),
+    Metadata(Metadata),
+    Contents(Contents),
+}
+
+
+/// Single layer of a filesystem entity matcher expression, with branches for matchers on
 /// - file name
 /// - file metadata
 /// - file contents
@@ -21,9 +35,9 @@ pub enum ExprLayer<
     Contents(Contents),
 }
 
-impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for ExprLayer<A, Stage1, Stage2, Stage3> {
+impl<Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<A, Name, Meta, Content> {
     type Unwrapped = A;
-    type To = ExprLayer<B, Stage1, Stage2, Stage3>;
+    type To = ExprLayer<B, Name, Meta, Content>;
     fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, f: F) -> Self::To {
         use ExprLayer::*;
         match self {
@@ -36,12 +50,7 @@ impl<Stage1, Stage2, Stage3, A, B> MapLayer<B> for ExprLayer<A, Stage1, Stage2, 
     }
 }
 
-#[derive(Debug)]
-#[allow(clippy::type_complexity)] pub struct ExprTree<N = NameMatcher, M = MetadataMatcher, C = ContentsMatcher>(
-    pub(crate) Box<ExprLayer<ExprTree<N, M, C>, N, M, C>>,
-);
-
-impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a ExprTree<S1, S2, S3> {
+impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
     type To = ExprLayer<Self, &'a S1, &'a S2, &'a S3>;
 
     fn project(self) -> Self::To {
@@ -49,26 +58,34 @@ impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a ExprTree<S1, S2, S3> {
     }
 }
 
-impl<N, M, C> ExprTree<N, M, C> {
-    pub(crate) fn new(e: ExprLayer<ExprTree<N, M, C>, N, M, C>) -> Self {
-        Self(Box::new(e))
+impl<N, M, C> Expr<N, M, C> {
+    // coproject - TODO rename, MB: make public API?
+    pub(crate) fn new(e: ExprLayer<Self, N, M, C>) -> Self {
+        use ExprLayer::*;
+        match e {
+            Operator(o) => Self::Operator(o.map_layer(Box::new)),
+            KnownResult(k) => Self::KnownResult(k),
+            Name(n) => Self::Name(n),
+            Metadata(m) => Self::Metadata(m),
+            Contents(c) => Self::Contents(c),
+        }
     }
 
     pub(crate) fn known(&self) -> Option<bool> {
-        match *self.0 {
-            ExprLayer::KnownResult(b) => Some(b),
+        match *self {
+            Self::KnownResult(b) => Some(b),
             _ => None,
         }
     }
 
     pub(crate) fn as_ref(&self) -> ExprLayer<&Self, &N, &M, &C> {
         use ExprLayer::*;
-        match self.0.as_ref() {
-            Operator(o) => Operator(o.as_ref_op()),
-            KnownResult(b) => KnownResult(*b),
-            Name(n) => Name(n),
-            Metadata(m) => Metadata(m),
-            Contents(c) => Contents(c),
+        match self {
+            Self::Operator(o) => Operator(o.as_ref_op()),
+            Self::KnownResult(b) => KnownResult(*b),
+            Self::Name(n) => Name(n),
+            Self::Metadata(m) => Metadata(m),
+            Self::Contents(c) => Contents(c),
         }
     }
 }
