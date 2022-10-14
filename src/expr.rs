@@ -19,7 +19,8 @@ pub enum Expr<Name, Metadata, Contents> {
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
 #[derive(Debug)]
-pub enum ExprLayer<'a,
+pub enum ExprLayer<
+    'a,
     Recurse,
     Name = NameMatcher,
     Metadata = MetadataMatcher,
