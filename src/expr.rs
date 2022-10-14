@@ -17,6 +17,7 @@ pub enum Expr<Name = NameMatcher, Metadata = MetadataMatcher, Contents = Content
 }
 
 
+/// NOTE: a projection, not a component of Expr
 /// Single layer of a filesystem entity matcher expression, with branches for matchers on
 /// - file name
 /// - file metadata
@@ -58,8 +59,12 @@ impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
     }
 }
 
+
+
+// borrowed vs owned nature extremely unclear here
 impl<N, M, C> Expr<N, M, C> {
     // coproject - TODO rename, MB: make public API?
+    // TOD: in use the things in the exprlayer are all borrowed so it looks like parameterizing over owned vs borrowed
     pub(crate) fn new(e: ExprLayer<Self, N, M, C>) -> Self {
         use ExprLayer::*;
         match e {
@@ -78,6 +83,8 @@ impl<N, M, C> Expr<N, M, C> {
         }
     }
 
+    // TODO: rename or move into project
+    // this looks like everything being borrowed
     pub(crate) fn as_ref(&self) -> ExprLayer<&Self, &N, &M, &C> {
         use ExprLayer::*;
         match self {

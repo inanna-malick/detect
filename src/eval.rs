@@ -12,9 +12,19 @@ use walkdir::DirEntry;
 // - file name matchers
 // - metadata matchers
 // - file content matchers
+// TODO: the ownership model is really hard to understand here
 pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
     use ExprLayer::*;
-    let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
+
+    // NOTE: param'd over Matcher/&Matcher is _CONFUSING_
+    //       add comments explaining that
+    // NOTE: consider REMOVING default params for Expr - makes it clearer, no need to reference impl
+
+    // NOTE: suggestion: convert fully owned expr into expr ampersand etc - so that eval doesn't take a &'d Expr,
+    //       instead it takes Expr<&N, &M, &C>
+    // NOTE: borrowed expr type alias? so then just have default param's overriden as Done instead of listing out all of them
+
+    let e: Expr<Done, _, _> = e.collapse_layers(|layer| {
         Expr::new(match layer {
             Operator(x) => match x.eval() {
                 None => Operator(x),
@@ -41,7 +51,7 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
     // short circuit or query metadata (expensive)
     let metadata = dir_entry.metadata()?;
 
-    let e: Expr<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
+    let e: Expr<Done, Done, _> = e.collapse_layers(|layer| {
         Expr::new(match layer {
             Operator(x) => match x.eval() {
                 None => Operator(x),
@@ -53,8 +63,8 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
             // boilerplate
             KnownResult(k) => KnownResult(k),
             Contents(p) => Contents(*p),
-            // already processed
-            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
+            // already processed (rewrite: less haskell brained?)
+            Name(_) => unreachable!("name predicate has already been evaluated"),
         })
     });
 
@@ -62,6 +72,8 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
         return Ok(b);
     }
 
+    // TODO: consider removing, conceptual overhead? benchmark lol. just don't do it for first pass.
+    // TODO: do simple thing
     enum ContentMatcherInternal {
         RegexIndex(usize),
         IsUtf8,
@@ -85,8 +97,8 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
             // boilerplate
             KnownResult(k) => KnownResult(k),
             // already processed
-            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
-            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
+            Name(_) => unreachable!("name predicate has already been evaluated"),
+            Metadata(_) => unreachable!("metadata predicate has already been evaluated"),
         })
     });
 
@@ -115,8 +127,8 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
             // boilerplate
             KnownResult(k) => KnownResult(k),
             // already processed
-            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
-            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
+            Name(_) => unreachable!("name predicate has already been evaluated"),
+            Metadata(_) => unreachable!("metadata predicate has already been evaluated"),
         })
     });
 
