@@ -9,7 +9,7 @@ use regex::Regex;
 use crate::expr::*;
 use crate::operator::Operator;
 
-fn and_<Input>() -> impl Parser<Input, Output = Expr>
+fn and_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -18,14 +18,14 @@ where
     let skip_spaces = || spaces().silent();
     sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
-            Expr::new(ExprLayer::Operator(Operator::And(xs)))
+            Expr::Operator(Box::new(Operator::And(xs)))
         } else {
             xs.pop().unwrap()
         }
     })
 }
 
-fn not_<Input>() -> impl Parser<Input, Output = Expr>
+fn not_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -35,12 +35,12 @@ where
     let lex_char = |c| char(c).skip(skip_spaces());
 
     choice((
-        (lex_char('!'), base()).map(|(_, x)| Expr::new(ExprLayer::Operator(Operator::Not(x)))),
+        (lex_char('!'), base()).map(|(_, x)| Expr::Operator(Box::new(Operator::Not(x)))),
         base(),
     ))
 }
 
-fn or_<Input>() -> impl Parser<Input, Output = Expr>
+fn or_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -50,7 +50,7 @@ where
     sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
         .map(|mut xs: Vec<_>| {
             if xs.len() > 1 {
-                Expr::new(ExprLayer::Operator(Operator::Or(xs)))
+                Expr::Operator(Box::new(Operator::Or(xs)))
             } else {
                 xs.pop().unwrap()
             }
@@ -59,7 +59,7 @@ where
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<Input, Output = Expr>
+fn base_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -89,10 +89,10 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentsMatcher::Utf8),
     ))
-    .map(|p| Expr::new(ExprLayer::Contents(p)));
+    .map(|p| Expr::Contents(p));
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| Expr::new(ExprLayer::Name(NameMatcher::Regex(s))));
+        .map(|(_, s, _)| Expr::Name(NameMatcher::Regex(s)));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
@@ -102,7 +102,7 @@ where
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
-        attempt(size_predicate).map(|x| Expr::new(ExprLayer::Metadata(x))),
+        attempt(size_predicate).map(|x| Expr::Metadata(x)),
         parens,
     ))
     .skip(skip_spaces())
@@ -116,7 +116,7 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> Expr
+    pub fn or[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -124,7 +124,7 @@ parser! {
 }
 
 parser! {
-    fn and[Input]()(Input) -> Expr
+    fn and[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -132,7 +132,7 @@ parser! {
 }
 
 parser! {
-    fn not[Input]()(Input) -> Expr
+    fn not[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
     where [Input: Stream<Token = char>]
     {
         not_()
@@ -140,7 +140,7 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> Expr
+    fn base[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
     where [Input: Stream<Token = char>]
     {
         base_()

@@ -6,8 +6,8 @@ mod parser;
 mod util;
 
 use crate::eval::eval;
-
 use combine::stream::position;
+
 pub fn parse_and_run<F: FnMut(String)>(
     root: String,
     s: String,

@@ -1,7 +1,6 @@
 use crate::expr::{ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher};
 use crate::util::Done;
 use recursion::Collapse;
-use regex::RegexSet;
 use std::{
     fs::{self},
     os::unix::prelude::MetadataExt,
@@ -12,126 +11,95 @@ use walkdir::DirEntry;
 // - file name matchers
 // - metadata matchers
 // - file content matchers
-// TODO: the ownership model is really hard to understand here
-pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
+pub(crate) fn eval(
+    e: &Expr<NameMatcher, MetadataMatcher, ContentsMatcher>,
+    dir_entry: DirEntry,
+) -> std::io::Result<bool> {
     use ExprLayer::*;
 
-    // NOTE: param'd over Matcher/&Matcher is _CONFUSING_
-    //       add comments explaining that
-    // NOTE: consider REMOVING default params for Expr - makes it clearer, no need to reference impl
-
-    // NOTE: suggestion: convert fully owned expr into expr ampersand etc - so that eval doesn't take a &'d Expr,
-    //       instead it takes Expr<&N, &M, &C>
-    // NOTE: borrowed expr type alias? so then just have default param's overriden as Done instead of listing out all of them
-
-    let e: Expr<Done, _, _> = e.collapse_layers(|layer| {
-        Expr::new(match layer {
+    let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
+        match layer {
             Operator(x) => match x.eval() {
-                None => Operator(x),
-                Some(k) => KnownResult(k),
+                None => Expr::Operator(Box::new(x)),
+                Some(k) => Expr::KnownResult(k),
             },
             // evaluate all NameMatcher predicates
             Name(name_matcher) => match dir_entry.file_name().to_str() {
                 Some(s) => match name_matcher {
-                    NameMatcher::Regex(r) => KnownResult(r.is_match(s)),
+                    NameMatcher::Regex(r) => Expr::KnownResult(r.is_match(s)),
                 },
-                None => KnownResult(false),
+                None => Expr::KnownResult(false),
             },
             // boilerplate
-            KnownResult(k) => KnownResult(k),
-            Metadata(p) => Metadata(p),
-            Contents(p) => Contents(p),
-        })
+            KnownResult(k) => Expr::KnownResult(k),
+            Metadata(p) => Expr::Metadata(p),
+            Contents(p) => Expr::Contents(p),
+        }
     });
 
-    if let Some(b) = e.known() {
+    // short circuit before querying metadata (expensive)
+    if let Expr::KnownResult(b) = e {
         return Ok(b);
     }
 
-    // short circuit or query metadata (expensive)
     let metadata = dir_entry.metadata()?;
 
-    let e: Expr<Done, Done, _> = e.collapse_layers(|layer| {
-        Expr::new(match layer {
+    let e: Expr<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
+        match layer {
             Operator(x) => match x.eval() {
-                None => Operator(x),
-                Some(k) => KnownResult(k),
+                None => Expr::Operator(Box::new(x)),
+                Some(k) => Expr::KnownResult(k),
             },
             Metadata(p) => match p {
-                MetadataMatcher::Filesize(range) => KnownResult(range.contains(&metadata.size())),
+                MetadataMatcher::Filesize(range) => {
+                    Expr::KnownResult(range.contains(&metadata.size()))
+                }
             },
             // boilerplate
-            KnownResult(k) => KnownResult(k),
-            Contents(p) => Contents(*p),
-            // already processed (rewrite: less haskell brained?)
+            KnownResult(k) => Expr::KnownResult(k),
+            Contents(p) => Expr::Contents(*p),
+            // unreachable: predicate already evaluated
             Name(_) => unreachable!("name predicate has already been evaluated"),
-        })
+        }
     });
 
-    if let Some(b) = e.known() {
+    // short circuit before reading file contents (even more expensive)
+    if let Expr::KnownResult(b) = e {
         return Ok(b);
     }
-
-    // TODO: consider removing, conceptual overhead? benchmark lol. just don't do it for first pass.
-    // TODO: do simple thing
-    enum ContentMatcherInternal {
-        RegexIndex(usize),
-        IsUtf8,
-    }
-    let mut regexes = Vec::new();
-
-    // harvest regexes so we can run a single fused RegexSet pass
-    let e: Expr<Done, Done, ContentMatcherInternal> = e.collapse_layers(|layer| {
-        Expr::new(match layer {
-            Operator(x) => match x.eval() {
-                None => Operator(x),
-                Some(k) => KnownResult(k),
-            },
-            Contents(p) => Contents(match p {
-                ContentsMatcher::Regex(r) => {
-                    regexes.push(r.as_str());
-                    ContentMatcherInternal::RegexIndex(regexes.len() - 1)
-                }
-                ContentsMatcher::Utf8 => ContentMatcherInternal::IsUtf8,
-            }),
-            // boilerplate
-            KnownResult(k) => KnownResult(k),
-            // already processed
-            Name(_) => unreachable!("name predicate has already been evaluated"),
-            Metadata(_) => unreachable!("metadata predicate has already been evaluated"),
-        })
-    });
-
-    let mut matching_idxs = Vec::new();
-    let mut is_utf8 = false;
-
-    let regex_set = RegexSet::new(regexes.iter()).unwrap();
 
     let contents = fs::read(dir_entry.path())?;
 
-    if let Ok(contents) = String::from_utf8(contents) {
-        matching_idxs.extend(regex_set.matches(&contents).into_iter());
-        is_utf8 = true;
-    }
+    let utf8_contents = String::from_utf8(contents).ok();
 
     let e: Expr<Done, Done, Done> = e.collapse_layers(|layer| {
-        Expr::new(match layer {
+        match layer {
             Operator(x) => match x.eval() {
-                None => Operator(x),
-                Some(k) => KnownResult(k),
+                None => Expr::Operator(Box::new(x)),
+                Some(k) => Expr::KnownResult(k),
             },
-            Contents(p) => KnownResult(match p {
-                ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
-                ContentMatcherInternal::IsUtf8 => is_utf8,
+            Contents(p) => Expr::KnownResult({
+                if let Some(utf8_contents) = utf8_contents.as_ref() {
+                    match p {
+                        ContentsMatcher::Regex(regex) => regex.is_match(&utf8_contents),
+                        ContentsMatcher::Utf8 => true,
+                    }
+                } else {
+                    false
+                }
             }),
             // boilerplate
-            KnownResult(k) => KnownResult(k),
-            // already processed
+            KnownResult(k) => Expr::KnownResult(k),
+            // unreachable: predicates already evaluated
             Name(_) => unreachable!("name predicate has already been evaluated"),
             Metadata(_) => unreachable!("metadata predicate has already been evaluated"),
-        })
+        }
     });
 
-    Ok(e.known()
-        .expect("all predicates evaluated, should have known result"))
+
+    if let Expr::KnownResult(b) = e {
+        return Ok(b);
+    } else {
+        panic!("programmer error, should have known result after all predicates evaluated")
+    }
 }

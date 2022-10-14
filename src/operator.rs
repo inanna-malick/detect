@@ -12,35 +12,27 @@ impl<A, B, C> Operator<Expr<A, B, C>> {
     pub(crate) fn eval(&self) -> Option<bool> {
         match self {
             Operator::And(ands) => {
-                if ands.iter().any(|b| b.known() == Some(false)) {
+                if ands.iter().any(|b| matches!(b, Expr::KnownResult(false))) {
                     Some(false)
-                } else if ands.iter().all(|b| b.known() == Some(true)) {
+                } else if ands.iter().all(|b| matches!(b, Expr::KnownResult(true))) {
                     Some(true)
                 } else {
                     None
                 }
             }
             Operator::Or(ors) => {
-                if ors.iter().any(|b| b.known() == Some(true)) {
+                if ors.iter().any(|b| matches!(b, Expr::KnownResult(true))) {
                     Some(true)
-                } else if ors.iter().all(|b| b.known() == Some(false)) {
+                } else if ors.iter().all(|b| matches!(b, Expr::KnownResult(false))) {
                     Some(false)
                 } else {
                     None
                 }
             }
-            Operator::Not(x) => x.known().map(|b| !b),
-        }
-    }
-}
-
-impl<X> Operator<Box<X>> {
-    pub(crate) fn as_ref_op(&self) -> Operator<&X> {
-        use Operator::*;
-        match self {
-            Not(a) => Not(a),
-            And(xs) => And(xs.iter().map(Box::as_ref).collect()),
-            Or(xs) => Or(xs.iter().map(Box::as_ref).collect()),
+            Operator::Not(x) => match x {
+                Expr::KnownResult(b) => Some(*b),
+                _ => None,
+            },
         }
     }
 }
