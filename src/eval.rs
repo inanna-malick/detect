@@ -54,7 +54,7 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
             KnownResult(k) => KnownResult(k),
             Contents(p) => Contents(*p),
             // already processed
-            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
         })
     });
 
@@ -85,8 +85,8 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
             // boilerplate
             KnownResult(k) => KnownResult(k),
             // already processed
-            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
-            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
+            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
         })
     });
 
@@ -115,8 +115,8 @@ pub(crate) fn eval(e: &Expr, dir_entry: DirEntry) -> std::io::Result<bool> {
             // boilerplate
             KnownResult(k) => KnownResult(k),
             // already processed
-            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
-            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
+            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated Done type"),
         })
     });
 
