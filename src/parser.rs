@@ -18,7 +18,7 @@ where
     let skip_spaces = || spaces().silent();
     sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
-            ExprTree::new(Expr::Operator(Operator::And(xs)))
+            ExprTree::new(ExprLayer::Operator(Operator::And(xs)))
         } else {
             xs.pop().unwrap()
         }
@@ -35,7 +35,7 @@ where
     let lex_char = |c| char(c).skip(skip_spaces());
 
     choice((
-        (lex_char('!'), base()).map(|(_, x)| ExprTree::new(Expr::Operator(Operator::Not(x)))),
+        (lex_char('!'), base()).map(|(_, x)| ExprTree::new(ExprLayer::Operator(Operator::Not(x)))),
         base(),
     ))
 }
@@ -50,7 +50,7 @@ where
     sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
         .map(|mut xs: Vec<_>| {
             if xs.len() > 1 {
-                ExprTree::new(Expr::Operator(Operator::Or(xs)))
+                ExprTree::new(ExprLayer::Operator(Operator::Or(xs)))
             } else {
                 xs.pop().unwrap()
             }
@@ -89,10 +89,10 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentsMatcher::Utf8),
     ))
-    .map(|p| ExprTree::new(Expr::ContentsMatcher(p)));
+    .map(|p| ExprTree::new(ExprLayer::Contents(p)));
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| ExprTree::new(Expr::NameMatcher(NameMatcher::Regex(s))));
+        .map(|(_, s, _)| ExprTree::new(ExprLayer::Name(NameMatcher::Regex(s))));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
@@ -102,7 +102,7 @@ where
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
-        attempt(size_predicate).map(|x| ExprTree::new(Expr::MetadataMatcher(x))),
+        attempt(size_predicate).map(|x| ExprTree::new(ExprLayer::Metadata(x))),
         parens,
     ))
     .skip(skip_spaces())

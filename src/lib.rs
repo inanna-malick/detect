@@ -15,8 +15,7 @@ pub fn parse_and_run<F: FnMut(String)>(
 ) -> Result<(), anyhow::Error> {
     use walkdir::WalkDir;
 
-    match combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..]))
-    {
+    match combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..])) {
         Ok((e, _)) => {
             println!("running with expression: {:?}", e);
 
@@ -32,10 +31,8 @@ pub fn parse_and_run<F: FnMut(String)>(
                 }
             }
 
-
-                    Ok(())
+            Ok(())
         }
         Err(err) => panic!("parse error: {}", err),
     }
-
 }

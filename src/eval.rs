@@ -1,5 +1,6 @@
-use crate::expr::{run_stage, ContentsMatcher, Expr, ExprTree, MetadataMatcher, NameMatcher};
-use crate::util::{never, Done};
+use crate::expr::{ContentsMatcher, ExprLayer, ExprTree, MetadataMatcher, NameMatcher};
+use crate::util::Done;
+use recursion::Collapse;
 use regex::RegexSet;
 use std::{
     fs::{self},
@@ -12,17 +13,26 @@ use walkdir::DirEntry;
 // - metadata matchers
 // - file content matchers
 pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
-    let e: ExprTree<Done, &MetadataMatcher, &ContentsMatcher> = run_stage(
-        e,
-        |name_matcher| match dir_entry.file_name().to_str() {
-            Some(s) => match name_matcher {
-                NameMatcher::Regex(r) => Expr::KnownResult(r.is_match(s)),
+    use ExprLayer::*;
+    let e: ExprTree<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
+        ExprTree::new(match layer {
+            Operator(x) => match x.eval() {
+                None => Operator(x),
+                Some(k) => KnownResult(k),
             },
-            None => Expr::KnownResult(false),
-        },
-        Expr::MetadataMatcher,
-        Expr::ContentsMatcher,
-    );
+            // evaluate all NameMatcher predicates
+            Name(name_matcher) => match dir_entry.file_name().to_str() {
+                Some(s) => match name_matcher {
+                    NameMatcher::Regex(r) => KnownResult(r.is_match(s)),
+                },
+                None => KnownResult(false),
+            },
+            // boilerplate
+            KnownResult(k) => KnownResult(k),
+            Metadata(p) => Metadata(p),
+            Contents(p) => Contents(p),
+        })
+    });
 
     if let Some(b) = e.known() {
         return Ok(b);
@@ -31,14 +41,22 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
     // short circuit or query metadata (expensive)
     let metadata = dir_entry.metadata()?;
 
-    let e: ExprTree<Done, Done, &ContentsMatcher> = run_stage(
-        &e,
-        never,
-        |metadata_matcher| match metadata_matcher {
-            MetadataMatcher::Filesize(range) => Expr::KnownResult(range.contains(&metadata.size())),
-        },
-        |c| Expr::ContentsMatcher(*c),
-    );
+    let e: ExprTree<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
+        ExprTree::new(match layer {
+            Operator(x) => match x.eval() {
+                None => Operator(x),
+                Some(k) => KnownResult(k),
+            },
+            Metadata(p) => match p {
+                MetadataMatcher::Filesize(range) => KnownResult(range.contains(&metadata.size())),
+            },
+            // boilerplate
+            KnownResult(k) => KnownResult(k),
+            Contents(p) => Contents(*p),
+            // already processed
+            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+        })
+    });
 
     if let Some(b) = e.known() {
         return Ok(b);
@@ -50,17 +68,27 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
     }
     let mut regexes = Vec::new();
 
-    // harvest regexes, then read and run
-    let e: ExprTree<Done, Done, ContentMatcherInternal> =
-        run_stage(&e, never, never, |contents_matcher| {
-            Expr::ContentsMatcher(match contents_matcher {
+    // harvest regexes so we can run a single fused RegexSet pass
+    let e: ExprTree<Done, Done, ContentMatcherInternal> = e.collapse_layers(|layer| {
+        ExprTree::new(match layer {
+            Operator(x) => match x.eval() {
+                None => Operator(x),
+                Some(k) => KnownResult(k),
+            },
+            Contents(p) => Contents(match p {
                 ContentsMatcher::Regex(r) => {
                     regexes.push(r.as_str());
                     ContentMatcherInternal::RegexIndex(regexes.len() - 1)
                 }
                 ContentsMatcher::Utf8 => ContentMatcherInternal::IsUtf8,
-            })
-        });
+            }),
+            // boilerplate
+            KnownResult(k) => KnownResult(k),
+            // already processed
+            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+        })
+    });
 
     let mut matching_idxs = Vec::new();
     let mut is_utf8 = false;
@@ -74,10 +102,21 @@ pub(crate) fn eval(e: &ExprTree, dir_entry: DirEntry) -> std::io::Result<bool> {
         is_utf8 = true;
     }
 
-    let e: ExprTree<Done, Done, Done> = run_stage(&e, never, never, |c| {
-        Expr::KnownResult(match c {
-            ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
-            ContentMatcherInternal::IsUtf8 => is_utf8,
+    let e: ExprTree<Done, Done, Done> = e.collapse_layers(|layer| {
+        ExprTree::new(match layer {
+            Operator(x) => match x.eval() {
+                None => Operator(x),
+                Some(k) => KnownResult(k),
+            },
+            Contents(p) => KnownResult(match p {
+                ContentMatcherInternal::RegexIndex(regex_idx) => matching_idxs.contains(regex_idx),
+                ContentMatcherInternal::IsUtf8 => is_utf8,
+            }),
+            // boilerplate
+            KnownResult(k) => KnownResult(k),
+            // already processed
+            Name(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
+            Metadata(_) => unreachable!("already evaluated as witnessed by uninhabitated type"),
         })
     });
 
