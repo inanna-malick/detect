@@ -1,24 +1,24 @@
 use crate::expr::{ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher};
 use crate::util::Done;
 use recursion::Collapse;
+use std::path::Path;
 use std::{
     fs::{self},
     os::unix::prelude::MetadataExt,
 };
-use walkdir::DirEntry;
 
 // multipass evaluation with short circuiting, runs, in order:
 // - file name matchers
 // - metadata matchers
 // - file content matchers
-pub(crate) fn eval(
+pub fn eval(
     e: &Expr<NameMatcher, MetadataMatcher, ContentsMatcher>,
-    dir_entry: DirEntry,
+    path: &Path,
 ) -> std::io::Result<bool> {
     let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
         match layer {
             // evaluate all NameMatcher predicates
-            ExprLayer::Name(name_matcher) => match dir_entry.file_name().to_str() {
+            ExprLayer::Name(name_matcher) => match path.to_str() {
                 Some(s) => match name_matcher {
                     NameMatcher::Regex(r) => Expr::KnownResult(r.is_match(s)),
                 },
@@ -40,10 +40,11 @@ pub(crate) fn eval(
         return Ok(b);
     }
 
-    let metadata = dir_entry.metadata()?;
+    let metadata = fs::metadata(path)?;
 
     let e: Expr<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
         match layer {
+            // evaluate all MetadataMatcher predicates
             ExprLayer::Metadata(p) => match p {
                 MetadataMatcher::Filesize(range) => {
                     Expr::KnownResult(range.contains(&metadata.size()))
@@ -66,11 +67,12 @@ pub(crate) fn eval(
         return Ok(b);
     }
 
-    let contents = fs::read(dir_entry.path())?;
+    let contents = fs::read(path)?;
     let utf8_contents = String::from_utf8(contents).ok();
 
     let e: Expr<Done, Done, Done> = e.collapse_layers(|layer| {
         match layer {
+            // evaluate all MetadataMatcher predicates
             ExprLayer::Contents(p) => Expr::KnownResult({
                 if let Some(utf8_contents) = utf8_contents.as_ref() {
                     match p {
