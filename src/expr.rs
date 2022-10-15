@@ -1,13 +1,15 @@
 pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
 pub(crate) use crate::operator::Operator;
+use itertools::*;
 use recursion::map_layer::MapLayer;
 use recursion::map_layer::Project;
+use std::fmt::{Debug, Display};
 
 /// Filesystem entity matcher expression, with branches for matchers on
 /// - file name
 /// - file metadata
 /// - file contents
-#[derive(Debug)]
+// #[derive(Debug)]
 pub enum Expr<Name, Metadata, Contents> {
     Operator(Box<Operator<Self>>),
     KnownResult(bool),
@@ -16,9 +18,41 @@ pub enum Expr<Name, Metadata, Contents> {
     Contents(Contents),
 }
 
+impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Operator(o) => match o.as_ref() {
+                Operator::Not(x) => write!(f, "!{:?}", x),
+                Operator::And(xs) => {
+                    let xs: String = xs
+                        .iter()
+                        .map(|x| format!("{:?}", x))
+                        .intersperse(" && ".to_string())
+                        .collect();
+                    write!(f, "{}", xs)
+                }
+                Operator::Or(xs) => {
+                    let xs: String = xs
+                        .iter()
+                        .map(|x| format!("{:?}", x))
+                        .intersperse(" && ".to_string())
+                        .collect();
+                    write!(f, "{}", xs)
+                }
+            },
+            Self::KnownResult(b) => {
+                write!(f, "{}", b)
+            }
+            Self::Name(arg0) => write!(f, "{}", arg0),
+            Self::Metadata(arg0) => write!(f, "{}", arg0),
+            Self::Contents(arg0) => write!(f, "{}", arg0),
+        }
+    }
+}
+
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
-#[derive(Debug)]
+// #[derive(Debug)]
 pub enum ExprLayer<
     'a,
     Recurse,
@@ -31,6 +65,30 @@ pub enum ExprLayer<
     Name(&'a Name),
     Metadata(&'a Metadata),
     Contents(&'a Contents),
+}
+
+impl<'a, N: Display, M: Display, C: Display> Debug for ExprLayer<'a, (), N, M, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Operator(o) => match o {
+                Operator::Not(_) => write!(f, "!_"),
+                Operator::And(xs) => {
+                    let xs: String = xs.iter().map(|_| "_").intersperse(" && ").collect();
+                    write!(f, "{}", xs)
+                }
+                Operator::Or(xs) => {
+                    let xs: String = xs.iter().map(|_| "_").intersperse(" || ").collect();
+                    write!(f, "{}", xs)
+                }
+            },
+            Self::KnownResult(b) => {
+                write!(f, "{}", b)
+            }
+            Self::Name(arg0) => write!(f, "{}", arg0),
+            Self::Metadata(arg0) => write!(f, "{}", arg0),
+            Self::Contents(arg0) => write!(f, "{}", arg0),
+        }
+    }
 }
 
 impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta, Content> {

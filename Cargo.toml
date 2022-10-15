@@ -8,9 +8,11 @@ anyhow = "1"
 clap = {version = "3.2", features = ["derive"]}
 combine = "4.6.6"
 futures = "0.3.23"
-recursion = "0.3.2"
+recursion = {version = "0.3.2", features = ["experimental"], path = "../recursion"} 
 regex = "1.6.0"
 walkdir = "2.3"
+
+itertools = "0.10"
 
 [dev-dependencies]
 tempdir = "0.3.7"

@@ -30,7 +30,7 @@ impl<A, B, C> Operator<Expr<A, B, C>> {
                 }
             }
             Operator::Not(x) => match x {
-                Expr::KnownResult(b) => Some(*b),
+                Expr::KnownResult(b) => Some(!b),
                 _ => None,
             },
         }

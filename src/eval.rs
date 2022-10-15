@@ -1,5 +1,6 @@
 use crate::expr::{ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher};
 use crate::util::Done;
+use recursion::stack_machine::visualize::Visualized;
 use recursion::Collapse;
 use std::path::Path;
 use std::{
@@ -15,7 +16,15 @@ pub fn eval(
     e: &Expr<NameMatcher, MetadataMatcher, ContentsMatcher>,
     path: &Path,
 ) -> std::io::Result<bool> {
-    let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
+    let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = Visualized::new(
+        e,
+        format!(
+            "{}_name_matcher.html",
+            path.to_str().unwrap().replace("/", "_")
+        ),
+        true,
+    )
+    .collapse_layers(|layer| {
         match layer {
             // evaluate all NameMatcher predicates
             ExprLayer::Name(name_matcher) => match path.to_str() {
@@ -42,7 +51,14 @@ pub fn eval(
 
     let metadata = fs::metadata(path)?;
 
-    let e: Expr<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
+    let e: Expr<Done, Done, &ContentsMatcher> = Visualized::new(
+        &e,
+        format!(
+            "{}_metadata_matcher.html",
+            path.to_str().unwrap().replace("/", "_")
+        ),
+        true,
+    ).collapse_layers(|layer| {
         match layer {
             // evaluate all MetadataMatcher predicates
             ExprLayer::Metadata(p) => match p {
@@ -70,9 +86,16 @@ pub fn eval(
     let contents = fs::read(path)?;
     let utf8_contents = String::from_utf8(contents).ok();
 
-    let e: Expr<Done, Done, Done> = e.collapse_layers(|layer| {
+    let e: Expr<Done, Done, Done> = Visualized::new(
+        &e,
+        format!(
+            "{}_content_matcher.html",
+            path.to_str().unwrap().replace("/", "_")
+        ),
+        true,
+    ).collapse_layers(|layer| {
         match layer {
-            // evaluate all MetadataMatcher predicates
+            // evaluate all ContentMatcher predicates
             ExprLayer::Contents(p) => Expr::KnownResult({
                 if let Some(utf8_contents) = utf8_contents.as_ref() {
                     match p {
