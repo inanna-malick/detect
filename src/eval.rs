@@ -19,7 +19,7 @@ pub fn eval(
     let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = Visualized::new(
         e,
         format!(
-            "{}_name_matcher.html",
+            "test_output/{}_name_matcher.html",
             path.to_str().unwrap().replace("/", "_")
         ),
         true,
@@ -55,7 +55,7 @@ pub fn eval(
     let e: Expr<Done, Done, &ContentsMatcher> = Visualized::new(
         &e,
         format!(
-            "{}_metadata_matcher.html",
+            "test_output/{}_metadata_matcher.html",
             path.to_str().unwrap().replace("/", "_")
         ),
         true,
@@ -91,7 +91,7 @@ pub fn eval(
     let e: Expr<Done, Done, Done> = Visualized::new(
         &e,
         format!(
-            "{}_content_matcher.html",
+            "test_output/{}_content_matcher.html",
             path.to_str().unwrap().replace("/", "_")
         ),
         true,

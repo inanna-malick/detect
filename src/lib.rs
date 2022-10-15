@@ -22,10 +22,13 @@ pub fn parse_and_run<F: FnMut(String)>(
             let walker = WalkDir::new(root).into_iter();
             for entry in walker {
                 let entry = entry?;
-                if !entry.metadata()?.is_dir() && eval(&e, entry.path())? {
-                    // hacky, will panic sometimes if bad OsStr (FIXME)
-                    let path = entry.path().to_str().unwrap().to_owned();
-                    on_match(path);
+                if entry.path().to_str().unwrap().contains("test_output") {
+                } else {
+                    if !entry.metadata()?.is_dir() && eval(&e, entry.path())? {
+                        // hacky, will panic sometimes if bad OsStr (FIXME)
+                        let path = entry.path().to_str().unwrap().to_owned();
+                        on_match(path);
+                    }
                 }
             }
 
