@@ -1,15 +1,17 @@
 use regex::Regex;
-use std::{ops::Range, fmt::Display};
+use std::{fmt::Display, ops::Range};
 
 #[derive(Debug)]
 pub enum NameMatcher {
     Regex(Regex),
+    Extension(String),
 }
 
 impl Display for NameMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NameMatcher::Regex(r) => write!(f, "filename({})", r.as_str()),
+            NameMatcher::Extension(x) => write!(f, "extension({})", x.as_str()),
         }
     }
 }

@@ -94,6 +94,15 @@ where
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
         .map(|(_, s, _)| Expr::Name(NameMatcher::Regex(s)));
 
+    let extension_predicate = (
+        string("extension("),
+        many1(
+            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.').expected("letter or digit or ."),
+        ),
+        lex_char(')'),
+    )
+        .map(|(_, s, _)| Expr::Name(NameMatcher::Extension(s)));
+
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
         .map(|(_, d1, _, d2, _)| MetadataMatcher::Filesize(d1..d2));
@@ -102,6 +111,7 @@ where
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
+        attempt(extension_predicate),
         attempt(size_predicate).map(Expr::Metadata),
         parens,
     ))

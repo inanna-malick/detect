@@ -75,6 +75,16 @@ fn test_name_and_contents() {
 }
 
 #[test]
+fn test_extension_and_contents() {
+    Case {
+        expr: "extension(.rs)",
+        expected: &["test.rs"],
+        files: vec![f("test.rs", ""), f("test2", "")],
+    }
+    .run()
+}
+
+#[test]
 fn test_size() {
     Case {
         expr: "filename(foo) && size(0..5)",

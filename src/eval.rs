@@ -28,9 +28,10 @@ pub fn eval(
         match layer {
             // evaluate all NameMatcher predicates
             ExprLayer::Name(name_matcher) => match path.to_str() {
-                Some(s) => match name_matcher {
-                    NameMatcher::Regex(r) => Expr::KnownResult(r.is_match(s)),
-                },
+                Some(s) => Expr::KnownResult(match name_matcher {
+                    NameMatcher::Regex(r) => r.is_match(s),
+                    NameMatcher::Extension(x) => s.ends_with(x),
+                }),
                 None => Expr::KnownResult(false),
             },
             // boilerplate
@@ -58,7 +59,8 @@ pub fn eval(
             path.to_str().unwrap().replace("/", "_")
         ),
         true,
-    ).collapse_layers(|layer| {
+    )
+    .collapse_layers(|layer| {
         match layer {
             // evaluate all MetadataMatcher predicates
             ExprLayer::Metadata(p) => match p {
@@ -93,7 +95,8 @@ pub fn eval(
             path.to_str().unwrap().replace("/", "_")
         ),
         true,
-    ).collapse_layers(|layer| {
+    )
+    .collapse_layers(|layer| {
         match layer {
             // evaluate all ContentMatcher predicates
             ExprLayer::Contents(p) => Expr::KnownResult({
