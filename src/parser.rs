@@ -7,7 +7,6 @@ use combine::*;
 use regex::Regex;
 
 use crate::expr::*;
-use crate::operator::Operator;
 
 fn and_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
 where
@@ -18,7 +17,7 @@ where
     let skip_spaces = || spaces().silent();
     sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
-            Expr::Operator(Box::new(Operator::And(xs)))
+            Expr::And(xs)
         } else {
             xs.pop().unwrap()
         }
@@ -35,7 +34,7 @@ where
     let lex_char = |c| char(c).skip(skip_spaces());
 
     choice((
-        (lex_char('!'), base()).map(|(_, x)| Expr::Operator(Box::new(Operator::Not(x)))),
+        (lex_char('!'), base()).map(|(_, x)| Expr::Not(Box::new(x))),
         base(),
     ))
 }
@@ -50,7 +49,7 @@ where
     sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
         .map(|mut xs: Vec<_>| {
             if xs.len() > 1 {
-                Expr::Operator(Box::new(Operator::Or(xs)))
+                Expr::Or(xs)
             } else {
                 xs.pop().unwrap()
             }
@@ -81,7 +80,6 @@ where
                 s.parse::<u64>().unwrap() // TODO: figure out andthen/error parsing, this will only trigger w/ ints greater than usize
             })
     };
-
 
     let regex = || {
         many1(

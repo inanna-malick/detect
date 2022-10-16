@@ -17,8 +17,6 @@ pub fn parse_and_run<F: FnMut(String)>(
 
     match combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..])) {
         Ok((e, _)) => {
-            println!("running with expression: {:?}", e);
-
             let walker = WalkDir::new(root).into_iter();
             for entry in walker {
                 let entry = entry?;

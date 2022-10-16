@@ -52,7 +52,7 @@ impl Case {
         let tmp_path = tmp_dir.path().to_str().unwrap();
         let mut out = Vec::new();
         set_current_dir(tmp_path).unwrap();
-        fileset_expr::parse_and_run(tmp_path.to_owned(), self.expr.to_owned(), |p| {
+        detect::parse_and_run(tmp_path.to_owned(), self.expr.to_owned(), |p| {
             // println!("yield: {:?}", p);
             // let contents = std::fs::read_to_string(p.clone()).unwrap();
             // println!("yield w/ contents: {:?}", contents);

@@ -9,18 +9,24 @@ use std::fmt::{Debug, Display};
 /// - file name
 /// - file metadata
 /// - file contents
-// #[derive(Debug)]
 pub enum Expr<Name, Metadata, Contents> {
-    Operator(Box<Operator<Self>>),
+    // literal boolean values
     KnownResult(bool),
+    // boolean operators
+    Not(Box<Self>),
+    And(Vec<Self>),
+    Or(Vec<Self>),
+    // predicates
     Name(Name),
     Metadata(Metadata),
     Contents(Contents),
 }
 
-// YES! simplifies ownership model immensely
+/// A filesystem entity matcher expression that owns its predicates
 pub type OwnedExpr<Name = NameMatcher, Metadata = MetadataMatcher, Contents = ContentsMatcher> =
     Expr<Name, Metadata, Contents>;
+
+/// A filesystem entity matcher expression with borrowed predicates
 pub type BorrowedExpr<
     'a,
     Name = &'a NameMatcher,
@@ -31,23 +37,21 @@ pub type BorrowedExpr<
 impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Operator(o) => match o.as_ref() {
-                Operator::Not(x) => write!(f, "!{:?}", x),
-                Operator::And(xs) => {
-                    let xs: String =
-                        intersperse(xs.iter().map(|x| format!("{:?}", x)), " && ".to_string())
-                            .collect();
-                    write!(f, "{}", xs)
-                }
-                Operator::Or(xs) => {
-                    let xs: String = Itertools::intersperse(
-                        xs.iter().map(|x| format!("{:?}", x)),
-                        " || ".to_string(),
-                    )
-                    .collect();
-                    write!(f, "{}", xs)
-                }
-            },
+            Self::Not(x) => write!(f, "!{:?}", x),
+            Self::And(xs) => {
+                let xs: String =
+                    intersperse(xs.iter().map(|x| format!("{:?}", x)), " && ".to_string())
+                        .collect();
+                write!(f, "{}", xs)
+            }
+            Self::Or(xs) => {
+                let xs: String = Itertools::intersperse(
+                    xs.iter().map(|x| format!("{:?}", x)),
+                    " || ".to_string(),
+                )
+                .collect();
+                write!(f, "{}", xs)
+            }
             Self::KnownResult(b) => {
                 write!(f, "{}", b)
             }
@@ -122,11 +126,9 @@ impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
     // project into ExprLayer
     fn project(self) -> Self::To {
         match self {
-            Expr::Operator(o) => ExprLayer::Operator(match o.as_ref() {
-                Operator::Not(x) => Operator::Not(x),
-                Operator::And(xs) => Operator::And(xs.iter().collect()),
-                Operator::Or(xs) => Operator::Or(xs.iter().collect()),
-            }),
+            Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
+            Expr::And(xs) => ExprLayer::Operator(Operator::And(xs.iter().collect())),
+            Expr::Or(xs) => ExprLayer::Operator(Operator::Or(xs.iter().collect())),
             Expr::KnownResult(b) => ExprLayer::KnownResult(*b),
             Expr::Name(n) => ExprLayer::Name(n),
             Expr::Metadata(m) => ExprLayer::Metadata(m),

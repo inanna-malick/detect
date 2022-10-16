@@ -10,29 +10,29 @@ pub enum Operator<Recurse> {
 
 // NOTE: only used in recurse - can have this as another borrowed thingy?
 impl<A, B, C> Operator<Expr<A, B, C>> {
-    pub(crate) fn eval(&self) -> Option<bool> {
+    pub fn attempt_short_circuit(self) -> Expr<A, B, C> {
         match self {
             Operator::And(ands) => {
                 if ands.iter().any(|b| matches!(b, Expr::KnownResult(false))) {
-                    Some(false)
+                    Expr::KnownResult(false)
                 } else if ands.iter().all(|b| matches!(b, Expr::KnownResult(true))) {
-                    Some(true)
+                    Expr::KnownResult(true)
                 } else {
-                    None
+                    Expr::And(ands)
                 }
             }
             Operator::Or(ors) => {
                 if ors.iter().any(|b| matches!(b, Expr::KnownResult(true))) {
-                    Some(true)
+                    Expr::KnownResult(true)
                 } else if ors.iter().all(|b| matches!(b, Expr::KnownResult(false))) {
-                    Some(false)
+                    Expr::KnownResult(false)
                 } else {
-                    None
+                    Expr::Or(ors)
                 }
             }
             Operator::Not(x) => match x {
-                Expr::KnownResult(b) => Some(!b),
-                _ => None,
+                Expr::KnownResult(b) => Expr::KnownResult(!b),
+                _ => Expr::Not(Box::new(x)),
             },
         }
     }

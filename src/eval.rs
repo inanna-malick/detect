@@ -25,10 +25,7 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
                 None => Expr::KnownResult(false),
             },
             // boilerplate
-            ExprLayer::Operator(x) => match x.eval() {
-                None => Expr::Operator(Box::new(x)),
-                Some(k) => Expr::KnownResult(k),
-            },
+            ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::KnownResult(k) => Expr::KnownResult(k),
             ExprLayer::Metadata(p) => Expr::Metadata(p),
             ExprLayer::Contents(p) => Expr::Contents(p),
@@ -51,10 +48,7 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
                 }
             },
             // boilerplate
-            ExprLayer::Operator(x) => match x.eval() {
-                None => Expr::Operator(Box::new(x)),
-                Some(k) => Expr::KnownResult(k),
-            },
+            ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::KnownResult(k) => Expr::KnownResult(k),
             ExprLayer::Contents(p) => Expr::Contents(*p),
             // unreachable: predicate already evaluated
@@ -84,10 +78,7 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
                 }
             }),
             // boilerplate
-            ExprLayer::Operator(x) => match x.eval() {
-                None => Expr::Operator(Box::new(x)),
-                Some(k) => Expr::KnownResult(k),
-            },
+            ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::KnownResult(k) => Expr::KnownResult(k),
             // unreachable: predicates already evaluated
             ExprLayer::Name(_) => unreachable!("name predicate has already been evaluated"),

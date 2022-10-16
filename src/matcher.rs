@@ -29,9 +29,7 @@ impl Display for MetadataMatcher {
     }
 }
 
-// predicates based on, eg, exif data or w/e also go here
-// could get silly with it and run, eg, 'strings' (like the cmd) or w/e
-// NOTE: could even abstract such that ppl can add their own functionality like this
+// predicates based on, eg, scanning file contents or trying to parse exif data go here
 #[derive(Debug)]
 pub enum ContentsMatcher {
     Regex(Regex),
