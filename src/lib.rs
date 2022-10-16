@@ -1,7 +1,6 @@
 mod eval;
 mod expr;
 mod matcher;
-mod operator;
 mod parser;
 mod util;
 

@@ -1,5 +1,7 @@
-use crate::expr::Expr;
 use recursion::map_layer::MapLayer;
+use std::fmt::Debug;
+
+use super::Expr;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
@@ -8,7 +10,6 @@ pub enum Operator<Recurse> {
     Or(Vec<Recurse>),
 }
 
-// NOTE: only used in recurse - can have this as another borrowed thingy?
 impl<A, B, C> Operator<Expr<A, B, C>> {
     pub fn attempt_short_circuit(self) -> Expr<A, B, C> {
         match self {

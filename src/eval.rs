@@ -1,5 +1,6 @@
 use crate::expr::{
-    BorrowedExpr, ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher, OwnedExpr,
+    recurse::ExprLayer, BorrowedExpr, ContentsMatcher, Expr, MetadataMatcher, NameMatcher,
+    OwnedExpr,
 };
 use crate::util::Done;
 use recursion::Collapse;
