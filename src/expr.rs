@@ -24,19 +24,17 @@ impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
             Self::Operator(o) => match o.as_ref() {
                 Operator::Not(x) => write!(f, "!{:?}", x),
                 Operator::And(xs) => {
-                    let xs: String = xs
-                        .iter()
-                        .map(|x| format!("{:?}", x))
-                        .intersperse(" && ".to_string())
-                        .collect();
+                    let xs: String =
+                        intersperse(xs.iter().map(|x| format!("{:?}", x)), " && ".to_string())
+                            .collect();
                     write!(f, "{}", xs)
                 }
                 Operator::Or(xs) => {
-                    let xs: String = xs
-                        .iter()
-                        .map(|x| format!("{:?}", x))
-                        .intersperse(" && ".to_string())
-                        .collect();
+                    let xs: String = Itertools::intersperse(
+                        xs.iter().map(|x| format!("{:?}", x)),
+                        " && ".to_string(),
+                    )
+                    .collect();
                     write!(f, "{}", xs)
                 }
             },
@@ -73,11 +71,13 @@ impl<'a, N: Display, M: Display, C: Display> Debug for ExprLayer<'a, (), N, M, C
             Self::Operator(o) => match o {
                 Operator::Not(_) => write!(f, "!_"),
                 Operator::And(xs) => {
-                    let xs: String = xs.iter().map(|_| "_").intersperse(" && ").collect();
+                    let xs: String =
+                        Itertools::intersperse(xs.iter().map(|_| "_"), " && ").collect();
                     write!(f, "{}", xs)
                 }
                 Operator::Or(xs) => {
-                    let xs: String = xs.iter().map(|_| "_").intersperse(" || ").collect();
+                    let xs: String =
+                        Itertools::intersperse(xs.iter().map(|_| "_"), " || ").collect();
                     write!(f, "{}", xs)
                 }
             },

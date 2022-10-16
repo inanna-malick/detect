@@ -1,5 +1,5 @@
 use clap::Parser;
-use fileset_expr::parse_and_run;
+use detect::parse_and_run;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
