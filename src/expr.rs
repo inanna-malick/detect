@@ -18,6 +18,16 @@ pub enum Expr<Name, Metadata, Contents> {
     Contents(Contents),
 }
 
+// YES! simplifies ownership model immensely
+pub type OwnedExpr<Name = NameMatcher, Metadata = MetadataMatcher, Contents = ContentsMatcher> =
+    Expr<Name, Metadata, Contents>;
+pub type BorrowedExpr<
+    'a,
+    Name = &'a NameMatcher,
+    Metadata = &'a MetadataMatcher,
+    Contents = &'a ContentsMatcher,
+> = Expr<Name, Metadata, Contents>;
+
 impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -32,7 +42,7 @@ impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
                 Operator::Or(xs) => {
                     let xs: String = Itertools::intersperse(
                         xs.iter().map(|x| format!("{:?}", x)),
-                        " && ".to_string(),
+                        " || ".to_string(),
                     )
                     .collect();
                     write!(f, "{}", xs)

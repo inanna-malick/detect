@@ -8,6 +8,7 @@ pub enum Operator<Recurse> {
     Or(Vec<Recurse>),
 }
 
+// NOTE: only used in recurse - can have this as another borrowed thingy?
 impl<A, B, C> Operator<Expr<A, B, C>> {
     pub(crate) fn eval(&self) -> Option<bool> {
         match self {

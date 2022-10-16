@@ -1,6 +1,6 @@
 // #[macro_use]
 use combine::error::ParseError;
-use combine::parser::char::{alpha_num, char, digit, spaces, string};
+use combine::parser::char::{char, digit, spaces, string};
 use combine::parser::combinator::recognize;
 use combine::stream::Stream;
 use combine::*;
@@ -82,7 +82,15 @@ where
             })
     };
 
-    let regex = || many1(alpha_num()).map(|s: String| Regex::new(&s).unwrap());
+
+    let regex = || {
+        many1(
+            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_')
+                .expected("letter or digit or ."),
+        )
+        .map(|s: String| Regex::new(&s).unwrap())
+    };
+
     let contains_predicate =
         (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentsMatcher::Regex(s));
     let contents_predicate = choice((

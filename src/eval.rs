@@ -1,4 +1,6 @@
-use crate::expr::{ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher};
+use crate::expr::{
+    BorrowedExpr, ContentsMatcher, Expr, ExprLayer, MetadataMatcher, NameMatcher, OwnedExpr,
+};
 use crate::util::Done;
 use recursion::Collapse;
 use std::path::Path;
@@ -11,11 +13,8 @@ use std::{
 // - file name matchers
 // - metadata matchers
 // - file content matchers
-pub fn eval(
-    e: &Expr<NameMatcher, MetadataMatcher, ContentsMatcher>,
-    path: &Path,
-) -> std::io::Result<bool> {
-    let e: Expr<Done, &MetadataMatcher, &ContentsMatcher> = e.collapse_layers(|layer| {
+pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
+    let e: BorrowedExpr<Done> = e.collapse_layers(|layer| {
         match layer {
             // evaluate all NameMatcher predicates
             ExprLayer::Name(name_matcher) => match path.to_str() {
@@ -43,7 +42,7 @@ pub fn eval(
 
     let metadata = fs::metadata(path)?;
 
-    let e: Expr<Done, Done, &ContentsMatcher> = e.collapse_layers(|layer| {
+    let e: BorrowedExpr<Done, Done> = e.collapse_layers(|layer| {
         match layer {
             // evaluate all MetadataMatcher predicates
             ExprLayer::Metadata(p) => match p {
@@ -71,7 +70,7 @@ pub fn eval(
     let contents = fs::read(path)?;
     let utf8_contents = String::from_utf8(contents).ok();
 
-    let e: Expr<Done, Done, Done> = e.collapse_layers(|layer| {
+    let e: BorrowedExpr<Done, Done, Done> = e.collapse_layers(|layer| {
         match layer {
             // evaluate all ContentMatcher predicates
             ExprLayer::Contents(p) => Expr::KnownResult({
