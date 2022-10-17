@@ -2,8 +2,8 @@
 
 
 ```shell
-➜  detect --expr "executable() && filename(detect) || 
-                  extension(.rs) && contains(map_layer)" 
+➜  detect --expr 'executable() && filename(detect) || 
+                  extension(.rs) && contains(map_layer)'
 ./target/release/detect
 ./target/release/deps/detect-6395eb2c29a3ed5e
 ./target/debug/detect
