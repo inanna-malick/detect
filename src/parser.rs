@@ -74,10 +74,9 @@ where
 
     let num = || {
         recognize(skip_many1(digit()))
-            // .and_then(|s: String| {
             .map(|s: String| {
                 // `bs` only contains digits which are ascii and thus UTF-8
-                s.parse::<u64>().unwrap() // TODO: figure out andthen/error parsing, this will only trigger w/ ints greater than usize
+                s.parse::<u64>().unwrap()
             })
     };
 
@@ -109,13 +108,14 @@ where
     )
         .map(|(_, s, _)| Expr::Name(NamePredicate::Extension(s)));
 
-    // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
+    // TODO: parser for KB/MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
         .map(|(_, d1, _, d2, _)| MetadataPredicate::Filesize(d1..d2));
 
     let metadata_predicate = choice((
         attempt(size_predicate),
         attempt(string("executable()").map(|_| MetadataPredicate::Executable())),
+        // TODO: add file/symlink predicate branches
         attempt(string("dir()").map(|_| MetadataPredicate::Dir())),
     ))
     .map(Expr::Metadata);

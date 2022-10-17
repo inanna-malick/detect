@@ -41,9 +41,6 @@ impl Case {
             .unwrap();
         }
 
-        // println!("tmpdir: {:?}", tmp_path);
-        // std::thread::sleep(Duration::new(10000000, 0));
-
         t
     }
 
@@ -53,10 +50,12 @@ impl Case {
         let mut out = Vec::new();
         set_current_dir(tmp_path).unwrap();
         detect::parse_and_run(tmp_path.to_owned(), self.expr.to_owned(), |p| {
-            // println!("yield: {:?}", p);
-            // let contents = std::fs::read_to_string(p.clone()).unwrap();
-            // println!("yield w/ contents: {:?}", contents);
-            let s = p.strip_prefix(&format!("{tmp_path}/")).unwrap().to_string();
+            let s = p
+                .strip_prefix(&format!("{tmp_path}/"))
+                .unwrap()
+                .as_os_str()
+                .to_string_lossy()
+                .into_owned();
             out.push(s)
         })
         .unwrap();

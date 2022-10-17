@@ -29,7 +29,6 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
     // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
-    // TODO: move walkdir stuff to main, thus making a lib specific to just a few things
     let e: BorrowedExpr<Done, Done> = e.collapse_layers(|layer| {
         match layer {
             // evaluate all MetadataPredicate predicates

@@ -2,8 +2,8 @@ pub mod recurse;
 
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
-use recursion::map_layer::Project;
-use std::fmt::{Debug, Display};
+use recursion::{map_layer::Project};
+use std::fmt::{Display};
 
 use self::recurse::{ExprLayer, Operator};
 
@@ -56,21 +56,19 @@ impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
     }
 }
 
-// TODO: this should probably be 'display', but the current impl of visualization machinery in 'recurse' wants Debug
-// and I don't want to push a new major version just for this
-impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
+impl<N: Display, M: Display, C: Display> Display for Expr<N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Not(x) => write!(f, "!{:?}", x),
+            Self::Not(x) => write!(f, "!{}", x),
             Self::And(xs) => {
                 let xs: String =
-                    intersperse(xs.iter().map(|x| format!("{:?}", x)), " && ".to_string())
+                    intersperse(xs.iter().map(|x| format!("{}", x)), " && ".to_string())
                         .collect();
                 write!(f, "{}", xs)
             }
             Self::Or(xs) => {
                 let xs: String = Itertools::intersperse(
-                    xs.iter().map(|x| format!("{:?}", x)),
+                    xs.iter().map(|x| format!("{}", x)),
                     " || ".to_string(),
                 )
                 .collect();

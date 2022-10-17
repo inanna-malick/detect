@@ -83,9 +83,8 @@ impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta,
     }
 }
 
-// TODO: this should probably be 'display', but the current impl of visualization machinery in 'recurse' wants Debug
-// and I don't want to push a new major version just for this
-impl<'a, N: Display, M: Display, C: Display> Debug for ExprLayer<'a, (), N, M, C> {
+// for use in recursion visualizations
+impl<'a, N: Display, M: Display, C: Display> Display for ExprLayer<'a, (), N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Operator(o) => match o {

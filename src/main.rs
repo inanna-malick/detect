@@ -12,5 +12,7 @@ struct Args {
 pub fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
-    parse_and_run(".".to_owned(), args.expr, |s| println!("{s}"))
+    parse_and_run(".".to_owned(), args.expr, |s| {
+        println!("{}", s.to_string_lossy())
+    })
 }
