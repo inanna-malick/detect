@@ -2,8 +2,8 @@ pub mod recurse;
 
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
-use recursion::{map_layer::Project};
-use std::fmt::{Display};
+use recursion::map_layer::Project;
+use std::fmt::Display;
 
 use self::recurse::{ExprLayer, Operator};
 
@@ -11,7 +11,7 @@ use self::recurse::{ExprLayer, Operator};
 /// - file name
 /// - file metadata
 /// - file contents
-pub enum Expr<Name, Metadata, Contents> {
+pub enum Expr<Name, Metadata, Content> {
     // literal boolean values
     KnownResult(bool),
     // boolean operators
@@ -21,23 +21,20 @@ pub enum Expr<Name, Metadata, Contents> {
     // predicates
     Name(Name),
     Metadata(Metadata),
-    Contents(Contents),
+    Contents(Content),
 }
 
 /// A filesystem entity matcher expression that owns its predicates
-pub type OwnedExpr<
-    Name = NamePredicate,
-    Metadata = MetadataPredicate,
-    Contents = ContentPredicate,
-> = Expr<Name, Metadata, Contents>;
+pub type OwnedExpr<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> =
+    Expr<Name, Metadata, Content>;
 
 /// A filesystem entity matcher expression with borrowed predicates
 pub type BorrowedExpr<
     'a,
     Name = &'a NamePredicate,
     Metadata = &'a MetadataPredicate,
-    Contents = &'a ContentPredicate,
-> = Expr<Name, Metadata, Contents>;
+    Content = &'a ContentPredicate,
+> = Expr<Name, Metadata, Content>;
 
 impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
     type To = ExprLayer<'a, Self, S1, S2, S3>;
@@ -62,16 +59,13 @@ impl<N: Display, M: Display, C: Display> Display for Expr<N, M, C> {
             Self::Not(x) => write!(f, "!{}", x),
             Self::And(xs) => {
                 let xs: String =
-                    intersperse(xs.iter().map(|x| format!("{}", x)), " && ".to_string())
-                        .collect();
+                    intersperse(xs.iter().map(|x| format!("{}", x)), " && ".to_string()).collect();
                 write!(f, "{}", xs)
             }
             Self::Or(xs) => {
-                let xs: String = Itertools::intersperse(
-                    xs.iter().map(|x| format!("{}", x)),
-                    " || ".to_string(),
-                )
-                .collect();
+                let xs: String =
+                    Itertools::intersperse(xs.iter().map(|x| format!("{}", x)), " || ".to_string())
+                        .collect();
                 write!(f, "{}", xs)
             }
             Self::KnownResult(b) => {

@@ -73,11 +73,10 @@ where
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
     let num = || {
-        recognize(skip_many1(digit()))
-            .map(|s: String| {
-                // `bs` only contains digits which are ascii and thus UTF-8
-                s.parse::<u64>().unwrap()
-            })
+        recognize(skip_many1(digit())).map(|s: String| {
+            // `bs` only contains digits which are ascii and thus UTF-8
+            s.parse::<u64>().unwrap()
+        })
     };
 
     let regex = || {
