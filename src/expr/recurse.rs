@@ -1,10 +1,6 @@
-pub mod operator;
-
-pub(crate) use crate::expr::recurse::operator::Operator;
 pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
 use itertools::*;
 use recursion::map_layer::MapLayer;
-use recursion::map_layer::Project;
 use std::fmt::{Debug, Display};
 
 use super::Expr;
@@ -25,6 +21,64 @@ pub enum ExprLayer<
     Contents(&'a Contents),
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum Operator<Recurse> {
+    Not(Recurse),
+    And(Vec<Recurse>),
+    Or(Vec<Recurse>),
+}
+
+impl<A, B, C> Operator<Expr<A, B, C>> {
+    pub fn attempt_short_circuit(self) -> Expr<A, B, C> {
+        use Expr::*;
+        match self {
+            Operator::And(ands) => {
+                if ands.iter().any(|b| matches!(b, KnownResult(false))) {
+                    KnownResult(false)
+                } else if ands.iter().all(|b| matches!(b, KnownResult(true))) {
+                    KnownResult(true)
+                } else {
+                    And(ands)
+                }
+            }
+            Operator::Or(ors) => {
+                if ors.iter().any(|b| matches!(b, KnownResult(true))) {
+                    KnownResult(true)
+                } else if ors.iter().all(|b| matches!(b, KnownResult(false))) {
+                    KnownResult(false)
+                } else {
+                    Or(ors)
+                }
+            }
+            Operator::Not(x) => match x {
+                KnownResult(b) => KnownResult(!b),
+                _ => Not(Box::new(x)),
+            },
+        }
+    }
+}
+
+impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta, Content> {
+    type Unwrapped = A;
+    type To = ExprLayer<'a, B, Name, Meta, Content>;
+    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, mut f: F) -> Self::To {
+        use self::Operator::*;
+        use ExprLayer::*;
+        match self {
+            Operator(o) => Operator(match o {
+                Not(a) => Not(f(a)),
+                And(xs) => And(xs.into_iter().map(f).collect()),
+                Or(xs) => Or(xs.into_iter().map(f).collect()),
+            }),
+            KnownResult(k) => KnownResult(k),
+            Name(x) => Name(x),
+            Metadata(x) => Metadata(x),
+            Contents(x) => Contents(x),
+        }
+    }
+}
+
+// TODO: this should probably be 'display', but the current impl of visualization machinery in 'recurse' wants Debug
 impl<'a, N: Display, M: Display, C: Display> Debug for ExprLayer<'a, (), N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -47,38 +101,6 @@ impl<'a, N: Display, M: Display, C: Display> Debug for ExprLayer<'a, (), N, M, C
             Self::Name(arg0) => write!(f, "{}", arg0),
             Self::Metadata(arg0) => write!(f, "{}", arg0),
             Self::Contents(arg0) => write!(f, "{}", arg0),
-        }
-    }
-}
-
-impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta, Content> {
-    type Unwrapped = A;
-    type To = ExprLayer<'a, B, Name, Meta, Content>;
-    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, f: F) -> Self::To {
-        use ExprLayer::*;
-        match self {
-            Operator(o) => Operator(o.map_layer(f)),
-            KnownResult(k) => KnownResult(k),
-            Name(x) => Name(x),
-            Metadata(x) => Metadata(x),
-            Contents(x) => Contents(x),
-        }
-    }
-}
-
-impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
-    type To = ExprLayer<'a, Self, S1, S2, S3>;
-
-    // project into ExprLayer
-    fn project(self) -> Self::To {
-        match self {
-            Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
-            Expr::And(xs) => ExprLayer::Operator(Operator::And(xs.iter().collect())),
-            Expr::Or(xs) => ExprLayer::Operator(Operator::Or(xs.iter().collect())),
-            Expr::KnownResult(b) => ExprLayer::KnownResult(*b),
-            Expr::Name(n) => ExprLayer::Name(n),
-            Expr::Metadata(m) => ExprLayer::Metadata(m),
-            Expr::Contents(c) => ExprLayer::Contents(c),
         }
     }
 }
