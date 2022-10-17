@@ -36,7 +36,7 @@ pub enum Expr<Name, Metadata, Content> {
 }
 ```
 
-and my [recursion crate](recursion crate) to provide concise, performant, and stack safe evaluation that takes advantage of boolean operator short circuiting to minimze syscalls used.
+and my [recursion crate](https://crates.io/crates/recursion) to provide concise, performant, and stack safe evaluation that takes advantage of boolean operator short circuiting to minimze syscalls used.
 
 For example, this code attempts to evaluate an expression given _just_ a filesystem entity's path, to minimize metadata and file content reads in cases where we can evaluate an expression given just a file name.
 
