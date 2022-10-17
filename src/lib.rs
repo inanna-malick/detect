@@ -20,7 +20,7 @@ pub fn parse_and_run<F: FnMut(&Path)>(
 
 
         Ok((e, _)) => {
-        println!("expr: {}", e);
+        // println!("expr: {}", e);
             let walker = WalkDir::new(root).into_iter();
             for entry in walker {
                 let entry = entry?;
