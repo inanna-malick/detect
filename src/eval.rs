@@ -1,14 +1,8 @@
-use crate::expr::{
-    recurse::ExprLayer, BorrowedExpr, ContentsMatcher, Expr, MetadataMatcher, NameMatcher,
-    OwnedExpr,
-};
+use crate::expr::{recurse::ExprLayer, BorrowedExpr, Expr, OwnedExpr};
 use crate::util::Done;
 use recursion::Collapse;
+use std::fs::{self};
 use std::path::Path;
-use std::{
-    fs::{self},
-    os::unix::prelude::MetadataExt,
-};
 
 // multipass evaluation with short circuiting, runs, in order:
 // - file name matchers
@@ -17,14 +11,8 @@ use std::{
 pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
     let e: BorrowedExpr<Done> = e.collapse_layers(|layer| {
         match layer {
-            // evaluate all NameMatcher predicates
-            ExprLayer::Name(name_matcher) => match path.to_str() {
-                Some(s) => Expr::KnownResult(match name_matcher {
-                    NameMatcher::Regex(r) => r.is_match(s),
-                    NameMatcher::Extension(x) => s.ends_with(x),
-                }),
-                None => Expr::KnownResult(false),
-            },
+            // evaluate all NamePredicate predicates
+            ExprLayer::Name(p) => Expr::KnownResult(p.is_match(path)),
             // boilerplate
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::KnownResult(k) => Expr::KnownResult(k),
@@ -38,16 +26,14 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
         return Ok(b);
     }
 
+    // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
+    // TODO: move walkdir stuff to main, thus making a lib specific to just a few things
     let e: BorrowedExpr<Done, Done> = e.collapse_layers(|layer| {
         match layer {
-            // evaluate all MetadataMatcher predicates
-            ExprLayer::Metadata(p) => match p {
-                MetadataMatcher::Filesize(range) => {
-                    Expr::KnownResult(range.contains(&metadata.size()))
-                }
-            },
+            // evaluate all MetadataPredicate predicates
+            ExprLayer::Metadata(p) => Expr::KnownResult(p.is_match(&metadata)),
             // boilerplate
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::KnownResult(k) => Expr::KnownResult(k),
@@ -57,27 +43,28 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
         }
     });
 
-    // short circuit before reading file contents (even more expensive)
+    // short circuit before reading contents (even more expensive)
     if let Expr::KnownResult(b) = e {
         return Ok(b);
     }
 
-    let contents = fs::read(path)?;
-    let utf8_contents = String::from_utf8(contents).ok();
+    // only try to read contents if it's a file according to entity metadata
+    let utf8_contents = if metadata.is_file() {
+        // read file contents via multiple syscalls
+        let contents = fs::read(path)?;
+        String::from_utf8(contents).ok()
+    } else {
+        None
+    };
 
     let e: BorrowedExpr<Done, Done, Done> = e.collapse_layers(|layer| {
         match layer {
-            // evaluate all ContentMatcher predicates
-            ExprLayer::Contents(p) => Expr::KnownResult({
-                if let Some(utf8_contents) = utf8_contents.as_ref() {
-                    match p {
-                        ContentsMatcher::Regex(regex) => regex.is_match(utf8_contents),
-                        ContentsMatcher::Utf8 => true,
-                    }
-                } else {
-                    false
-                }
-            }),
+            // evaluate all ContentPredicate predicates
+            ExprLayer::Contents(p) => {
+                // only examine contents if we have a valid utf8 contents string
+                let is_match = utf8_contents.as_ref().map_or(false, |s| p.is_match(s));
+                Expr::KnownResult(is_match)
+            }
             // boilerplate
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::KnownResult(k) => Expr::KnownResult(k),
