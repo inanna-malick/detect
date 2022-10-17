@@ -1,4 +1,4 @@
-pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
+pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
 use recursion::map_layer::MapLayer;
 use std::fmt::{Debug, Display};
@@ -10,17 +10,22 @@ use super::Expr;
 pub enum ExprLayer<
     'a,
     Recurse,
-    Name = NameMatcher,
-    Metadata = MetadataMatcher,
-    Contents = ContentsMatcher,
+    Name = NamePredicate,
+    Metadata = MetadataPredicate,
+    Contents = ContentPredicate,
 > {
-    Operator(Operator<Recurse>),
+    // boolean literals
     KnownResult(bool),
+    // boolean operators
+    Operator(Operator<Recurse>),
+    // borrowed predicates
     Name(&'a Name),
     Metadata(&'a Metadata),
     Contents(&'a Contents),
 }
 
+// having operator as a distinct type might seem a bit odd, but it lets us
+// factor out the short circuiting logic
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
     Not(Recurse),
@@ -79,6 +84,7 @@ impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta,
 }
 
 // TODO: this should probably be 'display', but the current impl of visualization machinery in 'recurse' wants Debug
+// and I don't want to push a new major version just for this
 impl<'a, N: Display, M: Display, C: Display> Debug for ExprLayer<'a, (), N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

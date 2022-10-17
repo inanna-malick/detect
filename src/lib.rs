@@ -1,7 +1,7 @@
 mod eval;
 mod expr;
-mod matcher;
 mod parser;
+mod predicate;
 mod util;
 
 use crate::eval::eval;
@@ -19,8 +19,10 @@ pub fn parse_and_run<F: FnMut(String)>(
             let walker = WalkDir::new(root).into_iter();
             for entry in walker {
                 let entry = entry?;
-                if !entry.metadata()?.is_dir() && eval(&e, entry.path())? {
-                    // hacky, will panic sometimes if bad OsStr (FIXME)
+                if eval(&e, entry.path())? {
+                    // NOTE: need this for tests, but that's ok - can just make optional compilation flag as used by main, I think
+                    // TODO: can have multi-crate repo, it's fine. probably for the best
+                    // hacky, can panic sometimes if bad OsStr (FIXME, move conversion to on_match)
                     let path = entry.path().to_str().unwrap().to_owned();
                     on_match(path);
                 }

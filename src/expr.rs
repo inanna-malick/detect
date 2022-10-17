@@ -1,6 +1,6 @@
 pub mod recurse;
 
-pub(crate) use crate::matcher::{ContentsMatcher, MetadataMatcher, NameMatcher};
+pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
 use recursion::map_layer::Project;
 use std::fmt::{Debug, Display};
@@ -25,15 +25,18 @@ pub enum Expr<Name, Metadata, Contents> {
 }
 
 /// A filesystem entity matcher expression that owns its predicates
-pub type OwnedExpr<Name = NameMatcher, Metadata = MetadataMatcher, Contents = ContentsMatcher> =
-    Expr<Name, Metadata, Contents>;
+pub type OwnedExpr<
+    Name = NamePredicate,
+    Metadata = MetadataPredicate,
+    Contents = ContentPredicate,
+> = Expr<Name, Metadata, Contents>;
 
 /// A filesystem entity matcher expression with borrowed predicates
 pub type BorrowedExpr<
     'a,
-    Name = &'a NameMatcher,
-    Metadata = &'a MetadataMatcher,
-    Contents = &'a ContentsMatcher,
+    Name = &'a NamePredicate,
+    Metadata = &'a MetadataPredicate,
+    Contents = &'a ContentPredicate,
 > = Expr<Name, Metadata, Contents>;
 
 impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
@@ -54,6 +57,7 @@ impl<'a, S1: 'a, S2: 'a, S3: 'a> Project for &'a Expr<S1, S2, S3> {
 }
 
 // TODO: this should probably be 'display', but the current impl of visualization machinery in 'recurse' wants Debug
+// and I don't want to push a new major version just for this
 impl<N: Display, M: Display, C: Display> Debug for Expr<N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

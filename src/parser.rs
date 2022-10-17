@@ -8,7 +8,7 @@ use regex::Regex;
 
 use crate::expr::*;
 
-fn and_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
+fn and_<Input>() -> impl Parser<Input, Output = OwnedExpr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -24,7 +24,7 @@ where
     })
 }
 
-fn not_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
+fn not_<Input>() -> impl Parser<Input, Output = OwnedExpr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -39,7 +39,7 @@ where
     ))
 }
 
-fn or_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
+fn or_<Input>() -> impl Parser<Input, Output = OwnedExpr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -58,7 +58,7 @@ where
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<Input, Output = Expr<NameMatcher, MetadataMatcher, ContentsMatcher>>
+fn base_<Input>() -> impl Parser<Input, Output = OwnedExpr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -90,15 +90,15 @@ where
     };
 
     let contains_predicate =
-        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentsMatcher::Regex(s));
+        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentPredicate::Regex(s));
     let contents_predicate = choice((
         attempt(contains_predicate),
-        string("utf8()").map(|_| ContentsMatcher::Utf8),
+        string("utf8()").map(|_| ContentPredicate::Utf8),
     ))
     .map(Expr::Contents);
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| Expr::Name(NameMatcher::Regex(s)));
+        .map(|(_, s, _)| Expr::Name(NamePredicate::Regex(s)));
 
     let extension_predicate = (
         string("extension("),
@@ -107,18 +107,25 @@ where
         ),
         lex_char(')'),
     )
-        .map(|(_, s, _)| Expr::Name(NameMatcher::Extension(s)));
+        .map(|(_, s, _)| Expr::Name(NamePredicate::Extension(s)));
 
     // TODO: parser for MB/GB postfixes, but we can start with exact numeral sizes
     let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
-        .map(|(_, d1, _, d2, _)| MetadataMatcher::Filesize(d1..d2));
+        .map(|(_, d1, _, d2, _)| MetadataPredicate::Filesize(d1..d2));
+
+    let metadata_predicate = choice((
+        attempt(size_predicate),
+        attempt(string("executable()").map(|_| MetadataPredicate::Executable())),
+        attempt(string("dir()").map(|_| MetadataPredicate::Dir())),
+    ))
+    .map(Expr::Metadata);
 
     // I don't think order matters here, inside the choice combinator? idk
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
         attempt(extension_predicate),
-        attempt(size_predicate).map(Expr::Metadata),
+        attempt(metadata_predicate),
         parens,
     ))
     .skip(skip_spaces())
@@ -132,7 +139,7 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
+    pub fn or[Input]()(Input) -> OwnedExpr
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -140,7 +147,7 @@ parser! {
 }
 
 parser! {
-    fn and[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
+    fn and[Input]()(Input) -> OwnedExpr
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -148,7 +155,7 @@ parser! {
 }
 
 parser! {
-    fn not[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
+    fn not[Input]()(Input) -> OwnedExpr
     where [Input: Stream<Token = char>]
     {
         not_()
@@ -156,7 +163,7 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> Expr<NameMatcher, MetadataMatcher, ContentsMatcher>
+    fn base[Input]()(Input) -> OwnedExpr
     where [Input: Stream<Token = char>]
     {
         base_()
