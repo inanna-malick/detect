@@ -43,7 +43,7 @@ impl MetadataPredicate {
             MetadataPredicate::Executable() => {
                 let permissions = metadata.permissions();
                 let is_executable = permissions.mode() & 0o111 != 0;
-                is_executable && !metadata.is_dir() && metadata.size() > 0
+                is_executable && !metadata.is_dir()
             }
             MetadataPredicate::Dir() => metadata.is_dir(),
         }
