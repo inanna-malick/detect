@@ -2,7 +2,7 @@ use std::{env::set_current_dir, fs::create_dir_all};
 
 use tempdir::TempDir;
 
-fn f(path: &'static str, contents: &'static str) -> TestFile {
+fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
     let (path, name) = if path.contains('/') {
         path.rsplit_once('/').unwrap()
     } else {
@@ -16,19 +16,19 @@ fn f(path: &'static str, contents: &'static str) -> TestFile {
     }
 }
 
-struct TestFile {
-    path: &'static str,
-    name: &'static str,
-    contents: &'static str,
+struct TestFile<'a> {
+    path: &'a str,
+    name: &'a str,
+    contents: &'a str,
 }
 
-struct Case {
+struct Case<'a> {
     expr: &'static str,
     expected: &'static [&'static str],
-    files: Vec<TestFile>,
+    files: Vec<TestFile<'a>>,
 }
 
-impl Case {
+impl<'a> Case<'a> {
     fn build(&self) -> TempDir {
         let t = TempDir::new("fileset-expr").unwrap();
         let tmp_path = t.path().to_str().unwrap();
@@ -89,6 +89,17 @@ fn test_size() {
         expr: "filename(foo) && size(0..5)",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
+    }
+    .run()
+}
+
+#[test]
+fn test_size_kb() {
+    let big_str = "x".repeat(1025);
+    Case {
+        expr: "filename(foo) && size(1kb..2kb)",
+        expected: &["bar/foo"],
+        files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
     }
     .run()
 }

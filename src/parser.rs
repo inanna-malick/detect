@@ -1,7 +1,6 @@
 // #[macro_use]
 use combine::error::ParseError;
 use combine::parser::char::{char, digit, spaces, string};
-use combine::parser::combinator::recognize;
 use combine::stream::Stream;
 use combine::*;
 use regex::Regex;
@@ -73,10 +72,18 @@ where
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
     let num = || {
-        recognize(skip_many1(digit())).map(|s: String| {
+        many1(digit()).map(|s: String| {
             // `bs` only contains digits which are ascii and thus UTF-8
             s.parse::<u64>().unwrap()
         })
+    };
+
+    let kb_mb_num = || {
+        choice((
+            attempt((num(), char('k'), char('b'))).map(|(n, _, _)| n * 1024),
+            attempt((num(), char('m'), char('b'))).map(|(n, _, _)| n * 1024 * 1024),
+            attempt(num()),
+        ))
     };
 
     let regex = || {
@@ -108,7 +115,13 @@ where
         .map(|(_, s, _)| Expr::Name(NamePredicate::Extension(s)));
 
     // TODO: parser for KB/MB/GB postfixes, but we can start with exact numeral sizes
-    let size_predicate = (string("size("), num(), string(".."), num(), lex_char(')'))
+    let size_predicate = (
+        string("size("),
+        kb_mb_num(),
+        string(".."),
+        kb_mb_num(),
+        lex_char(')'),
+    )
         .map(|(_, d1, _, d2, _)| MetadataPredicate::Filesize(d1..d2));
 
     let metadata_predicate = choice((
