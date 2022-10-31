@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::ops::{RangeFrom, RangeTo};
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
@@ -10,7 +11,7 @@ pub enum NamePredicate {
 
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
-        match path.to_str() {
+        match path.file_name().and_then(|os_str| os_str.to_str()) {
             Some(s) => match self {
                 NamePredicate::Regex(r) => r.is_match(s),
                 NamePredicate::Extension(x) => s.ends_with(x),
@@ -29,9 +30,27 @@ impl Display for NamePredicate {
     }
 }
 
+/// Enum over range types, allows for x1..x2, ..x2, x1..
+#[derive(Debug, PartialEq, Eq)]
+pub enum Bound {
+    Full(Range<u64>),
+    Left(RangeFrom<u64>),
+    Right(RangeTo<u64>),
+}
+
+impl Bound {
+    fn contains(&self, t: &u64) -> bool {
+        match self {
+            Bound::Full(b) => b.contains(t),
+            Bound::Left(b) => b.contains(t),
+            Bound::Right(b) => b.contains(t),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum MetadataPredicate {
-    Filesize(Range<u64>),
+    Filesize(Bound),
     Executable(),
     Dir(),
 }

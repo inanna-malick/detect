@@ -6,6 +6,7 @@ use combine::*;
 use regex::Regex;
 
 use crate::expr::*;
+use crate::predicate::Bound;
 
 fn and_<Input>() -> impl Parser<Input, Output = OwnedExpr>
 where
@@ -36,6 +37,46 @@ where
         (lex_char('!'), base()).map(|(_, x)| Expr::Not(Box::new(x))),
         base(),
     ))
+}
+
+fn kb_mb_bound_<Input>() -> impl Parser<Input, Output = Bound>
+where
+    Input: Stream<Token = char>,
+    // Necessary due to rust-lang/rust#24159
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    let num = || {
+        many1(digit()).map(|s: String| {
+            // `bs` only contains digits which are ascii and thus UTF-8
+            s.parse::<u64>().unwrap()
+        })
+    };
+
+    let kb_mb_num = || {
+        choice((
+            attempt((num(), char('k'), char('b'))).map(|(n, _, _)| n * 1024),
+            attempt((num(), char('m'), char('b'))).map(|(n, _, _)| n * 1024 * 1024),
+            attempt(num()),
+        ))
+    };
+
+    let full_range =
+        (kb_mb_num(), string(".."), kb_mb_num()).map(|(x1, _, x2)| Bound::Full(x1..x2));
+    let left_range = (kb_mb_num(), string("..")).map(|(x1, _)| Bound::Left(x1..));
+    let right_range = (string(".."), kb_mb_num()).map(|(_, x2)| Bound::Right(..x2));
+    choice((
+        attempt(full_range),  // x1..x2
+        attempt(left_range),  // x1..
+        attempt(right_range), // ..x2
+    ))
+}
+
+parser! {
+    fn kb_mb_bound[Input]()(Input) -> Bound
+    where [Input: Stream<Token = char>]
+    {
+        kb_mb_bound_()
+    }
 }
 
 fn or_<Input>() -> impl Parser<Input, Output = OwnedExpr>
@@ -71,31 +112,18 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
-    let num = || {
-        many1(digit()).map(|s: String| {
-            // `bs` only contains digits which are ascii and thus UTF-8
-            s.parse::<u64>().unwrap()
-        })
-    };
-
-    let kb_mb_num = || {
-        choice((
-            attempt((num(), char('k'), char('b'))).map(|(n, _, _)| n * 1024),
-            attempt((num(), char('m'), char('b'))).map(|(n, _, _)| n * 1024 * 1024),
-            attempt(num()),
-        ))
-    };
-
     let regex = || {
         many1(
-            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_')
+            // TODO: should do this in a principled way that fully covers all allowed regex chars,
+            //       instead I keep adding characters I want to use. shrug emoji.
+            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ')
                 .expected("letter or digit or ."),
         )
         .map(|s: String| Regex::new(&s).unwrap())
     };
 
     let contains_predicate =
-        (string("contains("), regex(), lex_char(')')).map(|(_, s, _)| ContentPredicate::Regex(s));
+        (string("contains("), regex(), char(')')).map(|(_, s, _)| ContentPredicate::Regex(s));
     let contents_predicate = choice((
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentPredicate::Utf8),
@@ -114,15 +142,8 @@ where
     )
         .map(|(_, s, _)| Expr::Name(NamePredicate::Extension(s)));
 
-    // TODO: parser for KB/MB/GB postfixes, but we can start with exact numeral sizes
-    let size_predicate = (
-        string("size("),
-        kb_mb_num(),
-        string(".."),
-        kb_mb_num(),
-        lex_char(')'),
-    )
-        .map(|(_, d1, _, d2, _)| MetadataPredicate::Filesize(d1..d2));
+    let size_predicate = (string("size("), kb_mb_bound(), lex_char(')'))
+        .map(|(_, range, _)| MetadataPredicate::Filesize(range));
 
     let metadata_predicate = choice((
         attempt(size_predicate),

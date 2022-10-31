@@ -94,6 +94,26 @@ fn test_size() {
 }
 
 #[test]
+fn test_size_right() {
+    Case {
+        expr: "filename(foo) && size(..5)",
+        expected: &["foo"],
+        files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
+    }
+    .run()
+}
+
+#[test]
+fn test_size_left() {
+    Case {
+        expr: "filename(foo) && size(5..)",
+        expected: &["bar/foo"],
+        files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
+    }
+    .run()
+}
+
+#[test]
 fn test_size_kb() {
     let big_str = "x".repeat(1025);
     Case {
