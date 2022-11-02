@@ -43,7 +43,17 @@ impl<A, B, C> Operator<Expr<A, B, C>> {
                 } else if ands.iter().all(|b| matches!(b, KnownResult(true))) {
                     KnownResult(true)
                 } else {
-                    And(ands)
+                    // we know they aren't _all_ true, but maybe some of them are. filter those out,
+                    // and see if we can collapse this down to a single expression
+                    let mut filtered: Vec<_> = ands
+                        .into_iter()
+                        .filter(|e| !matches!(e, KnownResult(true)))
+                        .collect();
+                    if filtered.len() == 1 {
+                        filtered.remove(0)
+                    } else {
+                        And(filtered)
+                    }
                 }
             }
             Operator::Or(ors) => {
@@ -52,7 +62,17 @@ impl<A, B, C> Operator<Expr<A, B, C>> {
                 } else if ors.iter().all(|b| matches!(b, KnownResult(false))) {
                     KnownResult(false)
                 } else {
-                    Or(ors)
+                    // we know they aren't _all_ false, but maybe some of them are. filter those out,
+                    // and see if we can collapse this down to a single expression
+                    let mut filtered: Vec<_> = ors
+                        .into_iter()
+                        .filter(|e| !matches!(e, KnownResult(false)))
+                        .collect();
+                    if filtered.len() == 1 {
+                        filtered.remove(0)
+                    } else {
+                        Or(filtered)
+                    }
                 }
             }
             Operator::Not(x) => match x {

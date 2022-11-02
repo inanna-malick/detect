@@ -1,7 +1,7 @@
 use crate::expr::{recurse::ExprLayer, BorrowedExpr, Expr, OwnedExpr};
 use crate::util::Done;
-use recursion::Collapse;
 use recursion::stack_machine::visualize::Visualized;
+use recursion::Collapse;
 use std::fs::{self};
 use std::path::Path;
 
@@ -10,7 +10,15 @@ use std::path::Path;
 // - metadata matchers
 // - file content matchers
 pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
-    let e: BorrowedExpr<Done> = Visualized::new(e, format!("{:?}/eval_name.html", path), false).collapse_layers(|layer| {
+    let e: BorrowedExpr<Done> = Visualized::new(
+        e,
+        format!(
+            "/tmp/visualize_out/{}_eval_name.html",
+            path.to_str().unwrap().replace("/", "_").replace(".", "_")
+        ),
+        false,
+    )
+    .collapse_layers(|layer| {
         match layer {
             // evaluate all NamePredicate predicates
             ExprLayer::Name(p) => Expr::KnownResult(p.is_match(path)),
@@ -30,7 +38,15 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
     // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
-    let e: BorrowedExpr<Done, Done> = Visualized::new(&e, format!("{:?}/eval_metadata.html", path), false).collapse_layers(|layer| {
+    let e: BorrowedExpr<Done, Done> = Visualized::new(
+        &e,
+        format!(
+            "/tmp/visualize_out/{}_eval_metadata.html",
+            path.to_str().unwrap().replace("/", "_").replace(".", "_")
+        ),
+        false,
+    )
+    .collapse_layers(|layer| {
         match layer {
             // evaluate all MetadataPredicate predicates
             ExprLayer::Metadata(p) => Expr::KnownResult(p.is_match(&metadata)),
@@ -57,7 +73,15 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
         None
     };
 
-    let e: BorrowedExpr<Done, Done, Done> = Visualized::new(&e, format!("{:?}/eval_contents.html", path), false).collapse_layers(|layer| {
+    let e: BorrowedExpr<Done, Done, Done> = Visualized::new(
+        &e,
+        format!(
+            "/tmp/visualize_out/{}_eval_contents.html",
+            path.to_str().unwrap().replace("/", "_").replace(".", "_")
+        ),
+        false,
+    )
+    .collapse_layers(|layer| {
         match layer {
             // evaluate all ContentPredicate predicates
             ExprLayer::Contents(p) => {

@@ -9,6 +9,16 @@ pub enum NamePredicate {
     Extension(String),
 }
 
+impl PartialEq for NamePredicate {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Extension(l0), Self::Extension(r0)) => l0.as_str() == r0.as_str(),
+            _ => false,
+        }
+    }
+}
+
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
         match path.file_name().and_then(|os_str| os_str.to_str()) {
@@ -31,11 +41,33 @@ impl Display for NamePredicate {
 }
 
 /// Enum over range types, allows for x1..x2, ..x2, x1..
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum Bound {
     Full(Range<u64>),
     Left(RangeFrom<u64>),
     Right(RangeTo<u64>),
+}
+
+fn display_kb_mb(u: u64) -> String {
+    let kb = 1024;
+    let mb = kb * 1024;
+    if u >= mb {
+        format!("{}mb", u / mb)
+    } else if u >= kb {
+        format!("{}kb", u / kb)
+    } else {
+        format!("{}", u)
+    }
+}
+
+impl Display for Bound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Bound::Full(r) => write!(f, "{}..{}", display_kb_mb(r.start), display_kb_mb(r.end)),
+            Bound::Left(r) => write!(f, "{}..", display_kb_mb(r.start)),
+            Bound::Right(r) => write!(f, "..{}", display_kb_mb(r.end)),
+        }
+    }
 }
 
 impl Bound {
@@ -48,7 +80,7 @@ impl Bound {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum MetadataPredicate {
     Filesize(Bound),
     Executable(),
@@ -72,7 +104,7 @@ impl MetadataPredicate {
 impl Display for MetadataPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MetadataPredicate::Filesize(fs) => write!(f, "size({:?})", fs),
+            MetadataPredicate::Filesize(fs) => write!(f, "size({})", fs),
             MetadataPredicate::Executable() => write!(f, "executable()"),
             MetadataPredicate::Dir() => write!(f, "dir()"),
         }
@@ -84,6 +116,16 @@ impl Display for MetadataPredicate {
 pub enum ContentPredicate {
     Regex(Regex),
     Utf8,
+}
+
+impl PartialEq for ContentPredicate {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Utf8, Self::Utf8) => true,
+            _ => false,
+        }
+    }
 }
 
 impl ContentPredicate {
