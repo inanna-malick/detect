@@ -1,6 +1,6 @@
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
-use recursion::map_layer::MapLayer;
+use recursion::recursive::Recursive;
 use std::fmt::{Debug, Display};
 
 use super::Expr;
@@ -33,6 +33,7 @@ pub enum Operator<Recurse> {
     Or(Vec<Recurse>),
 }
 
+// NOTE: not the full short circuit logic? need to port that over to main
 impl<A, B, C> Operator<Expr<A, B, C>> {
     pub fn attempt_short_circuit(self) -> Expr<A, B, C> {
         use Expr::*;
@@ -63,13 +64,29 @@ impl<A, B, C> Operator<Expr<A, B, C>> {
     }
 }
 
-impl<'a, Name, Meta, Content, A, B> MapLayer<B> for ExprLayer<'a, A, Name, Meta, Content> {
-    type Unwrapped = A;
-    type To = ExprLayer<'a, B, Name, Meta, Content>;
-    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, mut f: F) -> Self::To {
+impl<'a, N: 'a, M: 'a, C: 'a> Recursive for &'a Expr<N, M, C> {
+    type Layer<X> = ExprLayer<'a, X, N, M, C>;
+
+    fn into_layer(self) -> Self::Layer<Self> {
+        match self {
+            Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
+            Expr::And(xs) => ExprLayer::Operator(Operator::And(xs.iter().collect())),
+            Expr::Or(xs) => ExprLayer::Operator(Operator::Or(xs.iter().collect())),
+            Expr::KnownResult(b) => ExprLayer::KnownResult(*b),
+            Expr::Name(n) => ExprLayer::Name(n),
+            Expr::Metadata(m) => ExprLayer::Metadata(m),
+            Expr::Contents(c) => ExprLayer::Contents(c),
+        }
+    }
+
+
+    fn map_associated_layer<F, A, B>(input: Self::Layer<A>, mut f: F) -> Self::Layer<B>
+    where
+        F: FnMut(A) -> B,
+    {
         use self::Operator::*;
         use ExprLayer::*;
-        match self {
+        match input {
             Operator(o) => Operator(match o {
                 Not(a) => Not(f(a)),
                 And(xs) => And(xs.into_iter().map(f).collect()),
