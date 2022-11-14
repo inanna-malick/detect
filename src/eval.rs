@@ -1,6 +1,6 @@
 use crate::expr::{recurse::ExprLayer, BorrowedExpr, Expr, OwnedExpr};
 use crate::util::Done;
-use recursion::Collapse;
+use recursion::{Collapse, RecursiveExt};
 use std::fs::{self};
 use std::path::Path;
 
@@ -9,7 +9,7 @@ use std::path::Path;
 // - metadata matchers
 // - file content matchers
 pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
-    let e: BorrowedExpr<Done> = e.collapse_layers(|layer| {
+    let e: BorrowedExpr<Done> = e.fold_recursive(|layer| {
         match layer {
             // evaluate all NamePredicate predicates
             ExprLayer::Name(p) => Expr::KnownResult(p.is_match(path)),
@@ -29,7 +29,7 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
     // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
-    let e: BorrowedExpr<Done, Done> = e.collapse_layers(|layer| {
+    let e: BorrowedExpr<Done, Done> = e.fold_recursive(|layer| {
         match layer {
             // evaluate all MetadataPredicate predicates
             ExprLayer::Metadata(p) => Expr::KnownResult(p.is_match(&metadata)),
@@ -56,7 +56,7 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
         None
     };
 
-    let e: BorrowedExpr<Done, Done, Done> = e.collapse_layers(|layer| {
+    let e: BorrowedExpr<Done, Done, Done> = e.fold_recursive(|layer| {
         match layer {
             // evaluate all ContentPredicate predicates
             ExprLayer::Contents(p) => {

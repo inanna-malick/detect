@@ -1,6 +1,6 @@
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
-use recursion::recursive::Recursive;
+use recursion::{Functor, PartiallyApplied, Recursive};
 use std::fmt::{Debug, Display};
 
 use super::Expr;
@@ -64,23 +64,10 @@ impl<A, B, C> Operator<Expr<A, B, C>> {
     }
 }
 
-impl<'a, N: 'a, M: 'a, C: 'a> Recursive for &'a Expr<N, M, C> {
+impl<'a, N: 'a, M: 'a, C: 'a> Functor for ExprLayer<'a, PartiallyApplied, N, M, C> {
     type Layer<X> = ExprLayer<'a, X, N, M, C>;
 
-    fn into_layer(self) -> Self::Layer<Self> {
-        match self {
-            Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
-            Expr::And(xs) => ExprLayer::Operator(Operator::And(xs.iter().collect())),
-            Expr::Or(xs) => ExprLayer::Operator(Operator::Or(xs.iter().collect())),
-            Expr::KnownResult(b) => ExprLayer::KnownResult(*b),
-            Expr::Name(n) => ExprLayer::Name(n),
-            Expr::Metadata(m) => ExprLayer::Metadata(m),
-            Expr::Contents(c) => ExprLayer::Contents(c),
-        }
-    }
-
-
-    fn map_associated_layer<F, A, B>(input: Self::Layer<A>, mut f: F) -> Self::Layer<B>
+    fn fmap<F, A, B>(input: Self::Layer<A>, mut f: F) -> Self::Layer<B>
     where
         F: FnMut(A) -> B,
     {
@@ -96,6 +83,22 @@ impl<'a, N: 'a, M: 'a, C: 'a> Recursive for &'a Expr<N, M, C> {
             Name(x) => Name(x),
             Metadata(x) => Metadata(x),
             Contents(x) => Contents(x),
+        }
+    }
+}
+
+impl<'a, N: 'a, M: 'a, C: 'a> Recursive for &'a Expr<N, M, C> {
+    type FunctorToken = ExprLayer<'a, PartiallyApplied, N, M, C>;
+
+    fn into_layer(self) -> <Self::FunctorToken as Functor>::Layer<Self> {
+        match self {
+            Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
+            Expr::And(xs) => ExprLayer::Operator(Operator::And(xs.iter().collect())),
+            Expr::Or(xs) => ExprLayer::Operator(Operator::Or(xs.iter().collect())),
+            Expr::KnownResult(b) => ExprLayer::KnownResult(*b),
+            Expr::Name(n) => ExprLayer::Name(n),
+            Expr::Metadata(m) => ExprLayer::Metadata(m),
+            Expr::Contents(c) => ExprLayer::Contents(c),
         }
     }
 }
