@@ -1,6 +1,9 @@
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use itertools::*;
-use recursion::{Functor, PartiallyApplied, Recursive};
+use recursion_schemes::{
+    functor::{Functor, PartiallyApplied},
+    recursive::Recursive,
+};
 use std::fmt::{Debug, Display};
 
 use super::Expr;
@@ -33,32 +36,67 @@ pub enum Operator<Recurse> {
     Or(Vec<Recurse>),
 }
 
-// NOTE: not the full short circuit logic? need to port that over to main
-impl<A, B, C> Operator<Expr<A, B, C>> {
-    pub fn attempt_short_circuit(self) -> Expr<A, B, C> {
-        use Expr::*;
+pub trait ThreeValued {
+    fn as_bool(&self) -> Option<bool>;
+    fn lift_bool(b: bool) -> Self;
+
+    fn is_false(&self) -> bool {
+        self.as_bool().is_some_and(|x| !x)
+    }
+
+    fn is_true(&self) -> bool {
+        self.as_bool().is_some_and(|x| x)
+    }
+}
+
+impl<A, B, C> ThreeValued for Expr<A, B, C> {
+    fn as_bool(&self) -> Option<bool> {
         match self {
+            Expr::KnownResult(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    fn lift_bool(b: bool) -> Self {
+        Expr::KnownResult(b)
+    }
+}
+
+impl<A, B, C> From<Operator<Self>> for Expr<A, B, C> {
+    fn from(value: Operator<Expr<A, B, C>>) -> Self {
+        match value {
+            Operator::Not(x) => Self::Not(Box::new(x)),
+            Operator::And(xs) => Self::And(xs),
+            Operator::Or(xs) => Self::Or(xs),
+        }
+    }
+}
+
+impl<X: ThreeValued + From<Operator<X>>> Operator<X> {
+    pub fn attempt_short_circuit(self) -> X {
+        // use Expr::*;
+        match &self {
             Operator::And(ands) => {
-                if ands.iter().any(|b| matches!(b, KnownResult(false))) {
-                    KnownResult(false)
-                } else if ands.iter().all(|b| matches!(b, KnownResult(true))) {
-                    KnownResult(true)
+                if ands.iter().any(ThreeValued::is_false) {
+                    ThreeValued::lift_bool(false)
+                } else if ands.iter().all(ThreeValued::is_true) {
+                    ThreeValued::lift_bool(true)
                 } else {
-                    And(ands)
+                    X::from(self)
                 }
             }
             Operator::Or(ors) => {
-                if ors.iter().any(|b| matches!(b, KnownResult(true))) {
-                    KnownResult(true)
-                } else if ors.iter().all(|b| matches!(b, KnownResult(false))) {
-                    KnownResult(false)
+                if ors.iter().any(ThreeValued::is_false) {
+                    ThreeValued::lift_bool(true)
+                } else if ors.iter().all(ThreeValued::is_true) {
+                    ThreeValued::lift_bool(false)
                 } else {
-                    Or(ors)
+                    X::from(self)
                 }
             }
-            Operator::Not(x) => match x {
-                KnownResult(b) => KnownResult(!b),
-                _ => Not(Box::new(x)),
+            Operator::Not(x) => match x.as_bool() {
+                Some(b) => ThreeValued::lift_bool(!b),
+                None => X::from(self),
             },
         }
     }

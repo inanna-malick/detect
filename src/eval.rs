@@ -1,6 +1,7 @@
+use recursion_schemes::recursive::RecursiveExt;
+
 use crate::expr::{recurse::ExprLayer, BorrowedExpr, Expr, OwnedExpr};
 use crate::util::Done;
-use recursion::{Collapse, RecursiveExt};
 use std::fs::{self};
 use std::path::Path;
 
