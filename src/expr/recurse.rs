@@ -17,8 +17,6 @@ pub enum ExprLayer<
     Metadata = MetadataPredicate,
     Contents = ContentPredicate,
 > {
-    // boolean literals
-    KnownResult(bool),
     // boolean operators
     Operator(Operator<Recurse>),
     // borrowed predicates
@@ -32,8 +30,8 @@ pub enum ExprLayer<
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operator<Recurse> {
     Not(Recurse),
-    And(Vec<Recurse>),
-    Or(Vec<Recurse>),
+    And(Recurse, Recurse),
+    Or(Recurse, Recurse),
 }
 
 pub trait ThreeValued {
@@ -49,55 +47,61 @@ pub trait ThreeValued {
     }
 }
 
-impl<A, B, C> ThreeValued for Expr<A, B, C> {
-    fn as_bool(&self) -> Option<bool> {
-        match self {
-            Expr::KnownResult(b) => Some(*b),
-            _ => None,
-        }
-    }
-
-    fn lift_bool(b: bool) -> Self {
-        Expr::KnownResult(b)
-    }
-}
-
 impl<A, B, C> From<Operator<Self>> for Expr<A, B, C> {
     fn from(value: Operator<Expr<A, B, C>>) -> Self {
         match value {
             Operator::Not(x) => Self::Not(Box::new(x)),
-            Operator::And(xs) => Self::And(xs),
-            Operator::Or(xs) => Self::Or(xs),
+            Operator::And(a, b) => Self::And(Box::new(a), Box::new(b)),
+            Operator::Or(a, b) => Self::Or(Box::new(a), Box::new(b)),
         }
     }
 }
 
-impl<X: ThreeValued + From<Operator<X>>> Operator<X> {
-    pub fn attempt_short_circuit(self) -> X {
+pub enum ShortCircuit<X> {
+    Known(bool),
+    Unknown(X),
+}
+
+impl<X> ShortCircuit<X> {
+    fn known(&self) -> Option<bool> {
+        match self {
+            ShortCircuit::Known(k) => Some(*k),
+            ShortCircuit::Unknown(_) => None,
+        }
+    }
+}
+
+impl<A, B, C> Operator<ShortCircuit<Expr<A, B, C>>> {
+    pub fn attempt_short_circuit(self) -> ShortCircuit<Expr<A, B, C>> {
         // use Expr::*;
-        match &self {
-            Operator::And(ands) => {
-                if ands.iter().any(ThreeValued::is_false) {
-                    ThreeValued::lift_bool(false)
-                } else if ands.iter().all(ThreeValued::is_true) {
-                    ThreeValued::lift_bool(true)
-                } else {
-                    X::from(self)
+        match self {
+            Operator::And(a, b) => {
+                use ShortCircuit::*;
+                match (a, b) {
+                    (Known(false), _) => Known(false),
+                    (_, Known(false)) => Known(false),
+                    (x, Known(true)) => x,
+                    (Known(true), x) => x,
+                    (Unknown(a), Unknown(b)) => Unknown(Expr::and(a, b)),
                 }
             }
-            Operator::Or(ors) => {
-                if ors.iter().any(ThreeValued::is_false) {
-                    ThreeValued::lift_bool(true)
-                } else if ors.iter().all(ThreeValued::is_true) {
-                    ThreeValued::lift_bool(false)
-                } else {
-                    X::from(self)
+            Operator::Or(a, b) => {
+                use ShortCircuit::*;
+                match (a, b) {
+                    (Known(true), _) => Known(true),
+                    (_, Known(true)) => Known(true),
+                    (x, Known(false)) => x,
+                    (Known(false), x) => x,
+                    (Unknown(a), Unknown(b)) => Unknown(Expr::or(a, b)),
                 }
             }
-            Operator::Not(x) => match x.as_bool() {
-                Some(b) => ThreeValued::lift_bool(!b),
-                None => X::from(self),
-            },
+            Operator::Not(x) => {
+                use ShortCircuit::*;
+                match x {
+                    Known(k) => Known(!k),
+                    Unknown(u) => Unknown(Expr::not(u)),
+                }
+            }
         }
     }
 }
@@ -114,10 +118,9 @@ impl<'a, N: 'a, M: 'a, C: 'a> Functor for ExprLayer<'a, PartiallyApplied, N, M, 
         match input {
             Operator(o) => Operator(match o {
                 Not(a) => Not(f(a)),
-                And(xs) => And(xs.into_iter().map(f).collect()),
-                Or(xs) => Or(xs.into_iter().map(f).collect()),
+                And(a, b) => And(f(a), f(b)),
+                Or(a, b) => Or(f(a), f(b)),
             }),
-            KnownResult(k) => KnownResult(k),
             Name(x) => Name(x),
             Metadata(x) => Metadata(x),
             Contents(x) => Contents(x),
@@ -131,9 +134,8 @@ impl<'a, N: 'a, M: 'a, C: 'a> Recursive for &'a Expr<N, M, C> {
     fn into_layer(self) -> <Self::FunctorToken as Functor>::Layer<Self> {
         match self {
             Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
-            Expr::And(xs) => ExprLayer::Operator(Operator::And(xs.iter().collect())),
-            Expr::Or(xs) => ExprLayer::Operator(Operator::Or(xs.iter().collect())),
-            Expr::KnownResult(b) => ExprLayer::KnownResult(*b),
+            Expr::And(a, b) => ExprLayer::Operator(Operator::And(a, b)),
+            Expr::Or(a, b) => ExprLayer::Operator(Operator::Or(a, b)),
             Expr::Name(n) => ExprLayer::Name(n),
             Expr::Metadata(m) => ExprLayer::Metadata(m),
             Expr::Contents(c) => ExprLayer::Contents(c),
@@ -146,21 +148,14 @@ impl<'a, N: Display, M: Display, C: Display> Display for ExprLayer<'a, (), N, M,
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Operator(o) => match o {
-                Operator::Not(_) => write!(f, "!_"),
-                Operator::And(xs) => {
-                    let xs: String =
-                        Itertools::intersperse(xs.iter().map(|_| "_"), " && ").collect();
-                    write!(f, "{}", xs)
+                Operator::Not(_) => write!(f, "NOT"),
+                Operator::And(a, b) => {
+                    write!(f, "AND")
                 }
-                Operator::Or(xs) => {
-                    let xs: String =
-                        Itertools::intersperse(xs.iter().map(|_| "_"), " || ").collect();
-                    write!(f, "{}", xs)
+                Operator::Or(a, b) => {
+                    write!(f, "OR")
                 }
             },
-            Self::KnownResult(b) => {
-                write!(f, "{}", b)
-            }
             Self::Name(arg0) => write!(f, "{}", arg0),
             Self::Metadata(arg0) => write!(f, "{}", arg0),
             Self::Contents(arg0) => write!(f, "{}", arg0),

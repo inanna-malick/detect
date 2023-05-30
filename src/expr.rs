@@ -11,16 +11,26 @@ use self::recurse::{ExprLayer, Operator};
 /// - file metadata
 /// - file contents
 pub enum Expr<Name, Metadata, Content> {
-    // literal boolean values
-    KnownResult(bool),
     // boolean operators
     Not(Box<Self>),
-    And(Vec<Self>),
-    Or(Vec<Self>),
+    And(Box<Self>, Box<Self>),
+    Or(Box<Self>, Box<Self>),
     // predicates
     Name(Name),
     Metadata(Metadata),
     Contents(Content),
+}
+
+impl<A, B, C> Expr<A, B, C> {
+    pub fn and(a: Self, b: Self) -> Self {
+        Self::And(Box::new(a), Box::new(b))
+    }
+    pub fn or(a: Self, b: Self) -> Self {
+        Self::Or(Box::new(a), Box::new(b))
+    }
+    pub fn not(a: Self) -> Self {
+        Self::Not(Box::new(a))
+    }
 }
 
 /// A filesystem entity matcher expression that owns its predicates
@@ -39,19 +49,11 @@ impl<N: Display, M: Display, C: Display> Display for Expr<N, M, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Not(x) => write!(f, "!{}", x),
-            Self::And(xs) => {
-                let xs: String =
-                    intersperse(xs.iter().map(|x| format!("{}", x)), " && ".to_string()).collect();
-                write!(f, "{}", xs)
+            Self::And(a, b) => {
+                write!(f, "{} && {}", a, b)
             }
-            Self::Or(xs) => {
-                let xs: String =
-                    Itertools::intersperse(xs.iter().map(|x| format!("{}", x)), " || ".to_string())
-                        .collect();
-                write!(f, "{}", xs)
-            }
-            Self::KnownResult(b) => {
-                write!(f, "{}", b)
+            Self::Or(a, b) => {
+                write!(f, "{} || {}", a, b)
             }
             Self::Name(arg0) => write!(f, "{}", arg0),
             Self::Metadata(arg0) => write!(f, "{}", arg0),

@@ -1,5 +1,6 @@
 use recursion_schemes::recursive::RecursiveExt;
 
+use crate::expr::recurse::ShortCircuit;
 use crate::expr::{recurse::ExprLayer, BorrowedExpr, Expr, OwnedExpr};
 use crate::util::Done;
 use std::fs::{self};
@@ -10,43 +11,37 @@ use std::path::Path;
 // - metadata matchers
 // - file content matchers
 pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
-    let e: BorrowedExpr<Done> = e.fold_recursive(|layer| {
+    let e: BorrowedExpr<Done> = match e.fold_recursive(|layer| {
         match layer {
             // evaluate all NamePredicate predicates
-            ExprLayer::Name(p) => Expr::KnownResult(p.is_match(path)),
+            ExprLayer::Name(p) => ShortCircuit::Known(p.is_match(path)),
             // boilerplate
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::KnownResult(k) => Expr::KnownResult(k),
-            ExprLayer::Metadata(p) => Expr::Metadata(p),
-            ExprLayer::Contents(p) => Expr::Contents(p),
+            ExprLayer::Metadata(p) => ShortCircuit::Unknown(Expr::Metadata(p)),
+            ExprLayer::Contents(p) => ShortCircuit::Unknown(Expr::Contents(p)),
         }
-    });
-
-    // short circuit before querying metadata (expensive)
-    if let Expr::KnownResult(b) = e {
-        return Ok(b);
-    }
+    }) {
+        ShortCircuit::Known(x) => return Ok(x),
+        ShortCircuit::Unknown(e) => e,
+    };
 
     // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
-    let e: BorrowedExpr<Done, Done> = e.fold_recursive(|layer| {
+    let e: BorrowedExpr<Done, Done> = match e.fold_recursive(|layer| {
         match layer {
             // evaluate all MetadataPredicate predicates
-            ExprLayer::Metadata(p) => Expr::KnownResult(p.is_match(&metadata)),
+            ExprLayer::Metadata(p) => ShortCircuit::Known(p.is_match(&metadata)),
             // boilerplate
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::KnownResult(k) => Expr::KnownResult(k),
-            ExprLayer::Contents(p) => Expr::Contents(*p),
+            ExprLayer::Contents(p) => ShortCircuit::Unknown(Expr::Contents(*p)),
             // unreachable: predicate already evaluated
             ExprLayer::Name(_) => unreachable!("name predicate has already been evaluated"),
         }
-    });
-
-    // short circuit before reading contents (even more expensive)
-    if let Expr::KnownResult(b) = e {
-        return Ok(b);
-    }
+    }) {
+        ShortCircuit::Known(x) => return Ok(x),
+        ShortCircuit::Unknown(e) => e,
+    };
 
     // only try to read contents if it's a file according to entity metadata
     let utf8_contents = if metadata.is_file() {
@@ -57,26 +52,24 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
         None
     };
 
-    let e: BorrowedExpr<Done, Done, Done> = e.fold_recursive(|layer| {
+    match e.fold_recursive(|layer| {
         match layer {
             // evaluate all ContentPredicate predicates
             ExprLayer::Contents(p) => {
                 // only examine contents if we have a valid utf8 contents string
                 let is_match = utf8_contents.as_ref().map_or(false, |s| p.is_match(s));
-                Expr::KnownResult(is_match)
+                ShortCircuit::Known::<Expr<Done, Done, Done>>(is_match)
             }
             // boilerplate
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::KnownResult(k) => Expr::KnownResult(k),
             // unreachable: predicates already evaluated
             ExprLayer::Name(_) => unreachable!("name predicate has already been evaluated"),
             ExprLayer::Metadata(_) => unreachable!("metadata predicate has already been evaluated"),
         }
-    });
-
-    if let Expr::KnownResult(b) = e {
-        Ok(b)
-    } else {
-        panic!("programmer error, should have known result after all predicates evaluated")
+    }) {
+        ShortCircuit::Known(x) => return Ok(x),
+        ShortCircuit::Unknown(_) => {
+            panic!("programmer error, should have known result after all predicates evaluated")
+        }
     }
 }
