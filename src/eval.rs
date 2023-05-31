@@ -46,7 +46,7 @@ pub fn eval(
         None
     };
 
-    let res: bool = e.fold_recursive::<bool, _>(|layer| match layer {
+    let res = e.fold_recursive::<bool>(|layer| match layer {
         // no more short circuiting, we know we can calculate a result here
         ExprLayer::Operator(op) => match op {
             Operator::Not(x) => !x,

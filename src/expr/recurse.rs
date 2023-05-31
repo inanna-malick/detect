@@ -2,7 +2,7 @@ pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredi
 use itertools::*;
 use recursion_schemes::{
     functor::{Functor, PartiallyApplied},
-    recursive::{Recursive},
+    recursive::{Recursive, Base, BaseFunctor},
 };
 use std::fmt::{Debug, Display};
 
@@ -120,10 +120,13 @@ impl<'a, P: 'a> Functor for ExprLayer<'a, PartiallyApplied, P> {
     }
 }
 
-impl<'a, P: 'a> Recursive for &'a Expr<P> {
-    type FunctorToken = ExprLayer<'a, PartiallyApplied, P>;
+impl<'a, P: 'a> Base for &'a Expr<P> {
+    type MappableFrame = ExprLayer<'a, PartiallyApplied, P>;
+}
 
-    fn into_layer(self) ->  <Self::FunctorToken as Functor>::Layer<Self> {
+impl<'a, P: 'a> Recursive for &'a Expr<P> {
+
+    fn into_layer(self) -> BaseFunctor<Self, Self> {
         match self {
             Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
             Expr::And(a, b) => ExprLayer::Operator(Operator::And(a, b)),
