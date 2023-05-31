@@ -2,10 +2,7 @@ pub mod recurse;
 
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
-use itertools::*;
 use std::fmt::Display;
-
-use self::recurse::{ExprLayer, Operator};
 
 /// Filesystem entity matcher expression with boolean logic and predicates
 pub enum Expr<P = Predicate> {

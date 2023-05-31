@@ -1,5 +1,3 @@
-pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
-use itertools::*;
 use recursion_schemes::{
     functor::{Functor, PartiallyApplied},
     recursive::{Recursive, Base, BaseFunctor},
@@ -54,18 +52,9 @@ pub enum ShortCircuit<X> {
     Unknown(X),
 }
 
-impl<X> ShortCircuit<X> {
-    fn known(&self) -> Option<bool> {
-        match self {
-            ShortCircuit::Known(k) => Some(*k),
-            ShortCircuit::Unknown(_) => None,
-        }
-    }
-}
 
 impl<P> Operator<ShortCircuit<Expr<P>>> {
     pub fn attempt_short_circuit(self) -> ShortCircuit<Expr<P>> {
-        // use Expr::*;
         match self {
             Operator::And(a, b) => {
                 use ShortCircuit::*;
@@ -142,10 +131,10 @@ impl<'a, P: Display> Display for ExprLayer<'a, (), P> {
         match self {
             Self::Operator(o) => match o {
                 Operator::Not(_) => write!(f, "NOT"),
-                Operator::And(a, b) => {
+                Operator::And(_, _) => {
                     write!(f, "AND")
                 }
-                Operator::Or(a, b) => {
+                Operator::Or(_, _) => {
                     write!(f, "OR")
                 }
             },
