@@ -1,7 +1,9 @@
 use recursion_schemes::recursive::RecursiveExt;
 
-use crate::expr::recurse::ShortCircuit;
-use crate::expr::{recurse::ExprLayer, BorrowedExpr, Expr, OwnedExpr};
+use crate::expr::recurse::{ShortCircuit, Operator};
+use crate::expr::{recurse::ExprLayer, Expr};
+use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
+use crate::predicate::Predicate;
 use crate::util::Done;
 use std::fs::{self};
 use std::path::Path;
@@ -10,38 +12,30 @@ use std::path::Path;
 // - file name matchers
 // - metadata matchers
 // - file content matchers
-pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
-    let e: BorrowedExpr<Done> = match e.fold_recursive(|layer| {
-        match layer {
-            // evaluate all NamePredicate predicates
-            ExprLayer::Name(p) => ShortCircuit::Known(p.is_match(path)),
-            // boilerplate
+pub fn eval(
+    e: &Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
+    path: &Path,
+) -> std::io::Result<bool> {
+    let e: Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>> =
+        match e.fold_recursive(|layer| match layer {
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::Metadata(p) => ShortCircuit::Unknown(Expr::Metadata(p)),
-            ExprLayer::Contents(p) => ShortCircuit::Unknown(Expr::Contents(p)),
-        }
-    }) {
-        ShortCircuit::Known(x) => return Ok(x),
-        ShortCircuit::Unknown(e) => e,
-    };
+            ExprLayer::Predicate(p) => p.run_phase(path),
+        }) {
+            ShortCircuit::Known(x) => return Ok(x),
+            ShortCircuit::Unknown(e) => e,
+        };
 
     // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
-    let e: BorrowedExpr<Done, Done> = match e.fold_recursive(|layer| {
-        match layer {
-            // evaluate all MetadataPredicate predicates
-            ExprLayer::Metadata(p) => ShortCircuit::Known(p.is_match(&metadata)),
-            // boilerplate
+    let e: Expr<Predicate<Done, Done, &ContentPredicate>> =
+        match e.fold_recursive(|layer| match layer {
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::Contents(p) => ShortCircuit::Unknown(Expr::Contents(*p)),
-            // unreachable: predicate already evaluated
-            ExprLayer::Name(_) => unreachable!("name predicate has already been evaluated"),
-        }
-    }) {
-        ShortCircuit::Known(x) => return Ok(x),
-        ShortCircuit::Unknown(e) => e,
-    };
+            ExprLayer::Predicate(p) => p.run_phase(&metadata),
+        }) {
+            ShortCircuit::Known(x) => return Ok(x),
+            ShortCircuit::Unknown(e) => e,
+        };
 
     // only try to read contents if it's a file according to entity metadata
     let utf8_contents = if metadata.is_file() {
@@ -52,24 +46,15 @@ pub fn eval(e: &OwnedExpr, path: &Path) -> std::io::Result<bool> {
         None
     };
 
-    match e.fold_recursive(|layer| {
-        match layer {
-            // evaluate all ContentPredicate predicates
-            ExprLayer::Contents(p) => {
-                // only examine contents if we have a valid utf8 contents string
-                let is_match = utf8_contents.as_ref().map_or(false, |s| p.is_match(s));
-                ShortCircuit::Known::<Expr<Done, Done, Done>>(is_match)
-            }
-            // boilerplate
-            ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            // unreachable: predicates already evaluated
-            ExprLayer::Name(_) => unreachable!("name predicate has already been evaluated"),
-            ExprLayer::Metadata(_) => unreachable!("metadata predicate has already been evaluated"),
-        }
-    }) {
-        ShortCircuit::Known(x) => return Ok(x),
-        ShortCircuit::Unknown(_) => {
-            panic!("programmer error, should have known result after all predicates evaluated")
-        }
-    }
+    let res: bool = e.fold_recursive::<bool, _>(|layer| match layer {
+        // no more short circuiting, we know we can calculate a result here
+        ExprLayer::Operator(op) => match op {
+            Operator::Not(x) => !x,
+            Operator::And(a, b) => a && b,
+            Operator::Or(a, b) => a || b,
+        },
+        ExprLayer::Predicate(p) => p.run_phase(utf8_contents.as_deref()),
+    });
+
+    Ok(res)
 }

@@ -6,9 +6,9 @@ use combine::*;
 use regex::Regex;
 
 use crate::expr::*;
-use crate::predicate::Bound;
+use crate::predicate::{Bound, Predicate};
 
-fn and_<Input>() -> impl Parser<Input, Output = OwnedExpr>
+fn and_<Input>() -> impl Parser<Input, Output = Expr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -26,7 +26,7 @@ where
     })
 }
 
-fn not_<Input>() -> impl Parser<Input, Output = OwnedExpr>
+fn not_<Input>() -> impl Parser<Input, Output = Expr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -81,7 +81,7 @@ parser! {
     }
 }
 
-fn or_<Input>() -> impl Parser<Input, Output = OwnedExpr>
+fn or_<Input>() -> impl Parser<Input, Output = Expr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -101,7 +101,7 @@ where
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<Input, Output = OwnedExpr>
+fn base_<Input>() -> impl Parser<Input, Output = Expr>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -131,10 +131,13 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentPredicate::Utf8),
     ))
-    .map(Expr::Contents);
+    .map(Predicate::Content)
+    .map(Expr::Predicate);
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| Expr::Name(NamePredicate::Regex(s)));
+        .map(|(_, s, _)| NamePredicate::Regex(s))
+        .map(Predicate::Name)
+        .map(Expr::Predicate);
 
     let extension_predicate = (
         string("extension("),
@@ -143,7 +146,9 @@ where
         ),
         lex_char(')'),
     )
-        .map(|(_, s, _)| Expr::Name(NamePredicate::Extension(s)));
+        .map(|(_, s, _)| NamePredicate::Extension(s))
+        .map(Predicate::Name)
+        .map(Expr::Predicate);
 
     let size_predicate = (string("size("), kb_mb_bound(), lex_char(')'))
         .map(|(_, range, _)| MetadataPredicate::Filesize(range));
@@ -154,7 +159,8 @@ where
         // TODO: add file/symlink predicate branches
         attempt(string("dir()").map(|_| MetadataPredicate::Dir())),
     ))
-    .map(Expr::Metadata);
+    .map(Predicate::Metadata)
+    .map(Expr::Predicate);
 
     // I don't think order matters here, inside the choice combinator? idk
     choice((
@@ -175,7 +181,7 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> OwnedExpr
+    pub fn or[Input]()(Input) -> Expr
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -183,7 +189,7 @@ parser! {
 }
 
 parser! {
-    fn and[Input]()(Input) -> OwnedExpr
+    fn and[Input]()(Input) -> Expr
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -191,7 +197,7 @@ parser! {
 }
 
 parser! {
-    fn not[Input]()(Input) -> OwnedExpr
+    fn not[Input]()(Input) -> Expr
     where [Input: Stream<Token = char>]
     {
         not_()
@@ -199,7 +205,7 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> OwnedExpr
+    fn base[Input]()(Input) -> Expr
     where [Input: Stream<Token = char>]
     {
         base_()

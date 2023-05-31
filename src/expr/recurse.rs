@@ -2,7 +2,7 @@ pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredi
 use itertools::*;
 use recursion_schemes::{
     functor::{Functor, PartiallyApplied},
-    recursive::Recursive,
+    recursive::{Recursive},
 };
 use std::fmt::{Debug, Display};
 
@@ -10,19 +10,11 @@ use super::Expr;
 
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
-pub enum ExprLayer<
-    'a,
-    Recurse,
-    Name = NamePredicate,
-    Metadata = MetadataPredicate,
-    Contents = ContentPredicate,
-> {
+pub enum ExprLayer<'a, Recurse, P> {
     // boolean operators
     Operator(Operator<Recurse>),
-    // borrowed predicates
-    Name(&'a Name),
-    Metadata(&'a Metadata),
-    Contents(&'a Contents),
+    // borrowed predicate
+    Predicate(&'a P),
 }
 
 // having operator as a distinct type might seem a bit odd, but it lets us
@@ -47,8 +39,8 @@ pub trait ThreeValued {
     }
 }
 
-impl<A, B, C> From<Operator<Self>> for Expr<A, B, C> {
-    fn from(value: Operator<Expr<A, B, C>>) -> Self {
+impl<P> From<Operator<Self>> for Expr<P> {
+    fn from(value: Operator<Expr<P>>) -> Self {
         match value {
             Operator::Not(x) => Self::Not(Box::new(x)),
             Operator::And(a, b) => Self::And(Box::new(a), Box::new(b)),
@@ -71,8 +63,8 @@ impl<X> ShortCircuit<X> {
     }
 }
 
-impl<A, B, C> Operator<ShortCircuit<Expr<A, B, C>>> {
-    pub fn attempt_short_circuit(self) -> ShortCircuit<Expr<A, B, C>> {
+impl<P> Operator<ShortCircuit<Expr<P>>> {
+    pub fn attempt_short_circuit(self) -> ShortCircuit<Expr<P>> {
         // use Expr::*;
         match self {
             Operator::And(a, b) => {
@@ -106,8 +98,9 @@ impl<A, B, C> Operator<ShortCircuit<Expr<A, B, C>>> {
     }
 }
 
-impl<'a, N: 'a, M: 'a, C: 'a> Functor for ExprLayer<'a, PartiallyApplied, N, M, C> {
-    type Layer<X> = ExprLayer<'a, X, N, M, C>;
+impl<'a, P: 'a> Functor for ExprLayer<'a, PartiallyApplied, P> {
+
+    type Layer<X> = ExprLayer<'a, X, P>;
 
     fn fmap<F, A, B>(input: Self::Layer<A>, mut f: F) -> Self::Layer<B>
     where
@@ -121,30 +114,27 @@ impl<'a, N: 'a, M: 'a, C: 'a> Functor for ExprLayer<'a, PartiallyApplied, N, M, 
                 And(a, b) => And(f(a), f(b)),
                 Or(a, b) => Or(f(a), f(b)),
             }),
-            Name(x) => Name(x),
-            Metadata(x) => Metadata(x),
-            Contents(x) => Contents(x),
+
+            Predicate(p) => Predicate(p),
         }
     }
 }
 
-impl<'a, N: 'a, M: 'a, C: 'a> Recursive for &'a Expr<N, M, C> {
-    type FunctorToken = ExprLayer<'a, PartiallyApplied, N, M, C>;
+impl<'a, P: 'a> Recursive for &'a Expr<P> {
+    type FunctorToken = ExprLayer<'a, PartiallyApplied, P>;
 
-    fn into_layer(self) -> <Self::FunctorToken as Functor>::Layer<Self> {
+    fn into_layer(self) ->  <Self::FunctorToken as Functor>::Layer<Self> {
         match self {
             Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
             Expr::And(a, b) => ExprLayer::Operator(Operator::And(a, b)),
             Expr::Or(a, b) => ExprLayer::Operator(Operator::Or(a, b)),
-            Expr::Name(n) => ExprLayer::Name(n),
-            Expr::Metadata(m) => ExprLayer::Metadata(m),
-            Expr::Contents(c) => ExprLayer::Contents(c),
+            Expr::Predicate(p) => ExprLayer::Predicate(p),
         }
     }
 }
 
 // for use in recursion visualizations
-impl<'a, N: Display, M: Display, C: Display> Display for ExprLayer<'a, (), N, M, C> {
+impl<'a, P: Display> Display for ExprLayer<'a, (), P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Operator(o) => match o {
@@ -156,9 +146,7 @@ impl<'a, N: Display, M: Display, C: Display> Display for ExprLayer<'a, (), N, M,
                     write!(f, "OR")
                 }
             },
-            Self::Name(arg0) => write!(f, "{}", arg0),
-            Self::Metadata(arg0) => write!(f, "{}", arg0),
-            Self::Contents(arg0) => write!(f, "{}", arg0),
+            Self::Predicate(arg0) => write!(f, "{}", arg0),
         }
     }
 }

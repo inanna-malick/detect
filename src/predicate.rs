@@ -3,6 +3,56 @@ use std::ops::{RangeFrom, RangeTo};
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
+use crate::expr::recurse::ShortCircuit;
+use crate::expr::Expr;
+use crate::util::Done;
+
+pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> {
+    Name(Name),
+    Metadata(Metadata),
+    Content(Content),
+}
+
+impl Predicate<NamePredicate, MetadataPredicate, ContentPredicate> {
+    pub fn run_phase(
+        &self,
+        path: &Path,
+    ) -> ShortCircuit<Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>>> {
+        match self {
+            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
+            Predicate::Metadata(x) => {
+                ShortCircuit::Unknown(Expr::Predicate(Predicate::Metadata(x)))
+            }
+            Predicate::Content(x) => ShortCircuit::Unknown(Expr::Predicate(Predicate::Content(x))),
+        }
+    }
+}
+
+impl Predicate<Done, &MetadataPredicate, &ContentPredicate> {
+    pub fn run_phase(
+        &self,
+        metadata: &Metadata,
+    ) -> ShortCircuit<Expr<Predicate<Done, Done, &ContentPredicate>>> {
+        match self {
+            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Expr::Predicate(Predicate::Content(x))),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Predicate<Done, Done, &ContentPredicate> {
+    pub fn run_phase(&self, contents: Option<&str>) -> bool {
+        match self {
+            Predicate::Content(p) => match contents {
+                Some(contents) => p.is_match(contents),
+                None => false,
+            },
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum NamePredicate {
     Regex(Regex),
