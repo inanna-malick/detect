@@ -14,7 +14,7 @@ pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content =
 }
 
 impl Predicate<NamePredicate, MetadataPredicate, ContentPredicate> {
-    pub fn run_phase(
+    pub fn eval_name_predicate(
         &self,
         path: &Path,
     ) -> ShortCircuit<Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>>> {
@@ -29,7 +29,7 @@ impl Predicate<NamePredicate, MetadataPredicate, ContentPredicate> {
 }
 
 impl Predicate<Done, &MetadataPredicate, &ContentPredicate> {
-    pub fn run_phase(
+    pub fn eval_metadata_predicate(
         &self,
         metadata: &Metadata,
     ) -> ShortCircuit<Expr<Predicate<Done, Done, &ContentPredicate>>> {
@@ -42,7 +42,7 @@ impl Predicate<Done, &MetadataPredicate, &ContentPredicate> {
 }
 
 impl Predicate<Done, Done, &ContentPredicate> {
-    pub fn run_phase(&self, contents: Option<&str>) -> bool {
+    pub fn eval_file_content_predicate(&self, contents: Option<&str>) -> bool {
         match self {
             Predicate::Content(p) => match contents {
                 Some(contents) => p.is_match(contents),

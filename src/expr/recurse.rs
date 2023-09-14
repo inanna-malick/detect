@@ -1,6 +1,6 @@
 use recursion_schemes::{
     functor::{Functor, PartiallyApplied},
-    recursive::{Recursive, Base, BaseFunctor},
+    recursive::Recursive,
 };
 use std::fmt::{Debug, Display};
 
@@ -52,7 +52,6 @@ pub enum ShortCircuit<X> {
     Unknown(X),
 }
 
-
 impl<P> Operator<ShortCircuit<Expr<P>>> {
     pub fn attempt_short_circuit(self) -> ShortCircuit<Expr<P>> {
         match self {
@@ -88,13 +87,9 @@ impl<P> Operator<ShortCircuit<Expr<P>>> {
 }
 
 impl<'a, P: 'a> Functor for ExprLayer<'a, PartiallyApplied, P> {
-
     type Layer<X> = ExprLayer<'a, X, P>;
 
-    fn fmap<F, A, B>(input: Self::Layer<A>, mut f: F) -> Self::Layer<B>
-    where
-        F: FnMut(A) -> B,
-    {
+    fn fmap<A, B>(input: Self::Layer<A>, mut f: impl FnMut(A) -> B) -> Self::Layer<B> {
         use self::Operator::*;
         use ExprLayer::*;
         match input {
@@ -109,13 +104,10 @@ impl<'a, P: 'a> Functor for ExprLayer<'a, PartiallyApplied, P> {
     }
 }
 
-impl<'a, P: 'a> Base for &'a Expr<P> {
-    type MappableFrame = ExprLayer<'a, PartiallyApplied, P>;
-}
-
 impl<'a, P: 'a> Recursive for &'a Expr<P> {
+    type MappableFrame = ExprLayer<'a, PartiallyApplied, P>;
 
-    fn into_layer(self) -> BaseFunctor<Self, Self> {
+    fn into_layer(self) -> <Self::MappableFrame as Functor>::Layer<Self> {
         match self {
             Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
             Expr::And(a, b) => ExprLayer::Operator(Operator::And(a, b)),

@@ -1,6 +1,6 @@
 use recursion_schemes::recursive::RecursiveExt;
 
-use crate::expr::recurse::{ShortCircuit, Operator};
+use crate::expr::recurse::{Operator, ShortCircuit};
 use crate::expr::{recurse::ExprLayer, Expr};
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::predicate::Predicate;
@@ -19,7 +19,7 @@ pub fn eval(
     let e: Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>> =
         match e.fold_recursive(|layer| match layer {
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::Predicate(p) => p.run_phase(path),
+            ExprLayer::Predicate(p) => p.eval_name_predicate(path),
         }) {
             ShortCircuit::Known(x) => return Ok(x),
             ShortCircuit::Unknown(e) => e,
@@ -31,9 +31,9 @@ pub fn eval(
     let e: Expr<Predicate<Done, Done, &ContentPredicate>> =
         match e.fold_recursive(|layer| match layer {
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::Predicate(p) => p.run_phase(&metadata),
+            ExprLayer::Predicate(p) => p.eval_metadata_predicate(&metadata),
         }) {
-            ShortCircuit::Known(x) => return Ok(x),
+            ShortCircuit::Known(x) => return Ok(x), 
             ShortCircuit::Unknown(e) => e,
         };
 
@@ -47,13 +47,13 @@ pub fn eval(
     };
 
     let res = e.fold_recursive::<bool>(|layer| match layer {
-        // no more short circuiting, we know we can calculate a result here
+        // don't attempt short circuiting, because we know we can calculate a result here
         ExprLayer::Operator(op) => match op {
             Operator::Not(x) => !x,
             Operator::And(a, b) => a && b,
             Operator::Or(a, b) => a || b,
         },
-        ExprLayer::Predicate(p) => p.run_phase(utf8_contents.as_deref()),
+        ExprLayer::Predicate(p) => p.eval_file_content_predicate(utf8_contents.as_deref()),
     });
 
     Ok(res)

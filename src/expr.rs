@@ -26,18 +26,6 @@ impl<P> Expr<P> {
     }
 }
 
-// /// A filesystem entity matcher expression that owns its predicates
-// pub type OwnedExpr<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> =
-//     Expr<Name, Metadata, Content>;
-
-// /// A filesystem entity matcher expression with borrowed predicates
-// pub type BorrowedExpr<
-//     'a,
-//     Name = &'a NamePredicate,
-//     Metadata = &'a MetadataPredicate,
-//     Content = &'a ContentPredicate,
-// > = Expr<Name, Metadata, Content>;
-
 impl<P: Display> Display for Expr<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
