@@ -1,7 +1,4 @@
-use recursion_schemes::{
-    functor::{Functor, PartiallyApplied},
-    recursive::Recursive,
-};
+use recursion_schemes::recursive::Recursive;
 use std::fmt::{Debug, Display};
 
 use super::Expr;
@@ -24,19 +21,6 @@ pub enum Operator<Recurse> {
     Or(Recurse, Recurse),
 }
 
-pub trait ThreeValued {
-    fn as_bool(&self) -> Option<bool>;
-    fn lift_bool(b: bool) -> Self;
-
-    fn is_false(&self) -> bool {
-        self.as_bool().is_some_and(|x| !x)
-    }
-
-    fn is_true(&self) -> bool {
-        self.as_bool().is_some_and(|x| x)
-    }
-}
-
 impl<P> From<Operator<Self>> for Expr<P> {
     fn from(value: Operator<Expr<P>>) -> Self {
         match value {
@@ -53,6 +37,7 @@ pub enum ShortCircuit<X> {
 }
 
 impl<P> Operator<ShortCircuit<Expr<P>>> {
+    // TODO: docstrings
     pub fn attempt_short_circuit(self) -> ShortCircuit<Expr<P>> {
         match self {
             Operator::And(a, b) => {
@@ -86,10 +71,11 @@ impl<P> Operator<ShortCircuit<Expr<P>>> {
     }
 }
 
-impl<'a, P: 'a> Functor for ExprLayer<'a, PartiallyApplied, P> {
-    type Layer<X> = ExprLayer<'a, X, P>;
 
-    fn fmap<A, B>(input: Self::Layer<A>, mut f: impl FnMut(A) -> B) -> Self::Layer<B> {
+impl<'a, P: 'a> Recursive for &'a Expr<P> {
+    type Frame<X> = ExprLayer<'a, X, P>;
+
+    fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
         use self::Operator::*;
         use ExprLayer::*;
         match input {
@@ -102,12 +88,8 @@ impl<'a, P: 'a> Functor for ExprLayer<'a, PartiallyApplied, P> {
             Predicate(p) => Predicate(p),
         }
     }
-}
 
-impl<'a, P: 'a> Recursive for &'a Expr<P> {
-    type MappableFrame = ExprLayer<'a, PartiallyApplied, P>;
-
-    fn into_layer(self) -> <Self::MappableFrame as Functor>::Layer<Self> {
+    fn into_frame(self) -> Self::Frame<Self> {
         match self {
             Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
             Expr::And(a, b) => ExprLayer::Operator(Operator::And(a, b)),

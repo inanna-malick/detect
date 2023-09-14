@@ -33,7 +33,7 @@ pub fn eval(
             ExprLayer::Operator(op) => op.attempt_short_circuit(),
             ExprLayer::Predicate(p) => p.eval_metadata_predicate(&metadata),
         }) {
-            ShortCircuit::Known(x) => return Ok(x), 
+            ShortCircuit::Known(x) => return Ok(x),
             ShortCircuit::Unknown(e) => e,
         };
 
