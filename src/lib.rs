@@ -1,4 +1,3 @@
-#![feature(is_some_and)]
 mod eval;
 mod expr;
 mod parser;

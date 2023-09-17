@@ -1,4 +1,6 @@
-pub mod recurse;
+pub mod frame;
+pub mod recursive;
+pub mod short_circuit;
 
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};

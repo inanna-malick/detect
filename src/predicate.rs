@@ -3,7 +3,7 @@ use std::ops::{RangeFrom, RangeTo};
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
-use crate::expr::recurse::ShortCircuit;
+use crate::expr::short_circuit::ShortCircuit;
 use crate::expr::Expr;
 use crate::util::Done;
 

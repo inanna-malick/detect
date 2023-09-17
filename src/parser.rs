@@ -18,7 +18,7 @@ where
     sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
         if xs.len() > 1 {
             let head = xs.pop().unwrap();
-            xs.into_iter().fold(head, |acc, x| Expr::and(acc, x))
+            xs.into_iter().fold(head, Expr::and)
         } else {
             // always at least one element if we're here
             xs.pop().unwrap()
@@ -92,7 +92,7 @@ where
         .map(|mut xs: Vec<_>| {
             if xs.len() > 1 {
                 let head = xs.pop().unwrap();
-                xs.into_iter().fold(head, |acc, x| Expr::or(acc, x))
+                xs.into_iter().fold(head, Expr::or)
             } else {
                 xs.pop().unwrap()
             }

@@ -1,7 +1,8 @@
-use recursion_schemes::recursive::CollapseRecursive;
+use recursion_schemes::recursive::collapse::CollapseRecursive;
 
-use crate::expr::recurse::{Operator, ShortCircuit};
-use crate::expr::{recurse::ExprFrame, Expr};
+use crate::expr::frame::Operator;
+use crate::expr::short_circuit::ShortCircuit;
+use crate::expr::{frame::ExprFrame, Expr};
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::predicate::Predicate;
 use crate::util::Done;
@@ -17,7 +18,7 @@ pub fn eval(
     path: &Path,
 ) -> std::io::Result<bool> {
     let e: Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>> =
-        match e.collapse_recursive(|layer| match layer {
+        match e.collapse_frames(|frame| match frame {
             ExprFrame::Operator(op) => op.attempt_short_circuit(),
             ExprFrame::Predicate(p) => p.eval_name_predicate(path),
         }) {
@@ -29,7 +30,7 @@ pub fn eval(
     let metadata = fs::metadata(path)?;
 
     let e: Expr<Predicate<Done, Done, &ContentPredicate>> =
-        match e.collapse_recursive(|layer| match layer {
+        match e.collapse_frames(|frame| match frame {
             ExprFrame::Operator(op) => op.attempt_short_circuit(),
             ExprFrame::Predicate(p) => p.eval_metadata_predicate(&metadata),
         }) {
@@ -46,7 +47,7 @@ pub fn eval(
         None
     };
 
-    let res = e.collapse_recursive::<bool>(|layer| match layer {
+    let res = e.collapse_frames::<bool>(|frame| match frame {
         // don't attempt short circuiting, because we know we can calculate a result here
         ExprFrame::Operator(op) => match op {
             Operator::Not(x) => !x,
