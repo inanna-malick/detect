@@ -1,7 +1,7 @@
-use recursion_schemes::recursive::RecursiveExt;
+use recursion_schemes::recursive::CollapseRecursive;
 
 use crate::expr::recurse::{Operator, ShortCircuit};
-use crate::expr::{recurse::ExprLayer, Expr};
+use crate::expr::{recurse::ExprFrame, Expr};
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::predicate::Predicate;
 use crate::util::Done;
@@ -17,9 +17,9 @@ pub fn eval(
     path: &Path,
 ) -> std::io::Result<bool> {
     let e: Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>> =
-        match e.fold_recursive(|layer| match layer {
-            ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::Predicate(p) => p.eval_name_predicate(path),
+        match e.collapse_recursive(|layer| match layer {
+            ExprFrame::Operator(op) => op.attempt_short_circuit(),
+            ExprFrame::Predicate(p) => p.eval_name_predicate(path),
         }) {
             ShortCircuit::Known(x) => return Ok(x),
             ShortCircuit::Unknown(e) => e,
@@ -29,9 +29,9 @@ pub fn eval(
     let metadata = fs::metadata(path)?;
 
     let e: Expr<Predicate<Done, Done, &ContentPredicate>> =
-        match e.fold_recursive(|layer| match layer {
-            ExprLayer::Operator(op) => op.attempt_short_circuit(),
-            ExprLayer::Predicate(p) => p.eval_metadata_predicate(&metadata),
+        match e.collapse_recursive(|layer| match layer {
+            ExprFrame::Operator(op) => op.attempt_short_circuit(),
+            ExprFrame::Predicate(p) => p.eval_metadata_predicate(&metadata),
         }) {
             ShortCircuit::Known(x) => return Ok(x),
             ShortCircuit::Unknown(e) => e,
@@ -46,14 +46,14 @@ pub fn eval(
         None
     };
 
-    let res = e.fold_recursive::<bool>(|layer| match layer {
+    let res = e.collapse_recursive::<bool>(|layer| match layer {
         // don't attempt short circuiting, because we know we can calculate a result here
-        ExprLayer::Operator(op) => match op {
+        ExprFrame::Operator(op) => match op {
             Operator::Not(x) => !x,
             Operator::And(a, b) => a && b,
             Operator::Or(a, b) => a || b,
         },
-        ExprLayer::Predicate(p) => p.eval_file_content_predicate(utf8_contents.as_deref()),
+        ExprFrame::Predicate(p) => p.eval_file_content_predicate(utf8_contents.as_deref()),
     });
 
     Ok(res)

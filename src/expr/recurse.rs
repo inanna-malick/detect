@@ -1,11 +1,12 @@
 use recursion_schemes::recursive::Recursive;
+use recursion_schemes::frame::MappableFrame;
 use std::fmt::{Debug, Display};
 
 use super::Expr;
 
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
-pub enum ExprLayer<'a, Recurse, P> {
+pub enum ExprFrame<'a, Recurse, P> {
     // boolean operators
     Operator(Operator<Recurse>),
     // borrowed predicate
@@ -71,13 +72,14 @@ impl<P> Operator<ShortCircuit<Expr<P>>> {
     }
 }
 
+pub enum PartiallyApplied {}
 
-impl<'a, P: 'a> Recursive for &'a Expr<P> {
-    type Frame<X> = ExprLayer<'a, X, P>;
+impl<'a, P: 'a> MappableFrame for ExprFrame<'a, PartiallyApplied, P> {
+    type Frame<X> = ExprFrame<'a, X, P>;
 
     fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
         use self::Operator::*;
-        use ExprLayer::*;
+        use ExprFrame::*;
         match input {
             Operator(o) => Operator(match o {
                 Not(a) => Not(f(a)),
@@ -88,19 +90,25 @@ impl<'a, P: 'a> Recursive for &'a Expr<P> {
             Predicate(p) => Predicate(p),
         }
     }
+}
 
-    fn into_frame(self) -> Self::Frame<Self> {
-        match self {
-            Expr::Not(x) => ExprLayer::Operator(Operator::Not(x)),
-            Expr::And(a, b) => ExprLayer::Operator(Operator::And(a, b)),
-            Expr::Or(a, b) => ExprLayer::Operator(Operator::Or(a, b)),
-            Expr::Predicate(p) => ExprLayer::Predicate(p),
-        }
+impl<'a, P: 'a> Recursive for &'a Expr<P> {
+    type FrameToken = ExprFrame<'a, PartiallyApplied, P>;
+}
+
+impl<'a, P: 'a>  From<&'a Expr<P>> for ExprFrame<'a, &'a Expr<P>, P> {
+    fn from(value: &'a Expr<P>) -> Self {
+                match value {
+                    Expr::Not(x) => ExprFrame::Operator(Operator::Not(x)),
+                    Expr::And(a, b) => ExprFrame::Operator(Operator::And(a, b)),
+                    Expr::Or(a, b) => ExprFrame::Operator(Operator::Or(a, b)),
+                    Expr::Predicate(p) => ExprFrame::Predicate(p),
+                }
     }
 }
 
 // for use in recursion visualizations
-impl<'a, P: Display> Display for ExprLayer<'a, (), P> {
+impl<'a, P: Display> Display for ExprFrame<'a, (), P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Operator(o) => match o {
