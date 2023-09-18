@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::expr::frame::Operator;
 
 use super::Expr;
@@ -5,6 +7,15 @@ use super::Expr;
 pub enum ShortCircuit<X> {
     Known(bool),
     Unknown(X),
+}
+
+impl<X: Display> Display for ShortCircuit<X> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShortCircuit::Known(x) => write!(f, "known: {}", x),
+            ShortCircuit::Unknown(x) => write!(f, "unknown: {}", x),
+        }
+    }
 }
 
 impl<P> Operator<ShortCircuit<Expr<P>>> {

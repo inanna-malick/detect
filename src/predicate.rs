@@ -13,6 +13,16 @@ pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content =
     Content(Content),
 }
 
+impl<A: Display, B: Display, C:Display> Display for Predicate<A,B,C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Predicate::Name(x) => write!(f, "name: {}", x),
+            Predicate::Metadata(x) => write!(f, "metadata: {}", x),
+            Predicate::Content(x) => write!(f, "content: {}", x),
+        }
+    }
+}
+
 impl Predicate<NamePredicate, MetadataPredicate, ContentPredicate> {
     pub fn eval_name_predicate(
         &self,
