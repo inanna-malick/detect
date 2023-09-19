@@ -1,4 +1,3 @@
-use recursion_schemes::recursive::collapse::Collapsable;
 use recursion_visualize::visualize::{CollapsableV, Viz};
 
 use crate::expr::frame::Operator;
@@ -8,7 +7,7 @@ use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::predicate::Predicate;
 use crate::util::Done;
 use std::fs::{self};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct VisualizedEval {
     name_matcher: Option<(String, Viz)>,
@@ -19,14 +18,17 @@ pub struct VisualizedEval {
 impl VisualizedEval {
     pub fn do_thing(self, dir: String) {
         let (s, viz) =  self.name_matcher.unwrap();
-        let mut viz = viz.label(format!("eval using file path: {}", s));
+        let mut viz = viz.label("Eval File Path Predicates".to_string(), s);
+        println!("match on file name");
 
         if let Some((s, x)) = self.metadata_matcher {
-            viz = viz.fuse(x, format!("eval using file metadata: {}", s));
+            println!("and file meta");
+            viz = viz.fuse(x, "Eval File Metadata Predicates".to_string(), s);
         }
 
         if let Some((s, x)) = self.content_matcher {
-            viz = viz.fuse(x, format!("eval using file contents: {}", s));
+            println!("and file contents");
+            viz = viz.fuse(x, "Eval File Content Predicates".to_string(), s);
         }
 
         viz.write(format!("{}/viz.html", dir))
