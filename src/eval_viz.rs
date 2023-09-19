@@ -11,17 +11,27 @@ use std::fs::{self};
 use std::path::{Path, PathBuf};
 
 pub struct VisualizedEval {
-    name_matcher: Option<Viz>,
-    metadata_matcher: Option<Viz>,
-    content_matcher: Option<Viz>,
+    name_matcher: Option<(String, Viz)>,
+    metadata_matcher: Option<(String, Viz)>,
+    content_matcher: Option<(String, Viz)>,
 }
 
 impl VisualizedEval {
     pub fn do_thing(self, dir: String) {
-        if let Some(name_matcher) = self.name_matcher {
-            name_matcher.write(format!("{}/name.html", dir))
+        let (s, viz) =  self.name_matcher.unwrap();
+        let mut viz = viz.label(format!("eval using file path: {}", s));
+
+        if let Some((s, x)) = self.metadata_matcher {
+            viz = viz.fuse(x, format!("eval using file metadata: {}", s));
         }
-    }
+
+        if let Some((s, x)) = self.content_matcher {
+            viz = viz.fuse(x, format!("eval using file contents: {}", s));
+        }
+
+        viz.write(format!("{}/viz.html", dir))
+
+       }
 }
 
 /// multipass evaluation with short circuiting, runs, in order:
@@ -37,13 +47,14 @@ pub fn eval_v(
 
     let mut ve = VisualizedEval { name_matcher: None, metadata_matcher: None, content_matcher: None };
 
+    let ev = format!("{}", e);
     let e: Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>> = {
         let (e, v) = e.collapse_frames_v(|frame| match frame {
             ExprFrame::Operator(op) => op.attempt_short_circuit(),
             ExprFrame::Predicate(p) => p.eval_name_predicate(path),
         }) ;
 
-        ve.name_matcher = Some(v);
+        ve.name_matcher = Some((ev, v));
 
         match e {
             ShortCircuit::Known(x) => return Ok((x, ve)),
@@ -54,13 +65,14 @@ pub fn eval_v(
     // read metadata via STAT syscall
     let metadata = fs::metadata(path)?;
 
+    let ev = format!("{}", e);
     let e: Expr<Predicate<Done, Done, &ContentPredicate>> = {
         let (e,v) = e.collapse_frames_v(|frame| match frame {
             ExprFrame::Operator(op) => op.attempt_short_circuit(),
             ExprFrame::Predicate(p) => p.eval_metadata_predicate(&metadata),
         }) ;
 
-        ve.metadata_matcher = Some(v);
+        ve.metadata_matcher = Some((ev, v));
 
         match e {
             ShortCircuit::Known(x) => return Ok((x, ve)),
@@ -77,6 +89,7 @@ pub fn eval_v(
         None
     };
 
+    let ev = format!("{}", e);
     let (res, v) = e.collapse_frames_v::<bool>(|frame| match frame {
         // don't attempt short circuiting, because we know we can calculate a result here
         ExprFrame::Operator(op) => match op {
@@ -87,7 +100,7 @@ pub fn eval_v(
         ExprFrame::Predicate(p) => p.eval_file_content_predicate(utf8_contents.as_deref()),
     });
 
-    ve.content_matcher = Some(v);
+    ve.content_matcher = Some((ev, v));
 
     Ok((res, ve))
 }

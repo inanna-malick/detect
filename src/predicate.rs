@@ -16,9 +16,9 @@ pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content =
 impl<A: Display, B: Display, C:Display> Display for Predicate<A,B,C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Predicate::Name(x) => write!(f, "name: {}", x),
-            Predicate::Metadata(x) => write!(f, "metadata: {}", x),
-            Predicate::Content(x) => write!(f, "content: {}", x),
+            Predicate::Name(x) => write!(f, "{}", x),
+            Predicate::Metadata(x) => write!(f, "{}", x),
+            Predicate::Content(x) => write!(f, "{}", x),
         }
     }
 }
@@ -132,7 +132,11 @@ impl MetadataPredicate {
 impl Display for MetadataPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MetadataPredicate::Filesize(fs) => write!(f, "size({:?})", fs),
+            MetadataPredicate::Filesize(fs) => match fs {
+                Bound::Full(r) => write!(f, "size({}..{})", r.start, r.end),
+                Bound::Left(r) => write!(f, "size({}..)", r.start),
+                Bound::Right(r) => write!(f, "size(..{})", r.end),
+            },
             MetadataPredicate::Executable() => write!(f, "executable()"),
             MetadataPredicate::Dir() => write!(f, "dir()"),
         }
