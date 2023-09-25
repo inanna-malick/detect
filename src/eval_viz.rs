@@ -16,7 +16,7 @@ pub struct VisualizedEval {
 }
 
 impl VisualizedEval {
-    pub fn do_thing(self, dir: String) {
+    pub fn write_viz(self, dir: String) {
         let (s, viz) =  self.name_matcher.unwrap();
         let mut viz = viz.label("Eval File Path Predicates".to_string(), s);
         println!("match on file name");
@@ -44,9 +44,6 @@ pub fn eval_v(
     e: &Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
     path: &Path,
 ) -> std::io::Result<(bool, VisualizedEval)> {
-
-    println!("{}", e);
-
     let mut ve = VisualizedEval { name_matcher: None, metadata_matcher: None, content_matcher: None };
 
     let ev = format!("{}", e);

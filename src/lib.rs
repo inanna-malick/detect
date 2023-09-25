@@ -3,17 +3,19 @@ mod expr;
 mod parser;
 mod predicate;
 mod util;
+
+#[cfg(feature = "viz")]
 mod eval_viz;
 
 use std::path::Path;
 
 use combine::stream::position;
 
-use crate::eval_viz::eval_v;
 
 pub fn parse_and_run<F: FnMut(&Path)>(
     root: String,
     s: String,
+    viz_output_dir: Option<String>,
     mut on_match: F,
 ) -> Result<(), anyhow::Error> {
     use walkdir::WalkDir;
@@ -26,13 +28,26 @@ pub fn parse_and_run<F: FnMut(&Path)>(
                 let entry = entry?;
                 let path = entry.path();
                 // TODO: integrate via switch (mb with compile flag?)
-                let (is_match, viz) = eval_v(&e, path)? ;
 
-                let out_dir = format!("/home/inanna/viz_output_tmp/expr_for_{}", path.display());
-                println!("create dir: {}", out_dir);
-                std::fs::create_dir(&out_dir)?;
+                let is_match = if let Some(_viz_output_dir) = &viz_output_dir {
+                    #[cfg(not(feature = "viz"))]
+                    unimplemented!("todo: organize code better!");
 
-                viz.do_thing(out_dir);
+                    #[cfg(feature = "viz")]
+                    {
+                    let (is_match, viz) = eval_viz::eval_v(&e, path)? ;
+
+                    let out_dir = format!("{}/expr_for_{}", _viz_output_dir, path.display());
+                    // println!("create dir: {}", out_dir);
+                    std::fs::create_dir(&out_dir)?;
+
+                    viz.write_viz(out_dir);
+
+                    is_match
+                    }
+                } else {
+                    eval::eval(&e, path)?
+                };
 
                 if is_match {
                     on_match(path);
