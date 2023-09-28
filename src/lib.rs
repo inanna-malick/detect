@@ -12,7 +12,7 @@ use std::path::Path;
 use combine::stream::position;
 
 
-pub fn parse_and_run<F: FnMut(&Path)>(
+pub async fn parse_and_run<F: FnMut(&Path)>(
     root: String,
     s: String,
     viz_output_dir: Option<String>,
@@ -22,12 +22,10 @@ pub fn parse_and_run<F: FnMut(&Path)>(
 
     match combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..])) {
         Ok((e, _)) => {
-            // println!("expr: {}", e);
             let walker = WalkDir::new(root).into_iter();
             for entry in walker {
                 let entry = entry?;
                 let path = entry.path();
-                // TODO: integrate via switch (mb with compile flag?)
 
                 let is_match = if let Some(_viz_output_dir) = &viz_output_dir {
                     #[cfg(not(feature = "viz"))]
@@ -46,7 +44,7 @@ pub fn parse_and_run<F: FnMut(&Path)>(
                     is_match
                     }
                 } else {
-                    eval::eval(&e, path)?
+                    eval::eval(&e, path).await?
                 };
 
                 if is_match {

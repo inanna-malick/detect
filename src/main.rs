@@ -13,7 +13,9 @@ struct Args {
     viz_output_dir: Option<String>,
 }
 
-pub fn main() -> Result<(), anyhow::Error> {
+
+#[tokio::main]
+pub async fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
     #[cfg(feature = "viz")]
@@ -24,5 +26,5 @@ pub fn main() -> Result<(), anyhow::Error> {
     // TODO: refactor? idk
     parse_and_run(".".to_owned(), args.expr, viz_output_dir, |s| {
         println!("{}", s.to_string_lossy())
-    })
+    }).await
 }

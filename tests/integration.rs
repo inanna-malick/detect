@@ -44,12 +44,12 @@ impl<'a> Case<'a> {
         t
     }
 
-    fn run(&self) {
+    async fn run(&self) {
         let tmp_dir = self.build();
         let tmp_path = tmp_dir.path().to_str().unwrap();
         let mut out = Vec::new();
         set_current_dir(tmp_path).unwrap();
-        detect::parse_and_run(tmp_path.to_owned(), self.expr.to_owned(), |p| {
+        detect::parse_and_run(tmp_path.to_owned(), self.expr.to_owned(), None, |p| {
             let s = p
                 .strip_prefix(&format!("{tmp_path}/"))
                 .unwrap()
@@ -57,69 +57,69 @@ impl<'a> Case<'a> {
                 .to_string_lossy()
                 .into_owned();
             out.push(s)
-        })
+        }).await
         .unwrap();
         assert_eq!(self.expected, out)
     }
 }
 
-#[test]
-fn test_name_and_contents() {
+#[tokio::test]
+async fn test_name_and_contents() {
     Case {
         expr: "filename(foo) && contains(foo)",
         expected: &["foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
-    .run()
+    .run().await
 }
 
-#[test]
-fn test_extension_and_contents() {
+#[tokio::test]
+async fn test_extension_and_contents() {
     Case {
         expr: "extension(.rs)",
         expected: &["test.rs"],
         files: vec![f("test.rs", ""), f("test2", "")],
     }
-    .run()
+    .run().await
 }
 
-#[test]
-fn test_size() {
+#[tokio::test]
+async fn test_size() {
     Case {
         expr: "filename(foo) && size(0..5)",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
-    .run()
+    .run().await
 }
 
-#[test]
-fn test_size_right() {
+#[tokio::test]
+async fn test_size_right() {
     Case {
         expr: "filename(foo) && size(..5)",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
-    .run()
+    .run().await
 }
 
-#[test]
-fn test_size_left() {
+#[tokio::test]
+async fn test_size_left() {
     Case {
         expr: "filename(foo) && size(5..)",
         expected: &["bar/foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
-    .run()
+    .run().await
 }
 
-#[test]
-fn test_size_kb() {
+#[tokio::test]
+async fn test_size_kb() {
     let big_str = "x".repeat(1025);
     Case {
         expr: "filename(foo) && size(1kb..2kb)",
         expected: &["bar/foo"],
         files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
     }
-    .run()
+    .run().await
 }

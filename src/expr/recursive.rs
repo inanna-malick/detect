@@ -1,6 +1,5 @@
 
 use recursion_schemes::recursive::collapse::Collapsable;
-use recursion_schemes::recursive::HasRecursiveFrame;
 #[cfg(feature = "viz")]
 use std::fmt::Display;
 #[cfg(feature = "viz")]
@@ -9,11 +8,8 @@ use recursion_visualize::visualize::CollapsableV;
 use super::frame::{ExprFrame, Operator, PartiallyApplied};
 use super::Expr;
 
-impl<'a, P: 'a> HasRecursiveFrame for &'a Expr<P> {
-    type FrameToken = ExprFrame<'a, PartiallyApplied, P>;
-}
-
 impl<'a, P: 'a> Collapsable for &'a Expr<P> {
+    type FrameToken = ExprFrame<'a, PartiallyApplied, P>;
 
     fn into_frame(self) -> ExprFrame<'a, Self, P> {
         match self {

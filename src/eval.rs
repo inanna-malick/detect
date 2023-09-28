@@ -6,14 +6,14 @@ use crate::expr::{frame::ExprFrame, Expr};
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::predicate::Predicate;
 use crate::util::Done;
-use std::fs::{self};
+use tokio::fs;
 use std::path::Path;
 
 /// multipass evaluation with short circuiting, runs, in order:
 /// - file name matchers
 /// - metadata matchers
 /// - file content matchers
-pub fn eval(
+pub async fn eval(
     e: &Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
     path: &Path,
 ) -> std::io::Result<bool> {
@@ -27,7 +27,7 @@ pub fn eval(
         };
 
     // read metadata via STAT syscall
-    let metadata = fs::metadata(path)?;
+    let metadata = fs::metadata(path).await?;
 
     let e: Expr<Predicate<Done, Done, &ContentPredicate>> =
         match e.collapse_frames(|frame| match frame {
@@ -41,7 +41,7 @@ pub fn eval(
     // only try to read contents if it's a file according to entity metadata
     let utf8_contents = if metadata.is_file() {
         // read file contents via multiple syscalls
-        let contents = fs::read(path)?;
+        let contents = fs::read(path).await?;
         String::from_utf8(contents).ok()
     } else {
         None
