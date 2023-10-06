@@ -3,7 +3,7 @@ use recursion::Collapsible;
 #[cfg(feature = "viz")]
 use std::fmt::Display;
 #[cfg(feature = "viz")]
-use recursion_visualize::visualize::CollapsableV;
+use recursion_visualize::visualize::CollapsibleV;
 
 use super::frame::{ExprFrame, Operator, PartiallyApplied};
 use super::Expr;
@@ -22,5 +22,5 @@ impl<'a, P: 'a> Collapsible for &'a Expr<P> {
 }
 
 #[cfg(feature = "viz")]
-impl<'a, P: 'a + Display> CollapsableV for &'a Expr<P> {
+impl<'a, P: 'a + Display> CollapsibleV for &'a Expr<P> {
 }

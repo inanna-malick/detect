@@ -1,4 +1,4 @@
-use recursion_visualize::visualize::{CollapsableV, Viz};
+use recursion_visualize::visualize::{CollapsibleV, Viz};
 
 use crate::expr::frame::Operator;
 use crate::expr::short_circuit::ShortCircuit;
