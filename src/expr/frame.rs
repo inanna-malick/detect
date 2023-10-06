@@ -1,4 +1,4 @@
-use recursion_schemes::frame::MappableFrame;
+use recursion::MappableFrame;
 use std::fmt::{Debug, Display};
 
 /// short-lived single layer of a filesystem entity matcher expression, used for

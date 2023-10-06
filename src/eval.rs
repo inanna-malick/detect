@@ -1,4 +1,4 @@
-use recursion_schemes::recursive::collapse::Collapsable;
+use recursion::Collapsible;
 
 use crate::expr::frame::Operator;
 use crate::expr::short_circuit::ShortCircuit;
