@@ -1,27 +1,24 @@
 use std::fmt::Display;
 
-use recursion_schemes::recursive::collapse::Collapsable;
-use recursion_schemes::recursive::HasRecursiveFrame;
-use recursion_visualize::visualize::CollapsableV;
+use recursion::Collapsible;
 
-use super::frame::{ExprFrame, Operator, PartiallyApplied};
+use crate::predicate::Predicate;
+
+use super::frame::{ExprFrame, PartiallyApplied};
 use super::Expr;
 
-impl<'a, P: 'a> HasRecursiveFrame for &'a Expr<P> {
-    type FrameToken = ExprFrame<'a, PartiallyApplied, P>;
-}
+// TODO: fold predicate wrapper into expr?
 
-impl<'a, P: 'a> Collapsable for &'a Expr<P> {
+impl<'a, A, B, C> Collapsible for &'a Expr<A, B, C> {
+    type FrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C>>;
 
-    fn into_frame(self) -> ExprFrame<'a, Self, P> {
+    fn into_frame(self) -> ExprFrame<Self, Predicate<A, B, C>> {
         match self {
-            Expr::Not(x) => ExprFrame::Operator(Operator::Not(x)),
-            Expr::And(a, b) => ExprFrame::Operator(Operator::And(a, b)),
-            Expr::Or(a, b) => ExprFrame::Operator(Operator::Or(a, b)),
-            Expr::Predicate(p) => ExprFrame::Predicate(p),
+            Expr::Not(x) => ExprFrame::Not(x),
+            Expr::And(a, b) => ExprFrame::And(a, b),
+            Expr::Or(a, b) => ExprFrame::Or(a, b),
+            Expr::Predicate(p) => ExprFrame::Predicate((*p).clone()),
+            Expr::Literal(b) => ExprFrame::Literal(*b),
         }
     }
-}
-
-impl<'a, P: 'a + Display> CollapsableV for &'a Expr<P> {
 }

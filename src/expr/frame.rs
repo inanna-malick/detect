@@ -1,57 +1,49 @@
-use recursion_schemes::frame::MappableFrame;
+use recursion::MappableFrame;
 use std::fmt::{Debug, Display};
 
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
-pub enum ExprFrame<'a, X, P> {
-    // boolean operators
-    Operator(Operator<X>),
+pub enum ExprFrame<X, P> {
     // borrowed predicate
-    Predicate(&'a P),
+    Predicate(P),
+    // boolean operators
+    Not(X),
+    And(X, X),
+    Or(X, X),
+    // literal values
+    Literal(bool),
 }
 
-// having operator as a distinct type might seem a bit odd, but it lets us
-// factor out the short circuiting logic
-#[derive(Debug, Eq, PartialEq)]
-pub enum Operator<Recurse> {
-    Not(Recurse),
-    And(Recurse, Recurse),
-    Or(Recurse, Recurse),
-}
 pub enum PartiallyApplied {}
 
-impl<'a, P: 'a> MappableFrame for ExprFrame<'a, PartiallyApplied, P> {
-    type Frame<X> = ExprFrame<'a, X, P>;
+impl<P> MappableFrame for ExprFrame<PartiallyApplied, P> {
+    type Frame<X> = ExprFrame<X, P>;
 
     fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
-        use self::Operator::*;
         use ExprFrame::*;
         match input {
-            Operator(o) => Operator(match o {
-                Not(a) => Not(f(a)),
-                And(a, b) => And(f(a), f(b)),
-                Or(a, b) => Or(f(a), f(b)),
-            }),
-
+            Not(a) => Not(f(a)),
+            And(a, b) => And(f(a), f(b)),
+            Or(a, b) => Or(f(a), f(b)),
             Predicate(p) => Predicate(p),
+            Literal(bool) => Literal(bool),
         }
     }
 }
 
 // for use in recursion visualizations
-impl<'a, P: Display> Display for ExprFrame<'a, (), P> {
+impl<P: Display> Display for ExprFrame<(), P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Operator(o) => match o {
-                Operator::Not(_) => write!(f, "NOT"),
-                Operator::And(_, _) => {
-                    write!(f, "AND")
-                }
-                Operator::Or(_, _) => {
-                    write!(f, "OR")
-                }
-            },
+            Self::Not(_) => write!(f, "NOT"),
+            Self::And(_, _) => {
+                write!(f, "AND")
+            }
+            Self::Or(_, _) => {
+                write!(f, "OR")
+            }
             Self::Predicate(arg0) => write!(f, "{}", arg0),
+            Self::Literal(arg0) => write!(f, "{}", arg0),
         }
     }
 }

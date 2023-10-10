@@ -4,6 +4,7 @@ use combine::parser::char::{char, digit, spaces, string};
 use combine::stream::Stream;
 use combine::*;
 use regex::Regex;
+use std::sync::Arc;
 
 use crate::expr::*;
 use crate::predicate::{Bound, Predicate};
@@ -131,11 +132,13 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentPredicate::Utf8),
     ))
+        .map(Arc::new)
     .map(Predicate::Content)
     .map(Expr::Predicate);
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
         .map(|(_, s, _)| NamePredicate::Regex(s))
+        .map(Arc::new)
         .map(Predicate::Name)
         .map(Expr::Predicate);
 
@@ -147,6 +150,7 @@ where
         lex_char(')'),
     )
         .map(|(_, s, _)| NamePredicate::Extension(s))
+        .map(Arc::new)
         .map(Predicate::Name)
         .map(Expr::Predicate);
 
@@ -159,6 +163,7 @@ where
         // TODO: add file/symlink predicate branches
         attempt(string("dir()").map(|_| MetadataPredicate::Dir())),
     ))
+    .map(Arc::new)
     .map(Predicate::Metadata)
     .map(Expr::Predicate);
 

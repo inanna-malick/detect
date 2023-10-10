@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::ops::{RangeFrom, RangeTo};
+use std::sync::Arc;
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
@@ -8,12 +9,22 @@ use crate::expr::Expr;
 use crate::util::Done;
 
 pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> {
-    Name(Name),
-    Metadata(Metadata),
-    Content(Content),
+    Name(Arc<Name>),
+    Metadata(Arc<Metadata>),
+    Content(Arc<Content>),
 }
 
-impl<A: Display, B: Display, C:Display> Display for Predicate<A,B,C> {
+impl<A, B, C> Clone for Predicate<A, B, C> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Name(arg0) => Self::Name(arg0.clone()),
+            Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
+            Self::Content(arg0) => Self::Content(arg0.clone()),
+        }
+    }
+}
+
+impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Predicate::Name(x) => write!(f, "{}", x),
@@ -25,39 +36,40 @@ impl<A: Display, B: Display, C:Display> Display for Predicate<A,B,C> {
 
 impl Predicate<NamePredicate, MetadataPredicate, ContentPredicate> {
     pub fn eval_name_predicate(
-        &self,
+        self,
         path: &Path,
-    ) -> ShortCircuit<Expr<Predicate<Done, &MetadataPredicate, &ContentPredicate>>> {
+    ) -> ShortCircuit<Predicate<Done, MetadataPredicate, ContentPredicate>> {
         match self {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
-            Predicate::Metadata(x) => {
-                ShortCircuit::Unknown(Expr::Predicate(Predicate::Metadata(x)))
-            }
-            Predicate::Content(x) => ShortCircuit::Unknown(Expr::Predicate(Predicate::Content(x))),
+            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
         }
     }
 }
 
-impl Predicate<Done, &MetadataPredicate, &ContentPredicate> {
+impl Predicate<Done, MetadataPredicate, ContentPredicate> {
     pub fn eval_metadata_predicate(
-        &self,
+        self,
         metadata: &Metadata,
-    ) -> ShortCircuit<Expr<Predicate<Done, Done, &ContentPredicate>>> {
+    ) -> ShortCircuit<Predicate<Done, Done, ContentPredicate>> {
         match self {
             Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
-            Predicate::Content(x) => ShortCircuit::Unknown(Expr::Predicate(Predicate::Content(x))),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             _ => unreachable!(),
         }
     }
 }
 
-impl Predicate<Done, Done, &ContentPredicate> {
-    pub fn eval_file_content_predicate(&self, contents: Option<&str>) -> bool {
+impl Predicate<Done, Done, ContentPredicate> {
+    pub fn eval_file_content_predicate(
+        &self,
+        contents: Option<&String>,
+    ) -> ShortCircuit<Predicate<Done, Done, Done>> {
         match self {
-            Predicate::Content(p) => match contents {
+            Predicate::Content(p) => ShortCircuit::Known(match contents {
                 Some(contents) => p.is_match(contents),
                 None => false,
-            },
+            }),
             _ => unreachable!(),
         }
     }

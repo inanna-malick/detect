@@ -3,13 +3,12 @@ mod expr;
 mod parser;
 mod predicate;
 mod util;
-mod eval_viz;
 
 use std::path::Path;
 
 use combine::stream::position;
 
-use crate::eval_viz::eval_v;
+use crate::eval::eval;
 
 pub fn parse_and_run<F: FnMut(&Path)>(
     root: String,
@@ -26,13 +25,7 @@ pub fn parse_and_run<F: FnMut(&Path)>(
                 let entry = entry?;
                 let path = entry.path();
                 // TODO: integrate via switch (mb with compile flag?)
-                let (is_match, viz) = eval_v(&e, path)? ;
-
-                let out_dir = format!("/home/inanna/viz_output_tmp/expr_for_{}", path.display());
-                println!("create dir: {}", out_dir);
-                std::fs::create_dir(&out_dir)?;
-
-                viz.do_thing(out_dir);
+                let is_match = eval(&e, path)?;
 
                 if is_match {
                     on_match(path);
