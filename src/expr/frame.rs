@@ -1,9 +1,9 @@
 use recursion::MappableFrame;
-use std::fmt::{Debug, Display};
+use std::fmt::{Display};
 
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
-pub enum ExprFrame<X, P> {
+pub enum ExprFrame<X, P> { // TODO: replace 'P' with 'A', 'B', 'C'
     // borrowed predicate
     Predicate(P),
     // boolean operators
@@ -26,7 +26,7 @@ impl<P> MappableFrame for ExprFrame<PartiallyApplied, P> {
             And(a, b) => And(f(a), f(b)),
             Or(a, b) => Or(f(a), f(b)),
             Predicate(p) => Predicate(p),
-            Literal(bool) => Literal(bool),
+            Literal(bool) => Literal(bool)
         }
     }
 }
@@ -43,7 +43,7 @@ impl<P: Display> Display for ExprFrame<(), P> {
                 write!(f, "OR")
             }
             Self::Predicate(arg0) => write!(f, "{}", arg0),
-            Self::Literal(arg0) => write!(f, "{}", arg0),
+            Self::Literal(arg0) => write!(f, "{}", arg0)
         }
     }
 }

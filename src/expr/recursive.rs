@@ -1,13 +1,7 @@
-use std::fmt::Display;
-
-use recursion::Collapsible;
-
-use crate::predicate::Predicate;
-
 use super::frame::{ExprFrame, PartiallyApplied};
 use super::Expr;
-
-// TODO: fold predicate wrapper into expr?
+use crate::predicate::Predicate;
+use recursion::Collapsible;
 
 impl<'a, A, B, C> Collapsible for &'a Expr<A, B, C> {
     type FrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C>>;

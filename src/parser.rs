@@ -132,7 +132,7 @@ where
         attempt(contains_predicate),
         string("utf8()").map(|_| ContentPredicate::Utf8),
     ))
-        .map(Arc::new)
+    .map(Arc::new)
     .map(Predicate::Content)
     .map(Expr::Predicate);
 

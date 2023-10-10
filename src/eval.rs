@@ -1,9 +1,5 @@
-use recursion::CollapsibleExt;
-
-use crate::expr::short_circuit::ShortCircuit;
-use crate::expr::{frame::ExprFrame, Expr};
+use crate::expr::Expr;
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
-use crate::predicate::Predicate;
 use crate::util::Done;
 use std::fs::{self};
 use std::path::Path;
@@ -23,7 +19,7 @@ pub fn eval(
         return Ok(b);
     }
 
-    // read metadata via STAT syscall
+    // read metadata
     let metadata = fs::metadata(path)?;
 
     let e: Expr<Done, Done, ContentPredicate> = e
@@ -36,7 +32,7 @@ pub fn eval(
 
     // only try to read contents if it's a file according to entity metadata
     let utf8_contents = if metadata.is_file() {
-        // read file contents via multiple syscalls
+        // read contents
         let contents = fs::read(path)?;
         String::from_utf8(contents).ok()
     } else {

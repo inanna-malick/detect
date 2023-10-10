@@ -6,7 +6,6 @@ use crate::expr::frame::ExprFrame;
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use recursion::CollapsibleExt;
-use std::fmt::Display;
 
 use self::short_circuit::ShortCircuit;
 
@@ -75,18 +74,3 @@ impl<A, B, C> Expr<A, B, C> {
         })
     }
 }
-
-// impl<P: Display> Display for Expr<P> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::Not(x) => write!(f, "!{}", x),
-//             Self::And(a, b) => {
-//                 write!(f, "{} && {}", a, b)
-//             }
-//             Self::Or(a, b) => {
-//                 write!(f, "{} || {}", a, b)
-//             }
-//             Self::Predicate(arg0) => write!(f, "{}", arg0),
-//         }
-//     }
-// }

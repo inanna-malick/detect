@@ -1,7 +1,4 @@
-use crate::expr::frame::ExprFrame;
 use std::fmt::Display;
-
-use super::Expr;
 
 pub enum ShortCircuit<X> {
     Known(bool),

@@ -5,7 +5,6 @@ use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
 use crate::expr::short_circuit::ShortCircuit;
-use crate::expr::Expr;
 use crate::util::Done;
 
 pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> {
