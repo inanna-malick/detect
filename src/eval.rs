@@ -46,6 +46,8 @@ pub fn eval(
     if let Expr::Literal(b) = e {
         Ok(b)
     } else {
+        // this is unreachable because at this point we've replaced every
+        // predicate with boolean literals and reduced all binary operators
         unreachable!("programmer error")
     }
 }

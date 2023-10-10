@@ -1,5 +1,4 @@
 pub mod frame;
-pub mod recursive;
 pub mod short_circuit;
 
 use crate::expr::frame::ExprFrame;
