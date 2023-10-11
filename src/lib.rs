@@ -10,7 +10,7 @@ use combine::stream::position;
 
 use crate::eval::eval;
 
-pub fn parse_and_run<F: FnMut(&Path)>(
+pub async fn parse_and_run<F: FnMut(&Path)>(
     root: String,
     s: String,
     mut on_match: F,
@@ -25,7 +25,7 @@ pub fn parse_and_run<F: FnMut(&Path)>(
                 let entry = entry?;
                 let path = entry.path();
                 // TODO: integrate via switch (mb with compile flag?)
-                let is_match = eval(&e, path)?;
+                let is_match = eval(&e, path).await?;
 
                 if is_match {
                     on_match(path);

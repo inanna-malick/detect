@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::ops::{RangeFrom, RangeTo};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
@@ -7,69 +8,73 @@ use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
 
-pub enum Predicate<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> {
+pub enum Predicate<Name, Metadata, Content, Async> {
     Name(Arc<Name>),
     Metadata(Arc<Metadata>),
     Content(Arc<Content>),
+    Async(Arc<Async>), // TODO: better name?
 }
 
-impl<A, B, C> Clone for Predicate<A, B, C> {
+impl<A, B, C, D> Clone for Predicate<A, B, C, D> {
     fn clone(&self) -> Self {
         match self {
             Self::Name(arg0) => Self::Name(arg0.clone()),
             Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
             Self::Content(arg0) => Self::Content(arg0.clone()),
+            Self::Async(arg0) => Self::Async(arg0.clone()),
         }
     }
 }
 
-impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
+impl<A: Display, B: Display, C: Display, D: Display> Display for Predicate<A, B, C, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Predicate::Name(x) => write!(f, "{}", x),
             Predicate::Metadata(x) => write!(f, "{}", x),
             Predicate::Content(x) => write!(f, "{}", x),
+            Predicate::Async(x) => write!(f, "{}", x),
         }
     }
 }
 
-impl Predicate<NamePredicate, MetadataPredicate, ContentPredicate> {
-    pub fn eval_name_predicate(
-        self,
-        path: &Path,
-    ) -> ShortCircuit<Predicate<Done, MetadataPredicate, ContentPredicate>> {
+impl<A, B, C> Predicate<NamePredicate, A, B, C> {
+    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, C>> {
         match self {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
         }
     }
 }
 
-impl Predicate<Done, MetadataPredicate, ContentPredicate> {
+impl<A, B, C> Predicate<A, MetadataPredicate, B, C> {
     pub fn eval_metadata_predicate(
         self,
         metadata: &Metadata,
-    ) -> ShortCircuit<Predicate<Done, Done, ContentPredicate>> {
+    ) -> ShortCircuit<Predicate<A, Done, B, C>> {
         match self {
             Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            _ => unreachable!(),
+            Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
     }
 }
 
-impl Predicate<Done, Done, ContentPredicate> {
+impl<A, B, C> Predicate<A, B, ContentPredicate, C> {
     pub fn eval_file_content_predicate(
-        &self,
+        self,
         contents: Option<&String>,
-    ) -> ShortCircuit<Predicate<Done, Done, Done>> {
+    ) -> ShortCircuit<Predicate<A, B, Done, C>> {
         match self {
             Predicate::Content(p) => ShortCircuit::Known(match contents {
                 Some(contents) => p.is_match(contents),
                 None => false,
             }),
-            _ => unreachable!(),
+            Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
         }
     }
 }
@@ -175,6 +180,65 @@ impl Display for ContentPredicate {
         match self {
             ContentPredicate::Regex(r) => write!(f, "contains({})", r.as_str()),
             ContentPredicate::Utf8 => write!(f, "utf8()"),
+        }
+    }
+}
+
+// run cmd with file path as an argument
+#[derive(Debug)]
+pub enum ProcessPredicate {
+    Process { cmd: String, expected_stdout: Regex },
+}
+
+impl Display for ProcessPredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProcessPredicate::Process { cmd, expected_stdout: expected } => {
+                write!(f, "process(cmd={}, expected={})", cmd, expected.as_str())
+            }
+        }
+    }
+}
+
+impl<A, B, C> Predicate<A, B, C, ProcessPredicate> {
+    pub async fn eval_async_predicate(
+        self,
+        file_path: &Path,
+    ) -> std::io::Result<ShortCircuit<Predicate<A, B, C, Done>>> {
+        match self {
+            Predicate::Async(x) => match x.as_ref() {
+                ProcessPredicate::Process { cmd, expected_stdout: expected } => {
+                    use tokio::process::*;
+
+                    // TODO: propagate ctrl-c and etc to child processes
+                    let mut child = Command::new(cmd).arg(file_path).stdin(Stdio::null())
+                    .stderr(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+
+                    let processid = child.id();
+
+                    let status = child.wait_with_output().await?;
+
+                    let stdout = status.stdout;
+
+                    let stderr = status.stderr;
+                    println!("stderr: {:?}", String::from_utf8(stderr));
+
+
+                    // if parse utf8 then run regex on stdout
+                    let res = match String::from_utf8(stdout) {
+                        Ok(utf8) => {
+                            println!("stdout == {}", utf8);
+                            expected.is_match(&utf8)
+                        },
+                        Err(_) => todo!(), // not sure how to handle this - either error out or no-op
+                    };
+
+                    Ok(ShortCircuit::Known(res))
+                }
+            },
+            Predicate::Content(x) => Ok(ShortCircuit::Unknown(Predicate::Content(x))),
+            Predicate::Name(x) => Ok(ShortCircuit::Unknown(Predicate::Name(x))),
+            Predicate::Metadata(x) => Ok(ShortCircuit::Unknown(Predicate::Metadata(x))),
         }
     }
 }

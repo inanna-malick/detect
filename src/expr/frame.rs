@@ -1,7 +1,12 @@
-use recursion::{MappableFrame, PartiallyApplied, Collapsible};
-use std::fmt::Display;
 use super::Expr;
 use crate::predicate::Predicate;
+use futures::FutureExt;
+use recursion::experimental::recursive::collapse::CollapsibleAsync;
+use recursion::{
+    experimental::frame::AsyncMappableFrame, Collapsible, MappableFrame, PartiallyApplied,
+};
+use std::fmt::Display;
+use tokio::try_join;
 
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
@@ -32,10 +37,49 @@ impl<P> MappableFrame for ExprFrame<PartiallyApplied, P> {
     }
 }
 
-impl<'a, A, B, C> Collapsible for &'a Expr<A, B, C> {
-    type FrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C>>;
+async fn map_frame_async<'a, A, B, E, P>(
+    input: ExprFrame<A, P>,
+    f: impl Fn(A) -> futures::future::BoxFuture<'a, Result<B, E>> + Send + Sync + 'a,
+) -> Result<ExprFrame<B, P>, E>
+where
+    E: Send + 'a,
+    A: Send + 'a,
+    B: Send + 'a,
+{
+    use ExprFrame::*;
+    match input {
+        Not(a) => Ok(Not(f(a).await?)),
+        And(a, b) => {
+            let (a, b) = try_join!(f(a), f(b))?;
+            Ok(And(a, b))
+        }
+        Or(a, b) => {
+            let (a, b) = try_join!(f(a), f(b))?;
+            Ok(Or(a, b))
+        }
+        Predicate(p) => Ok(Predicate(p)),
+        Literal(bool) => Ok(Literal(bool)),
+    }
+}
 
-    fn into_frame(self) -> ExprFrame<Self, Predicate<A, B, C>> {
+impl<P: Send + Sync + 'static> AsyncMappableFrame for ExprFrame<PartiallyApplied, P> {
+    fn map_frame_async<'a, A, B, E>(
+        input: Self::Frame<A>,
+        f: impl Fn(A) -> futures::future::BoxFuture<'a, Result<B, E>> + Send + Sync + 'a,
+    ) -> futures::future::BoxFuture<'a, Result<Self::Frame<B>, E>>
+    where
+        E: Send + 'a,
+        A: Send + 'a,
+        B: Send + 'a,
+    {
+        map_frame_async(input, f).boxed()
+    }
+}
+
+impl<'a, A, B, C, D> Collapsible for &'a Expr<A, B, C, D> {
+    type FrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C, D>>;
+
+    fn into_frame(self) -> ExprFrame<Self, Predicate<A, B, C, D>> {
         match self {
             Expr::Not(x) => ExprFrame::Not(x),
             Expr::And(a, b) => ExprFrame::And(a, b),
@@ -44,6 +88,17 @@ impl<'a, A, B, C> Collapsible for &'a Expr<A, B, C> {
             Expr::Literal(b) => ExprFrame::Literal(*b),
         }
     }
+}
+
+impl<
+        'a,
+        A: Send + Sync + 'static,
+        B: Send + Sync + 'static,
+        C: Send + Sync + 'static,
+        D: Send + Sync + 'static,
+    > CollapsibleAsync for &'a Expr<A, B, C, D>
+{
+    type AsyncFrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C, D>>;
 }
 
 // for use in recursion visualizations

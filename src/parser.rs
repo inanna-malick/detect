@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::Arc;
 
 use crate::expr::*;
-use crate::predicate::{Bound, Predicate};
+use crate::predicate::{ProcessPredicate, Bound, Predicate};
 
 fn and_<Input>() -> impl Parser<Input, Output = Expr>
 where
@@ -116,15 +116,17 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
-    let regex = || {
+    let regex_str = || {
         many1(
             // TODO: should do this in a principled way that fully covers all allowed regex chars,
             //       instead I keep adding characters I want to use. shrug emoji.
+            // TODO: another one of these for valid process stuff
             satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ')
                 .expected("letter or digit or ."),
         )
-        .map(|s: String| Regex::new(&s).unwrap())
     };
+
+    let regex = || regex_str().map(|s: String| Regex::new(&s).unwrap());
 
     let contains_predicate =
         (string("contains("), regex(), char(')')).map(|(_, s, _)| ContentPredicate::Regex(s));
@@ -167,12 +169,28 @@ where
     .map(Predicate::Metadata)
     .map(Expr::Predicate);
 
+    let async_predicate = (
+        string("process("),
+        regex_str(),
+        lex_char(','),
+        regex(),
+        lex_char(')'),
+    )
+        .map(|(_, cmd, _, expected, _)| ProcessPredicate::Process {
+            cmd: cmd.to_string(),
+            expected_stdout: expected,
+        })
+        .map(Arc::new)
+        .map(Predicate::Async)
+        .map(Expr::Predicate);
+
     // I don't think order matters here, inside the choice combinator? idk
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
         attempt(extension_predicate),
         attempt(metadata_predicate),
+        attempt(async_predicate),
         parens,
     ))
     .skip(skip_spaces())

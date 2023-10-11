@@ -1,26 +1,34 @@
 pub mod frame;
 pub mod short_circuit;
 
-use crate::expr::frame::ExprFrame;
+use std::io;
+
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
+use crate::{expr::frame::ExprFrame, predicate::ProcessPredicate};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use recursion::CollapsibleExt;
 
 use self::short_circuit::ShortCircuit;
 
 /// Filesystem entity matcher expression with boolean logic and predicates
-pub enum Expr<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> {
+pub enum Expr<
+    Name = NamePredicate,
+    Metadata = MetadataPredicate,
+    Content = ContentPredicate,
+    Async = ProcessPredicate,
+> {
     // boolean operators
     Not(Box<Self>),
     And(Box<Self>, Box<Self>),
     Or(Box<Self>, Box<Self>),
     // predicates
-    Predicate(Predicate<Name, Metadata, Content>),
+    Predicate(Predicate<Name, Metadata, Content, Async>),
     // literal boolean values
     Literal(bool),
 }
 
-impl<A, B, C> Expr<A, B, C> {
+impl<A, B, C, D> Expr<A, B, C, D> {
     pub fn and(a: Self, b: Self) -> Self {
         Self::And(Box::new(a), Box::new(b))
     }
@@ -31,10 +39,10 @@ impl<A, B, C> Expr<A, B, C> {
         Self::Not(Box::new(a))
     }
 
-    pub fn map_predicate<A1, B1, C1>(
+    pub fn map_predicate<A1, B1, C1, D1>(
         &self,
-        f: impl Fn(Predicate<A, B, C>) -> ShortCircuit<Predicate<A1, B1, C1>>,
-    ) -> Expr<A1, B1, C1> {
+        f: impl Fn(Predicate<A, B, C, D>) -> ShortCircuit<Predicate<A1, B1, C1, D1>>,
+    ) -> Expr<A1, B1, C1, D1> {
         self.collapse_frames(|e| match e {
             ExprFrame::Predicate(p) => match f(p) {
                 ShortCircuit::Known(b) => Expr::Literal(b),
@@ -47,7 +55,7 @@ impl<A, B, C> Expr<A, B, C> {
         })
     }
 
-    pub fn reduce(&self) -> Expr<A, B, C> {
+    pub fn reduce(&self) -> Expr<A, B, C, D> {
         self.collapse_frames(|e| match e {
             ExprFrame::And(a, b) => match (a, b) {
                 (Expr::Literal(false), _) => Expr::Literal(false),
@@ -71,5 +79,47 @@ impl<A, B, C> Expr<A, B, C> {
             ExprFrame::Predicate(p) => Expr::Predicate(p),
             ExprFrame::Literal(b) => Expr::Literal(b),
         })
+    }
+}
+
+impl<A, B, C, D> Expr<A, B, C, D>
+where
+    A: Sync + Send + 'static,
+    B: Sync + Send + 'static,
+    C: Sync + Send + 'static,
+    D: Sync + Send + 'static,
+{
+    pub async fn map_predicate_async<
+        'a,
+        A1: Send + Sync + 'static,
+        B1: Send + Sync + 'static,
+        C1: Send + Sync + 'static,
+        D1: Send + Sync + 'static,
+    >(
+        &'a self,
+        f: impl Fn(
+                Predicate<A, B, C, D>,
+            ) -> BoxFuture<'a, io::Result<ShortCircuit<Predicate<A1, B1, C1, D1>>>>
+            + Send
+            + Sync,
+    ) -> std::io::Result<Expr<A1, B1, C1, D1>> {
+        use futures::future::ok;
+        use recursion::experimental::recursive::collapse::CollapsibleAsync;
+        let res = self
+            .collapse_frames_async(|e| match e {
+                ExprFrame::Predicate(p) => f(p)
+                    .map_ok(|x| match x {
+                        ShortCircuit::Known(b) => Expr::Literal(b),
+                        ShortCircuit::Unknown(p) => Expr::Predicate(p),
+                    })
+                    .boxed(),
+                ExprFrame::Not(a) => ok(Expr::not(a)).boxed(),
+                ExprFrame::And(a, b) => ok(Expr::and(a, b)).boxed(),
+                ExprFrame::Or(a, b) => ok(Expr::or(a, b)).boxed(),
+                ExprFrame::Literal(b) => ok(Expr::Literal(b)).boxed(),
+            })
+            .await?;
+
+        Ok(res)
     }
 }

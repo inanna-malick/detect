@@ -1,7 +1,7 @@
 /// uninhabited type, used to signify that something does not exist
 /// provided typeclass instances never invoked but provided for
 /// convenience
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Done {}
 
 impl std::fmt::Display for Done {
