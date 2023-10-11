@@ -3,13 +3,12 @@ pub mod short_circuit;
 
 use std::io;
 
+use self::short_circuit::ShortCircuit;
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::{expr::frame::ExprFrame, predicate::ProcessPredicate};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use recursion::CollapsibleExt;
-use self::short_circuit::ShortCircuit;
-
 
 // motivating example - nontrivial logic that first looks for '.rs'
 // and then applies some heuristic to apply 'file' cmd line program invocations

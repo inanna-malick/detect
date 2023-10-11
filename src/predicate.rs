@@ -44,7 +44,7 @@ impl<A, B, C> Predicate<NamePredicate, A, B, C> {
             Predicate::Name(p) => {
                 // println!("")
                 ShortCircuit::Known(p.is_match(path))
-            },
+            }
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
@@ -93,9 +93,18 @@ pub enum NamePredicate {
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
         match self {
-            NamePredicate::Filename(regex) => path.file_name().and_then(|os_str| os_str.to_str()).map_or(false, |s| regex.is_match(s)),
-            NamePredicate::Path(regex) => path.as_os_str().to_str().map_or(false, |s| regex.is_match(s)),
-            NamePredicate::Extension(e) => path.file_name().and_then(|os_str| os_str.to_str()).map_or(false, |s| s.ends_with(e)),
+            NamePredicate::Filename(regex) => path
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .map_or(false, |s| regex.is_match(s)),
+            NamePredicate::Path(regex) => path
+                .as_os_str()
+                .to_str()
+                .map_or(false, |s| regex.is_match(s)),
+            NamePredicate::Extension(e) => path
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .map_or(false, |s| s.ends_with(e)),
         }
     }
 }
@@ -105,6 +114,7 @@ impl Display for NamePredicate {
         match self {
             NamePredicate::Filename(r) => write!(f, "filename({})", r.as_str()),
             NamePredicate::Extension(x) => write!(f, "extension({})", x.as_str()),
+            NamePredicate::Path(r) => write!(f, "filepath({})", r.as_str()),
         }
     }
 }
@@ -196,7 +206,10 @@ pub enum ProcessPredicate {
 impl Display for ProcessPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProcessPredicate::Process { cmd, expected_stdout: expected } => {
+            ProcessPredicate::Process {
+                cmd,
+                expected_stdout: expected,
+            } => {
                 write!(f, "process(cmd={}, expected={})", cmd, expected.as_str())
             }
         }
@@ -210,12 +223,19 @@ impl<A, B, C> Predicate<A, B, C, ProcessPredicate> {
     ) -> std::io::Result<ShortCircuit<Predicate<A, B, C, Done>>> {
         match self {
             Predicate::Async(x) => match x.as_ref() {
-                ProcessPredicate::Process { cmd, expected_stdout: expected } => {
+                ProcessPredicate::Process {
+                    cmd,
+                    expected_stdout: expected,
+                } => {
                     use tokio::process::*;
 
                     // TODO: propagate ctrl-c and etc to child processes
-                    let mut child = Command::new(cmd).arg(file_path).stdin(Stdio::null())
-                    .stderr(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+                    let mut child = Command::new(cmd)
+                        .arg(file_path)
+                        .stdin(Stdio::null())
+                        .stderr(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .spawn()?;
 
                     let processid = child.id();
 
@@ -223,16 +243,15 @@ impl<A, B, C> Predicate<A, B, C, ProcessPredicate> {
 
                     let stdout = status.stdout;
 
-                    let stderr = status.stderr;
-                    println!("stderr: {:?}", String::from_utf8(stderr));
-
+                    // let stderr = status.stderr;
+                    // println!("stderr: {:?}", String::from_utf8(stderr));
 
                     // if parse utf8 then run regex on stdout
                     let res = match String::from_utf8(stdout) {
                         Ok(utf8) => {
-                            println!("stdout == {}", utf8);
+                            // println!("stdout == {}", utf8);
                             expected.is_match(&utf8)
-                        },
+                        }
                         Err(_) => todo!(), // not sure how to handle this - either error out or no-op
                     };
 

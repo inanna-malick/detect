@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::Arc;
 
 use crate::expr::*;
-use crate::predicate::{ProcessPredicate, Bound, Predicate};
+use crate::predicate::{Bound, Predicate, ProcessPredicate};
 
 fn and_<Input>() -> impl Parser<Input, Output = Expr>
 where
@@ -121,8 +121,8 @@ where
             // TODO: should do this in a principled way that fully covers all allowed regex chars,
             //       instead I keep adding characters I want to use. shrug emoji.
             // TODO: another one of these for valid process stuff
-            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ')
-                .expected("letter or digit or ."),
+            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ' || ch == '-')
+                .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
         )
     };
 
@@ -140,6 +140,12 @@ where
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
         .map(|(_, s, _)| NamePredicate::Filename(s))
+        .map(Arc::new)
+        .map(Predicate::Name)
+        .map(Expr::Predicate);
+
+    let filepath_predicate = (string("filepath("), regex(), lex_char(')'))
+        .map(|(_, s, _)| NamePredicate::Path(s))
         .map(Arc::new)
         .map(Predicate::Name)
         .map(Expr::Predicate);
@@ -188,6 +194,7 @@ where
     choice((
         attempt(contents_predicate),
         attempt(filename_predicate),
+        attempt(filepath_predicate),
         attempt(extension_predicate),
         attempt(metadata_predicate),
         attempt(async_predicate),
