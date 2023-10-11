@@ -64,6 +64,30 @@ impl<'a> Case<'a> {
     }
 }
 
+
+#[tokio::test]
+async fn test_foo() {
+    Case {
+        expr: "filename(foo)",
+        // we get the dir z/foo but not the file z/foo/bar,
+        // so it really is just operating on filenames - nice
+        expected: &["foo", "z/foo", "bar/foo"],
+        files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo"), f("z/foo/bar", "")],
+    }
+    .run().await
+}
+
+#[tokio::test]
+async fn test_not_foo() {
+    Case {
+        expr: "!filename(foo)",
+        // note: weird inclusion of "" (empty str) in the results
+        expected: &["bar/baz", "bar/baz"],
+        files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
+    }
+    .run().await
+}
+
 #[tokio::test]
 async fn test_name_and_contents() {
     Case {

@@ -8,6 +8,7 @@ use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
 
+#[derive(Debug)]
 pub enum Predicate<Name, Metadata, Content, Async> {
     Name(Arc<Name>),
     Metadata(Arc<Metadata>),
@@ -40,7 +41,10 @@ impl<A: Display, B: Display, C: Display, D: Display> Display for Predicate<A, B,
 impl<A, B, C> Predicate<NamePredicate, A, B, C> {
     pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, C>> {
         match self {
-            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
+            Predicate::Name(p) => {
+                // println!("")
+                ShortCircuit::Known(p.is_match(path))
+            },
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
@@ -81,18 +85,17 @@ impl<A, B, C> Predicate<A, B, ContentPredicate, C> {
 
 #[derive(Debug)]
 pub enum NamePredicate {
-    Regex(Regex),
+    Filename(Regex),
+    Path(Regex),
     Extension(String),
 }
 
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
-        match path.file_name().and_then(|os_str| os_str.to_str()) {
-            Some(s) => match self {
-                NamePredicate::Regex(r) => r.is_match(s),
-                NamePredicate::Extension(x) => s.ends_with(x),
-            },
-            None => false,
+        match self {
+            NamePredicate::Filename(regex) => path.file_name().and_then(|os_str| os_str.to_str()).map_or(false, |s| regex.is_match(s)),
+            NamePredicate::Path(regex) => path.as_os_str().to_str().map_or(false, |s| regex.is_match(s)),
+            NamePredicate::Extension(e) => path.file_name().and_then(|os_str| os_str.to_str()).map_or(false, |s| s.ends_with(e)),
         }
     }
 }
@@ -100,7 +103,7 @@ impl NamePredicate {
 impl Display for NamePredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NamePredicate::Regex(r) => write!(f, "filename({})", r.as_str()),
+            NamePredicate::Filename(r) => write!(f, "filename({})", r.as_str()),
             NamePredicate::Extension(x) => write!(f, "extension({})", x.as_str()),
         }
     }

@@ -139,7 +139,7 @@ where
     .map(Expr::Predicate);
 
     let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| NamePredicate::Regex(s))
+        .map(|(_, s, _)| NamePredicate::Filename(s))
         .map(Arc::new)
         .map(Predicate::Name)
         .map(Expr::Predicate);

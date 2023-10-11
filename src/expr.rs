@@ -8,10 +8,15 @@ pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredi
 use crate::{expr::frame::ExprFrame, predicate::ProcessPredicate};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use recursion::CollapsibleExt;
-
 use self::short_circuit::ShortCircuit;
 
+
+// motivating example - nontrivial logic that first looks for '.rs'
+// and then applies some heuristic to apply 'file' cmd line program invocations
+// eg detecting UTF-8 files vs. ASCII files vs. etc
+
 /// Filesystem entity matcher expression with boolean logic and predicates
+#[derive(Debug)]
 pub enum Expr<
     Name = NamePredicate,
     Metadata = MetadataPredicate,
