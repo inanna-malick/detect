@@ -8,12 +8,12 @@ use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
 
-#[derive(Debug)]
-pub enum Predicate<Name, Metadata, Content, Async> {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Predicate<Name, Metadata, Content, Process> {
     Name(Arc<Name>),
     Metadata(Arc<Metadata>),
     Content(Arc<Content>),
-    Async(Arc<Async>), // TODO: better name?
+    Process(Arc<Process>),
 }
 
 impl<A, B, C, D> Clone for Predicate<A, B, C, D> {
@@ -22,7 +22,7 @@ impl<A, B, C, D> Clone for Predicate<A, B, C, D> {
             Self::Name(arg0) => Self::Name(arg0.clone()),
             Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
             Self::Content(arg0) => Self::Content(arg0.clone()),
-            Self::Async(arg0) => Self::Async(arg0.clone()),
+            Self::Process(arg0) => Self::Process(arg0.clone()),
         }
     }
 }
@@ -33,7 +33,7 @@ impl<A: Display, B: Display, C: Display, D: Display> Display for Predicate<A, B,
             Predicate::Name(x) => write!(f, "{}", x),
             Predicate::Metadata(x) => write!(f, "{}", x),
             Predicate::Content(x) => write!(f, "{}", x),
-            Predicate::Async(x) => write!(f, "{}", x),
+            Predicate::Process(x) => write!(f, "{}", x),
         }
     }
 }
@@ -41,13 +41,10 @@ impl<A: Display, B: Display, C: Display, D: Display> Display for Predicate<A, B,
 impl<A, B, C> Predicate<NamePredicate, A, B, C> {
     pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, C>> {
         match self {
-            Predicate::Name(p) => {
-                // println!("")
-                ShortCircuit::Known(p.is_match(path))
-            }
+            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
+            Predicate::Process(x) => ShortCircuit::Unknown(Predicate::Process(x)),
         }
     }
 }
@@ -60,7 +57,7 @@ impl<A, B, C> Predicate<A, MetadataPredicate, B, C> {
         match self {
             Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
+            Predicate::Process(x) => ShortCircuit::Unknown(Predicate::Process(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
     }
@@ -76,7 +73,7 @@ impl<A, B, C> Predicate<A, B, ContentPredicate, C> {
                 Some(contents) => p.is_match(contents),
                 None => false,
             }),
-            Predicate::Async(x) => ShortCircuit::Unknown(Predicate::Async(x)),
+            Predicate::Process(x) => ShortCircuit::Unknown(Predicate::Process(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
         }
@@ -89,6 +86,20 @@ pub enum NamePredicate {
     Path(Regex),
     Extension(String),
 }
+
+// only used for tests
+impl PartialEq for NamePredicate {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Filename(l0), Self::Filename(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Path(l0), Self::Path(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Extension(l0), Self::Extension(r0)) => l0 == r0,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for NamePredicate {}
 
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
@@ -172,12 +183,25 @@ impl Display for MetadataPredicate {
     }
 }
 
-// predicates based on, eg, scanning file contents or trying to parse exif data go here
+// predicates that scan the entire file
 #[derive(Debug)]
 pub enum ContentPredicate {
     Regex(Regex),
     Utf8,
 }
+
+// only used for tests
+impl PartialEq for ContentPredicate {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Utf8, Self::Utf8) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ContentPredicate {}
 
 impl ContentPredicate {
     pub fn is_match(&self, utf8_contents: &str) -> bool {
@@ -203,6 +227,26 @@ pub enum ProcessPredicate {
     Process { cmd: String, expected_stdout: Regex },
 }
 
+// only used for tests
+impl PartialEq for ProcessPredicate {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::Process {
+                    cmd: l_cmd,
+                    expected_stdout: l_expected_stdout,
+                },
+                Self::Process {
+                    cmd: r_cmd,
+                    expected_stdout: r_expected_stdout,
+                },
+            ) => l_cmd == r_cmd && l_expected_stdout.as_str() == r_expected_stdout.as_str(),
+        }
+    }
+}
+
+impl Eq for ProcessPredicate {}
+
 impl Display for ProcessPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -222,7 +266,7 @@ impl<A, B, C> Predicate<A, B, C, ProcessPredicate> {
         file_path: &Path,
     ) -> std::io::Result<ShortCircuit<Predicate<A, B, C, Done>>> {
         match self {
-            Predicate::Async(x) => match x.as_ref() {
+            Predicate::Process(x) => match x.as_ref() {
                 ProcessPredicate::Process {
                     cmd,
                     expected_stdout: expected,

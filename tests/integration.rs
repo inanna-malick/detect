@@ -1,5 +1,7 @@
 use std::{env::set_current_dir, fs::create_dir_all};
 
+use detect::{parse, predicate::NamePredicate};
+use regex::Regex;
 use tempdir::TempDir;
 
 fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
@@ -66,6 +68,41 @@ impl<'a> Case<'a> {
     }
 }
 
+// TODO: move to own file
+#[test]
+fn test_parser() {
+    use detect::expr::Expr;
+
+    let filepath = |s| Expr::name_predicate(NamePredicate::Path(Regex::new(s).unwrap()));
+    let filename = |s| Expr::name_predicate(NamePredicate::Filename(Regex::new(s).unwrap()));
+
+    let examples: Vec<(&'static str, Expr)> = vec![
+        (
+            "filename(foo) && filepath(bar)",
+            // note: order is reversed by parser? eh that's fine (TODO: or is it?)
+            Expr::and(
+                filepath("bar"),
+                Expr::name_predicate(NamePredicate::Filename(Regex::new("foo").unwrap())),
+            ),
+        ),
+        (
+            // test confirming that '&&' binds more tightly than ||
+            "filename(foo) || filepath(bar) && filepath(baz)",
+            Expr::or(Expr::and(filepath("baz"), filepath("bar")), filename("foo")),
+        ),
+        (
+            // test confirming that '&&' binds more tightly than || in reverse order
+            "filepath(bar) && filepath(baz) || filename(foo)",
+            Expr::or(filename("foo"), Expr::and(filepath("baz"), filepath("bar"))),
+        ),
+        // TODO: test for ! operator binding I guess?
+    ];
+
+    for (input, expected) in examples.into_iter() {
+        assert_eq!(detect::parse(input).unwrap(), expected)
+    }
+}
+
 #[tokio::test]
 async fn test_filename_only() {
     Case {
@@ -91,11 +128,7 @@ async fn test_filepath_only() {
         // we get the dir z/foo but not the file z/foo/bar,
         // so it really is just operating on filenames - nice
         expected: &["bar", "bar/baz", "bar/foo"],
-        files: vec![
-            f("foo", "foo"),
-            f("bar/foo", "baz"),
-            f("bar/baz", "foo"),
-        ],
+        files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
     .run()
     .await

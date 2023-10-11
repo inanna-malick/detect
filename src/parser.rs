@@ -121,8 +121,10 @@ where
             // TODO: should do this in a principled way that fully covers all allowed regex chars,
             //       instead I keep adding characters I want to use. shrug emoji.
             // TODO: another one of these for valid process stuff
-            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ' || ch == '-')
-                .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
+            satisfy(|ch: char| {
+                ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ' || ch == '-'
+            })
+            .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
         )
     };
 
@@ -187,7 +189,7 @@ where
             expected_stdout: expected,
         })
         .map(Arc::new)
-        .map(Predicate::Async)
+        .map(Predicate::Process)
         .map(Expr::Predicate);
 
     // I don't think order matters here, inside the choice combinator? idk

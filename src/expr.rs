@@ -1,33 +1,30 @@
 pub mod frame;
 pub mod short_circuit;
 
-use std::io;
+use std::{io, sync::Arc};
 
-use self::short_circuit::ShortCircuit;
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use crate::{expr::frame::ExprFrame, predicate::ProcessPredicate};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use recursion::CollapsibleExt;
 
-// motivating example - nontrivial logic that first looks for '.rs'
-// and then applies some heuristic to apply 'file' cmd line program invocations
-// eg detecting UTF-8 files vs. ASCII files vs. etc
+use self::short_circuit::ShortCircuit;
 
 /// Filesystem entity matcher expression with boolean logic and predicates
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr<
     Name = NamePredicate,
     Metadata = MetadataPredicate,
     Content = ContentPredicate,
-    Async = ProcessPredicate,
+    Process = ProcessPredicate,
 > {
     // boolean operators
     Not(Box<Self>),
     And(Box<Self>, Box<Self>),
     Or(Box<Self>, Box<Self>),
     // predicates
-    Predicate(Predicate<Name, Metadata, Content, Async>),
+    Predicate(Predicate<Name, Metadata, Content, Process>),
     // literal boolean values
     Literal(bool),
 }
@@ -41,6 +38,18 @@ impl<A, B, C, D> Expr<A, B, C, D> {
     }
     pub fn not(a: Self) -> Self {
         Self::Not(Box::new(a))
+    }
+    pub fn name_predicate(x: A) -> Self {
+        Self::Predicate(Predicate::Name(Arc::new(x)))
+    }
+    pub fn meta_predicate(x: B) -> Self {
+        Self::Predicate(Predicate::Metadata(Arc::new(x)))
+    }
+    pub fn content_predicate(x: C) -> Self {
+        Self::Predicate(Predicate::Content(Arc::new(x)))
+    }
+    pub fn process_predicate(x: D) -> Self {
+        Self::Predicate(Predicate::Process(Arc::new(x)))
     }
 
     pub fn map_predicate<A1, B1, C1, D1>(

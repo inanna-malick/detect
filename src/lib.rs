@@ -1,14 +1,22 @@
 mod eval;
-mod expr;
+pub mod expr;
 mod parser;
-mod predicate;
+pub mod predicate;
 mod util;
 
 use std::path::Path;
 
-use combine::stream::position;
+use combine::stream::position::{self, SourcePosition};
+use expr::Expr;
 
 use crate::eval::eval;
+
+pub fn parse<'a>(s: &'a str) -> Result<Expr, combine::easy::Errors<char, &'a str, SourcePosition>> {
+    let (e, _source_position) =
+        combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..]))?;
+
+    Ok(e)
+}
 
 pub async fn parse_and_run<F: FnMut(&Path)>(
     root: String,
@@ -17,14 +25,16 @@ pub async fn parse_and_run<F: FnMut(&Path)>(
 ) -> Result<(), anyhow::Error> {
     use walkdir::WalkDir;
 
-    match combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..])) {
-        Ok((e, _)) => {
+    // NOTE: top level should be and, I think - rain says that binds most tightly
+    match parse(&s) {
+        Ok(e) => {
+            // TODO: debug loggin switch? tracing? idk hell yes
             // println!("expr: {:?}", e);
             let walker = WalkDir::new(root).into_iter();
             for entry in walker {
                 let entry = entry?;
                 let path = entry.path();
-                // TODO: integrate via switch (mb with compile flag?)
+
                 let is_match = eval(&e, path).await?;
 
                 if is_match {
