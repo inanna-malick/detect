@@ -8,6 +8,7 @@ use std::path::Path;
 
 use combine::stream::position::{self, SourcePosition};
 use expr::Expr;
+use tokio::sync::broadcast;
 
 use crate::eval::eval;
 
@@ -18,6 +19,11 @@ pub fn parse<'a>(s: &'a str) -> Result<Expr, combine::easy::Errors<char, &'a str
     Ok(e)
 }
 
+pub(crate) struct SubpocessId(u64);
+
+#[derive(Clone)]
+pub(crate) struct Cancellation();
+
 pub async fn parse_and_run<F: FnMut(&Path)>(
     root: String,
     s: String,
@@ -25,25 +31,32 @@ pub async fn parse_and_run<F: FnMut(&Path)>(
 ) -> Result<(), anyhow::Error> {
     use walkdir::WalkDir;
 
-    // NOTE: top level should be and, I think - rain says that binds most tightly
-    match parse(&s) {
-        Ok(e) => {
-            // TODO: debug loggin switch? tracing? idk hell yes
-            // println!("expr: {:?}", e);
-            let walker = WalkDir::new(root).into_iter();
-            for entry in walker {
-                let entry = entry?;
-                let path = entry.path();
+    let expr = parse(&s)?;
 
-                let is_match = eval(&e, path).await?;
+    let mut ctrl_c_stream =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
 
-                if is_match {
-                    on_match(path);
-                }
+    let (cancellation_sender, _) = broadcast::channel::<Cancellation>(16);
+    let (subprocessid_sender, _) = broadcast::channel::<SubpocessId>(16);
+
+    let main_loop = async {
+        // NOTE: sadly this is all synchronous, async would be nicer but the async
+        //       walkdir crate is not yet mature
+        // println!("expr: {:?}", e);
+        let walker = WalkDir::new(root).into_iter();
+        for entry in walker {
+            let entry = entry?;
+            let path = entry.path();
+
+            let is_match = eval(&expr, path).await?;
+
+            if is_match {
+                on_match(path);
             }
-
-            Ok(())
         }
-        Err(err) => panic!("parse error: {}", err),
-    }
+
+        Ok(())
+    };
+
+    Ok(())
 }

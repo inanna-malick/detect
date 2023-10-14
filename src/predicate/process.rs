@@ -1,6 +1,7 @@
 use std::{fmt::Display, path::Path, process::Stdio};
 
 use regex::Regex;
+use tokio::sync::mpsc;
 
 use crate::{expr::short_circuit::ShortCircuit, util::Done};
 
@@ -49,6 +50,7 @@ impl<A, B, C> Predicate<A, B, C, ProcessPredicate> {
     pub async fn eval_async_predicate(
         self,
         file_path: &Path,
+        process_ids: mpsc::Sender<u32>,
     ) -> std::io::Result<ShortCircuit<Predicate<A, B, C, Done>>> {
         match self {
             Predicate::Process(x) => match x.as_ref() {
@@ -59,14 +61,17 @@ impl<A, B, C> Predicate<A, B, C, ProcessPredicate> {
                     use tokio::process::*;
 
                     // TODO: propagate ctrl-c and etc to child processes
-                    let mut child = Command::new(cmd)
+                    let child = Command::new(cmd)
                         .arg(file_path)
                         .stdin(Stdio::null())
                         .stderr(Stdio::piped())
                         .stdout(Stdio::piped())
                         .spawn()?;
 
-                    let processid = child.id();
+                    if let Some(processid) = child.id() {
+                        // trac subprocess ids
+                        process_ids.send(processid).await.unwrap();
+                    }
 
                     let status = child.wait_with_output().await?;
 

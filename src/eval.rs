@@ -72,7 +72,7 @@ where
     C: Sync + Send + 'static,
 {
     let e = e
-        .map_predicate_async(|p| p.eval_async_predicate(path).boxed())
+        .map_predicate_async(|p| p.eval_async_predicate(path, todo!()).boxed())
         .await?
         .reduce();
 
