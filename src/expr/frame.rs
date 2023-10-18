@@ -1,7 +1,7 @@
-use recursion::{MappableFrame, PartiallyApplied, Collapsible};
-use std::fmt::Display;
 use super::Expr;
 use crate::predicate::Predicate;
+use recursion::{Collapsible, MappableFrame, PartiallyApplied};
+use std::fmt::Display;
 
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr

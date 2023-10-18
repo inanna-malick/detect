@@ -1,10 +1,13 @@
 pub mod frame;
 pub mod short_circuit;
 
+use std::fmt::Display;
+
 use crate::expr::frame::ExprFrame;
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use recursion::CollapsibleExt;
+use recursion_visualize::visualize::*;
 
 use self::short_circuit::ShortCircuit;
 
@@ -20,7 +23,23 @@ pub enum Expr<Name = NamePredicate, Metadata = MetadataPredicate, Content = Cont
     Literal(bool),
 }
 
-impl<A, B, C> Expr<A, B, C> {
+impl<A: Display, B: Display, C: Display> Display for Expr<A, B, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Not(a) => write!(f, "!{}", a),
+            Self::And(a, b) => {
+                write!(f, "{} && {}", a, b)
+            }
+            Self::Or(a, b) => {
+                write!(f, "{} || {}", a, b)
+            }
+            Self::Predicate(arg0) => write!(f, "{}", arg0),
+            Self::Literal(arg0) => write!(f, "{}", arg0),
+        }
+    }
+}
+
+impl<A: Display, B: Display, C: Display> Expr<A, B, C> {
     pub fn and(a: Self, b: Self) -> Self {
         Self::And(Box::new(a), Box::new(b))
     }
@@ -31,24 +50,19 @@ impl<A, B, C> Expr<A, B, C> {
         Self::Not(Box::new(a))
     }
 
-    pub fn map_predicate<A1, B1, C1>(
+    // TODO: predicate mapping type CHANGE to 'P'
+    pub fn map_predicate<A1: Display, B1: Display, C1: Display>(
         &self,
+        vopt: &mut Option<Viz>,
+        header: String,
+        text: String,
         f: impl Fn(Predicate<A, B, C>) -> ShortCircuit<Predicate<A1, B1, C1>>,
     ) -> Expr<A1, B1, C1> {
-        self.collapse_frames(|e| match e {
+        let (res, viz) = self.collapse_frames_v(|e| match e {
             ExprFrame::Predicate(p) => match f(p) {
                 ShortCircuit::Known(b) => Expr::Literal(b),
                 ShortCircuit::Unknown(p) => Expr::Predicate(p),
             },
-            ExprFrame::Not(a) => Expr::not(a),
-            ExprFrame::And(a, b) => Expr::and(a, b),
-            ExprFrame::Or(a, b) => Expr::or(a, b),
-            ExprFrame::Literal(b) => Expr::Literal(b),
-        })
-    }
-
-    pub fn reduce(&self) -> Expr<A, B, C> {
-        self.collapse_frames(|e| match e {
             ExprFrame::And(a, b) => match (a, b) {
                 (Expr::Literal(false), _) => Expr::Literal(false),
                 (_, Expr::Literal(false)) => Expr::Literal(false),
@@ -67,9 +81,16 @@ impl<A, B, C> Expr<A, B, C> {
                 Expr::Literal(k) => Expr::Literal(!k),
                 x => Expr::not(x),
             },
-            // leave literals and predicates unchanged
-            ExprFrame::Predicate(p) => Expr::Predicate(p),
-            ExprFrame::Literal(b) => Expr::Literal(b),
-        })
+            ExprFrame::Literal(x) => Expr::Literal(x),
+        });
+
+        if let Some(v) = vopt.take() {
+            let vv = v.fuse(viz, header, text);
+            *vopt = Some(vv);
+        } else {
+            *vopt = Some(viz.label(header, text))
+        }
+
+        res
     }
 }
