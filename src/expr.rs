@@ -4,11 +4,8 @@ pub mod short_circuit;
 use std::fmt::Display;
 
 use crate::expr::frame::ExprFrame;
-use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
 use recursion::CollapsibleExt;
-use recursion_visualize::visualize::*;
-
 use self::short_circuit::ShortCircuit;
 
 /// Filesystem entity matcher expression with boolean logic and predicates
@@ -50,14 +47,11 @@ impl<A: Display + Clone> Expr<A> {
         Self::Not(Box::new(a))
     }
 
-    pub fn map_predicate_v<B: Display + Clone>(
+    pub fn reduce_predicate_and_short_circuit<B: Display + Clone>(
         &self,
-        vopt: &mut Option<Viz>,
-        header: String,
-        text: String,
         f: impl Fn(A) -> ShortCircuit<B>,
     ) -> Expr<B> {
-        let (res, viz) = self.collapse_frames_v(|e| match e {
+        self.collapse_frames(|e| match e {
             // apply 'f' to Predicate expressions
             ExprFrame::Predicate(p) => match f(p) {
                 ShortCircuit::Known(b) => Expr::Literal(b),
@@ -80,16 +74,7 @@ impl<A: Display + Clone> Expr<A> {
             ExprFrame::Not(x) => Expr::Not(Box::new(x)),
             // Literal expressions are unchanged
             ExprFrame::Literal(x) => Expr::Literal(x),
-        });
-
-        if let Some(v) = vopt.take() {
-            let vv = v.fuse(viz, header, text);
-            *vopt = Some(vv);
-        } else {
-            *vopt = Some(viz.label(header, text))
-        }
-
-        res
+        })
     }
 
     //     // apply some potentially short circuiting transformation to all predicates in

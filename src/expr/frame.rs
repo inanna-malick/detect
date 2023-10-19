@@ -1,5 +1,4 @@
 use super::Expr;
-use crate::predicate::Predicate;
 use recursion::{Collapsible, MappableFrame, PartiallyApplied};
 use std::fmt::Display;
 
