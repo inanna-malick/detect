@@ -76,10 +76,10 @@ impl<P: Send + Sync + 'static> AsyncMappableFrame for ExprFrame<PartiallyApplied
     }
 }
 
-impl<'a, A, B, C, D> Collapsible for &'a Expr<A, B, C, D> {
-    type FrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C, D>>;
+impl<'a, P: Clone> Collapsible for &'a Expr<P> {
+    type FrameToken = ExprFrame<PartiallyApplied, P>;
 
-    fn into_frame(self) -> ExprFrame<Self, Predicate<A, B, C, D>> {
+    fn into_frame(self) -> ExprFrame<Self, P> {
         match self {
             Expr::Not(x) => ExprFrame::Not(x),
             Expr::And(a, b) => ExprFrame::And(a, b),
@@ -90,15 +90,8 @@ impl<'a, A, B, C, D> Collapsible for &'a Expr<A, B, C, D> {
     }
 }
 
-impl<
-        'a,
-        A: Send + Sync + 'static,
-        B: Send + Sync + 'static,
-        C: Send + Sync + 'static,
-        D: Send + Sync + 'static,
-    > CollapsibleAsync for &'a Expr<A, B, C, D>
-{
-    type AsyncFrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C, D>>;
+impl<'a, P: Clone + Send + Sync + 'static> CollapsibleAsync for &'a Expr<P> {
+    type AsyncFrameToken = ExprFrame<PartiallyApplied, P>;
 }
 
 // for use in recursion visualizations

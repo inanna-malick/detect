@@ -7,11 +7,17 @@ mod util;
 use std::path::Path;
 
 use combine::stream::position::{self, SourcePosition};
-use expr::Expr;
+use expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
+use predicate::{Predicate, ProcessPredicate};
 
 use crate::eval::eval;
 
-pub fn parse<'a>(s: &'a str) -> Result<Expr, combine::easy::Errors<char, &'a str, SourcePosition>> {
+pub fn parse<'a>(
+    s: &'a str,
+) -> Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+    combine::easy::Errors<char, &'a str, SourcePosition>,
+> {
     let (e, _source_position) =
         combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(&s[..]))?;
 

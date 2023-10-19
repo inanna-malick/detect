@@ -76,7 +76,7 @@ fn test_parser() {
     let filepath = |s| Expr::name_predicate(NamePredicate::Path(Regex::new(s).unwrap()));
     let filename = |s| Expr::name_predicate(NamePredicate::Filename(Regex::new(s).unwrap()));
 
-    let examples: Vec<(&'static str, Expr)> = vec![
+    let examples: Vec<(&'static str, _)> = vec![
         (
             "filename(foo) && filepath(bar)",
             // note: order is reversed by parser? eh that's fine (TODO: or is it?)

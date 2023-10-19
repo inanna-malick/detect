@@ -9,7 +9,10 @@ use std::sync::Arc;
 use crate::expr::*;
 use crate::predicate::{Bound, Predicate, ProcessPredicate};
 
-fn and_<Input>() -> impl Parser<Input, Output = Expr>
+fn and_<Input>() -> impl Parser<
+    Input,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -27,7 +30,10 @@ where
     })
 }
 
-fn not_<Input>() -> impl Parser<Input, Output = Expr>
+fn not_<Input>() -> impl Parser<
+    Input,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -82,7 +88,10 @@ parser! {
     }
 }
 
-fn or_<Input>() -> impl Parser<Input, Output = Expr>
+fn or_<Input>() -> impl Parser<
+    Input,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -102,7 +111,10 @@ where
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<Input, Output = Expr>
+fn base_<Input>() -> impl Parser<
+    Input,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -213,7 +225,7 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> Expr
+    pub fn or[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -221,7 +233,7 @@ parser! {
 }
 
 parser! {
-    fn and[Input]()(Input) -> Expr
+    fn and[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -229,7 +241,7 @@ parser! {
 }
 
 parser! {
-    fn not[Input]()(Input) -> Expr
+    fn not[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
     where [Input: Stream<Token = char>]
     {
         not_()
@@ -237,7 +249,7 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> Expr
+    fn base[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
     where [Input: Stream<Token = char>]
     {
         base_()
