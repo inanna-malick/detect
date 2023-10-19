@@ -12,18 +12,18 @@ use recursion_visualize::visualize::*;
 use self::short_circuit::ShortCircuit;
 
 /// Filesystem entity matcher expression with boolean logic and predicates
-pub enum Expr<Name = NamePredicate, Metadata = MetadataPredicate, Content = ContentPredicate> {
+pub enum Expr<Predicate> {
     // boolean operators
     Not(Box<Self>),
     And(Box<Self>, Box<Self>),
     Or(Box<Self>, Box<Self>),
     // predicates
-    Predicate(Predicate<Name, Metadata, Content>),
+    Predicate(Predicate),
     // literal boolean values
     Literal(bool),
 }
 
-impl<A: Display, B: Display, C: Display> Display for Expr<A, B, C> {
+impl<A: Display> Display for Expr<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Not(a) => write!(f, "!{}", a),
@@ -39,7 +39,7 @@ impl<A: Display, B: Display, C: Display> Display for Expr<A, B, C> {
     }
 }
 
-impl<A: Display, B: Display, C: Display> Expr<A, B, C> {
+impl<A: Display + Clone> Expr<A> {
     pub fn and(a: Self, b: Self) -> Self {
         Self::And(Box::new(a), Box::new(b))
     }
@@ -50,37 +50,35 @@ impl<A: Display, B: Display, C: Display> Expr<A, B, C> {
         Self::Not(Box::new(a))
     }
 
-    // TODO: predicate mapping type CHANGE to 'P'
-    pub fn map_predicate<A1: Display, B1: Display, C1: Display>(
+    pub fn map_predicate_v<B: Display + Clone>(
         &self,
         vopt: &mut Option<Viz>,
         header: String,
         text: String,
-        f: impl Fn(Predicate<A, B, C>) -> ShortCircuit<Predicate<A1, B1, C1>>,
-    ) -> Expr<A1, B1, C1> {
+        f: impl Fn(A) -> ShortCircuit<B>,
+    ) -> Expr<B> {
         let (res, viz) = self.collapse_frames_v(|e| match e {
+            // apply 'f' to Predicate expressions
             ExprFrame::Predicate(p) => match f(p) {
                 ShortCircuit::Known(b) => Expr::Literal(b),
                 ShortCircuit::Unknown(p) => Expr::Predicate(p),
             },
-            ExprFrame::And(a, b) => match (a, b) {
-                (Expr::Literal(false), _) => Expr::Literal(false),
-                (_, Expr::Literal(false)) => Expr::Literal(false),
-                (x, Expr::Literal(true)) => x,
-                (Expr::Literal(true), x) => x,
-                (a, b) => Expr::and(a, b),
-            },
-            ExprFrame::Or(a, b) => match (a, b) {
-                (Expr::Literal(true), _) => Expr::Literal(true),
-                (_, Expr::Literal(true)) => Expr::Literal(true),
-                (x, Expr::Literal(false)) => x,
-                (Expr::Literal(false), x) => x,
-                (a, b) => Expr::or(a, b),
-            },
-            ExprFrame::Not(x) => match x {
-                Expr::Literal(k) => Expr::Literal(!k),
-                x => Expr::not(x),
-            },
+            // reduce And expressions
+            ExprFrame::And(Expr::Literal(false), _) => Expr::Literal(false),
+            ExprFrame::And(_, Expr::Literal(false)) => Expr::Literal(false),
+            ExprFrame::And(x, Expr::Literal(true)) => x,
+            ExprFrame::And(Expr::Literal(true), x) => x,
+            ExprFrame::And(a, b) => Expr::And(Box::new(a), Box::new(b)),
+            // reduce Or expressions
+            ExprFrame::Or(Expr::Literal(true), _) => Expr::Literal(true),
+            ExprFrame::Or(_, Expr::Literal(true)) => Expr::Literal(true),
+            ExprFrame::Or(x, Expr::Literal(false)) => x,
+            ExprFrame::Or(Expr::Literal(false), x) => x,
+            ExprFrame::Or(a, b) => Expr::Or(Box::new(a), Box::new(b)),
+            // reduce Not expressions
+            ExprFrame::Not(Expr::Literal(k)) => Expr::Literal(!k),
+            ExprFrame::Not(x) => Expr::Not(Box::new(x)),
+            // Literal expressions are unchanged
             ExprFrame::Literal(x) => Expr::Literal(x),
         });
 
@@ -93,4 +91,80 @@ impl<A: Display, B: Display, C: Display> Expr<A, B, C> {
 
         res
     }
+
+    //     // apply some potentially short circuiting transformation to all predicates in
+    //     // this expression, with the goal of eventually eliminating all
+    //     pub fn reduce_predicates_and_short_circuit_<B>(
+    //         &self,
+    //         f: impl Fn(A) -> ShortCircuit<B>,
+    //     ) -> Expr<B> {
+    //         self.collapse_frames(|e| match e {
+    //             // apply 'f' to Predicate expressions
+    //             ExprFrame::Predicate(p) => match f(p) {
+    //                 ShortCircuit::Known(b) => Expr::Literal(b),
+    //                 ShortCircuit::Unknown(p) => Expr::Predicate(p),
+    //             },
+    //             // reduce And expressions
+    //             ExprFrame::And(Expr::Literal(false), _) => Expr::Literal(false),
+    //             ExprFrame::And(_, Expr::Literal(false)) => Expr::Literal(false),
+    //             ExprFrame::And(x, Expr::Literal(true)) => x,
+    //             ExprFrame::And(Expr::Literal(true), x) => x,
+    //             ExprFrame::And(a, b) => Expr::And(Box::new(a), Box::new(b)),
+    //             // reduce Or expressions
+    //             ExprFrame::Or(Expr::Literal(true), _) => Expr::Literal(true),
+    //             ExprFrame::Or(_, Expr::Literal(true)) => Expr::Literal(true),
+    //             ExprFrame::Or(x, Expr::Literal(false)) => x,
+    //             ExprFrame::Or(Expr::Literal(false), x) => x,
+    //             ExprFrame::Or(a, b) => Expr::Or(Box::new(a), Box::new(b)),
+    //             // reduce Not expressions
+    //             ExprFrame::Not(Expr::Literal(k)) => Expr::Literal(!k),
+    //             ExprFrame::Not(x) => Expr::Not(Box::new(x)),
+    //             // Literal expressions are unchanged
+    //             ExprFrame::Literal(x) => Expr::Literal(x),
+    //         })
+    //     }
+
+    //     // apply some potentially short circuiting transformation to all predicates in
+    //     // this expression, with the goal of eventually eliminating all
+    //     pub fn reduce_predicates_and_short_circuit<B>(
+    //         &self,
+    //         f: impl Fn(A) -> ShortCircuit<B>,
+    //     ) -> Expr<B> {
+    //         match self {
+    //             // apply 'f' to Predicate expressions
+    //             Expr::Predicate(p) => match f(p.clone()) {
+    //                 ShortCircuit::Known(bool) => Expr::Literal(bool),
+    //                 ShortCircuit::Unknown(p) => Expr::Predicate(p),
+    //             },
+    //             // reduce And expressions
+    //             Expr::And(a, b) => match (&**a, &**b) {
+    //                 (Expr::Literal(false), _) => Expr::Literal(false),
+    //                 (_, Expr::Literal(false)) => Expr::Literal(false),
+    //                 (x, Expr::Literal(true)) => x.reduce_predicates_and_short_circuit(f),
+    //                 (Expr::Literal(true), x) => x.reduce_predicates_and_short_circuit(f),
+    //                 (a, b) => Expr::And(
+    //                     Box::new(a.reduce_predicates_and_short_circuit(&f)),
+    //                     Box::new(b.reduce_predicates_and_short_circuit(&f)),
+    //                 ),
+    //             },
+    //             // reduce Or expressions
+    //             Expr::Or(a, b) => match (&**a, &**b) {
+    //                 (Expr::Literal(true), _) => Expr::Literal(true),
+    //                 (_, Expr::Literal(true)) => Expr::Literal(true),
+    //                 (x, Expr::Literal(false)) => x.reduce_predicates_and_short_circuit(f),
+    //                 (Expr::Literal(false), x) => x.reduce_predicates_and_short_circuit(f),
+    //                 (a, b) => Expr::Or(
+    //                     Box::new(a.reduce_predicates_and_short_circuit(&f)),
+    //                     Box::new(b.reduce_predicates_and_short_circuit(&f)),
+    //                 ),
+    //             },
+    //             // reduce Not expressions
+    //             Expr::Not(a) => match &**a {
+    //                 Expr::Literal(x) => Expr::Literal(!x),
+    //                 x => Expr::Not(Box::new(x.reduce_predicates_and_short_circuit(&f))),
+    //             },
+    //             // Literal expressions are unchanged
+    //             Expr::Literal(x) => Expr::Literal(*x),
+    //         }
+    //     }
 }

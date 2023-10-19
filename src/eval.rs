@@ -2,6 +2,7 @@ use recursion_visualize::visualize::Viz;
 
 use crate::expr::Expr;
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
+use crate::predicate::Predicate;
 use crate::util::Done;
 use std::fs::{self};
 use std::path::Path;
@@ -11,24 +12,25 @@ use std::path::Path;
 /// - metadata matchers
 /// - file content matchers
 pub fn eval(
-    e: &Expr<NamePredicate, MetadataPredicate, ContentPredicate>,
+    e: &Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
     path: &Path,
 ) -> std::io::Result<bool> {
     let mut viz: Option<Viz> = None;
 
-    let e: Expr<Done, MetadataPredicate, ContentPredicate> = e
-        .map_predicate(
-            &mut viz,
-            "evaluate name predicates".to_string(),
-            String::new(),
-            |p| p.eval_name_predicate(path),
-        );
+    let e: Expr<Predicate<Done, MetadataPredicate, ContentPredicate>> = e.map_predicate_v(
+        &mut viz,
+        "first stage: very cheap".to_string(),
+        format!("reduce name predicates for {}", path.to_str().unwrap()),
+        |p| p.eval_name_predicate(path),
+    );
 
     if let Expr::Literal(b) = e {
-
         if let Some(v) = viz {
-            let v = v.append_label("Done".to_string(), "evaluation required examining filename only".to_string());
-           // v.write(format!("visualized"))
+            let v = v.append_label(
+                "Done".to_string(),
+                "evaluation required examining filename only".to_string(),
+            );
+            v.write(format!("../out/{}.viz.html", path.to_str().unwrap().replace("/", "_")))
         }
         return Ok(b);
     }
@@ -36,19 +38,20 @@ pub fn eval(
     // read metadata
     let metadata = fs::metadata(path)?;
 
-    let e: Expr<Done, Done, ContentPredicate> = e
-        .map_predicate(
-            &mut viz,
-            "evaluate metadata predicates".to_string(),
-            String::new(),
-            |p| p.eval_metadata_predicate(&metadata),
-        );
+    let e: Expr<Predicate<Done, Done, ContentPredicate>> = e.map_predicate_v(
+        &mut viz,
+        "second stage: cheap".to_string(),
+        format!("reduce metadata predicates for {}", path.to_str().unwrap()),
+        |p| p.eval_metadata_predicate(&metadata),
+    );
 
     if let Expr::Literal(b) = e {
-
         if let Some(v) = viz {
-            let v = v.append_label("Done".to_string(), "evaluation required examining filename and metadata only".to_string());
-           // v.write(format!("visualized"))
+            let v = v.append_label(
+                "Done".to_string(),
+                "evaluation required examining filename and metadata only".to_string(),
+            );
+            v.write(format!("../out/{}.viz.html", path.to_str().unwrap().replace("/", "_")))
         }
         return Ok(b);
     }
@@ -62,19 +65,20 @@ pub fn eval(
         None
     };
 
-    let e: Expr<Done, Done, Done> = e
-        .map_predicate(
-            &mut viz,
-            "evaluate file content predicates".to_string(),
-            String::new(),
-            |p| p.eval_file_content_predicate(utf8_contents.as_ref()),
+    let e: Expr<Predicate<Done, Done, Done>> = e.map_predicate_v(
+        &mut viz,
+        "third stage: expensive".to_string(),
+        format!("reduce file content predicates for {}", path.to_str().unwrap()),
+        |p| p.eval_file_content_predicate(utf8_contents.as_ref()),
+    );
+
+    if let Some(v) = viz {
+        let v = v.append_label(
+            "Done".to_string(),
+            "evaluation required examining filename, metadata, and file contents".to_string(),
         );
-
-        if let Some(v) = viz {
-            let v = v.append_label("Done".to_string(), "evaluation required examining filename, metadata, and file contents".to_string());
-        //    v.write(format!("visualized {}", path.to_str().unwrap()))
-        }
-
+        v.write(format!("../out/{}.viz.html", path.to_str().unwrap().replace("/", "_")))
+    }
 
     if let Expr::Literal(b) = e {
         Ok(b)

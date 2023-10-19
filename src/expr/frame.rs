@@ -32,10 +32,10 @@ impl<P> MappableFrame for ExprFrame<PartiallyApplied, P> {
     }
 }
 
-impl<'a, A, B, C> Collapsible for &'a Expr<A, B, C> {
-    type FrameToken = ExprFrame<PartiallyApplied, Predicate<A, B, C>>;
+impl<'a, A: Clone> Collapsible for &'a Expr<A> {
+    type FrameToken = ExprFrame<PartiallyApplied, A>;
 
-    fn into_frame(self) -> ExprFrame<Self, Predicate<A, B, C>> {
+    fn into_frame(self) -> ExprFrame<Self, A> {
         match self {
             Expr::Not(x) => ExprFrame::Not(x),
             Expr::And(a, b) => ExprFrame::And(a, b),
