@@ -1,5 +1,5 @@
 use clap::{Parser, command};
-use detect::parse_and_run;
+use detect_rs::parse_and_run;
 
 
 /// operators

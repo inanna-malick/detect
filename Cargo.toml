@@ -1,9 +1,13 @@
 [package]
-name = "detect"
+name = "detect_rs"
 description = "Detect files on your filesystem using arbitrary expression language criteria"
 license = "MIT OR Apache-2.0"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "detect"
+path = "src/main.rs"
 
 [features]
 viz = ["dep:recursion-visualize"]
