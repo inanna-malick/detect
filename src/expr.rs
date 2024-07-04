@@ -5,11 +5,16 @@ use std::{io, sync::Arc};
 
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
-use crate::{expr::frame::ExprFrame, predicate::ProcessPredicate};
+use crate::{expr::frame::ExprFrame};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use recursion::CollapsibleExt;
 
 use self::short_circuit::ShortCircuit;
+
+
+/*
+idea: replace predicates with selectors (file name, contents, etc) and have generic ~ (regex), == (exact equals), etc
+*/
 
 /// Filesystem entity matcher expression with boolean logic and predicates
 #[derive(Debug, PartialEq, Eq)]
@@ -24,7 +29,7 @@ pub enum Expr<Predicate> {
     Literal(bool),
 }
 
-impl<A, B, C, D> Expr<Predicate<A, B, C, D>> {
+impl<A, B, C, D> Expr<Predicate<A, B, C>> {
     pub fn name_predicate(x: A) -> Self {
         Self::Predicate(Predicate::Name(Arc::new(x)))
     }
@@ -33,9 +38,6 @@ impl<A, B, C, D> Expr<Predicate<A, B, C, D>> {
     }
     pub fn content_predicate(x: C) -> Self {
         Self::Predicate(Predicate::Content(Arc::new(x)))
-    }
-    pub fn process_predicate(x: D) -> Self {
-        Self::Predicate(Predicate::Process(Arc::new(x)))
     }
 }
 

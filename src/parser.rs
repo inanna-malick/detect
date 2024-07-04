@@ -7,11 +7,11 @@ use regex::Regex;
 use std::sync::Arc;
 
 use crate::expr::*;
-use crate::predicate::{Bound, Predicate, ProcessPredicate};
+use crate::predicate::{Bound, Predicate};
 
 fn and_<Input>() -> impl Parser<
     Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
 >
 where
     Input: Stream<Token = char>,
@@ -32,7 +32,7 @@ where
 
 fn not_<Input>() -> impl Parser<
     Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
 >
 where
     Input: Stream<Token = char>,
@@ -90,7 +90,7 @@ parser! {
 
 fn or_<Input>() -> impl Parser<
     Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
 >
 where
     Input: Stream<Token = char>,
@@ -113,7 +113,7 @@ where
 // `impl Parser` can be used to create reusable parsers with zero overhead
 fn base_<Input>() -> impl Parser<
     Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
 >
 where
     Input: Stream<Token = char>,
@@ -189,21 +189,6 @@ where
     .map(Predicate::Metadata)
     .map(Expr::Predicate);
 
-    let async_predicate = (
-        string("process("),
-        regex_str(),
-        lex_char(','),
-        regex(),
-        lex_char(')'),
-    )
-        .map(|(_, cmd, _, expected, _)| ProcessPredicate::Process {
-            cmd: cmd.to_string(),
-            expected_stdout: expected,
-        })
-        .map(Arc::new)
-        .map(Predicate::Process)
-        .map(Expr::Predicate);
-
     // I don't think order matters here, inside the choice combinator? idk
     choice((
         attempt(contents_predicate),
@@ -211,7 +196,6 @@ where
         attempt(filepath_predicate),
         attempt(extension_predicate),
         attempt(metadata_predicate),
-        attempt(async_predicate),
         parens,
     ))
     .skip(skip_spaces())
@@ -225,7 +209,7 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    pub fn or[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -233,7 +217,7 @@ parser! {
 }
 
 parser! {
-    fn and[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    fn and[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -241,7 +225,7 @@ parser! {
 }
 
 parser! {
-    fn not[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    fn not[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         not_()
@@ -249,7 +233,7 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    fn base[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         base_()
