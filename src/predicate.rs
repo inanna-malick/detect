@@ -34,7 +34,7 @@ impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
     }
 }
 
-impl<A, B, C> Predicate<NamePredicate, A, B> {
+impl<A, B> Predicate<NamePredicate, A, B> {
     pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B>> {
         match self {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
@@ -44,7 +44,7 @@ impl<A, B, C> Predicate<NamePredicate, A, B> {
     }
 }
 
-impl<A, B, C> Predicate<A, MetadataPredicate, B> {
+impl<A, B> Predicate<A, MetadataPredicate, B> {
     pub fn eval_metadata_predicate(
         self,
         metadata: &Metadata,
@@ -57,7 +57,7 @@ impl<A, B, C> Predicate<A, MetadataPredicate, B> {
     }
 }
 
-impl<A, B, C> Predicate<A, B, ContentPredicate> {
+impl<A, B> Predicate<A, B, ContentPredicate> {
     pub fn eval_file_content_predicate(
         self,
         contents: Option<&String>,

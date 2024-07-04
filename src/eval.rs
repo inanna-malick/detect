@@ -1,16 +1,11 @@
 use crate::expr::Expr;
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
-use crate::predicate::{Predicate};
+use crate::predicate::Predicate;
 use crate::util::Done;
-use futures::FutureExt;
 use std::fs::Metadata;
-use std::os::unix::prelude::MetadataExt;
 use std::path::Path;
 use tokio::fs::{self};
 use tokio::io;
-
-// file size at which program-based matchers are run before file content matchers
-const LARGE_FILE_SIZE: u64 = 1024 * 1024; // totally arbitrary
 
 /// multipass evaluation with short circuiting, runs, in order:
 /// - file name matchers
@@ -37,21 +32,7 @@ pub async fn eval(
         return Ok(b);
     }
 
-    // the ordering of the file contents and process predicates is determined by file
-    // size - for large files it makes more sense to run processes
-    // (that may just peek at the first few bytes) first
-    let e: Expr<Predicate<Done, Done, Done, Done>> = if metadata.size() > LARGE_FILE_SIZE {
-        // run program-based matchers first
-        let e: Expr<Predicate<Done, Done, ContentPredicate, Done>> =
-            run_process_predicate(e, path).await?;
-
-        run_contents_predicate(e, metadata, path).await?
-    } else {
-        let e: Expr<Predicate<Done, Done, Done, ProcessPredicate>> =
-            run_contents_predicate(e, metadata, path).await?;
-
-        run_process_predicate(e, path).await?
-    };
+    let e: Expr<Predicate<Done, Done, Done>> = run_contents_predicate(e, metadata, path).await?;
 
     if let Expr::Literal(b) = e {
         Ok(b)
@@ -61,7 +42,6 @@ pub async fn eval(
         unreachable!("programmer error")
     }
 }
-
 
 async fn run_contents_predicate<A, B>(
     e: Expr<Predicate<A, B, ContentPredicate>>,

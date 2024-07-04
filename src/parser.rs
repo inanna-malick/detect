@@ -9,10 +9,8 @@ use std::sync::Arc;
 use crate::expr::*;
 use crate::predicate::{Bound, Predicate};
 
-fn and_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
->
+fn and_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -30,10 +28,8 @@ where
     })
 }
 
-fn not_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
->
+fn not_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -88,10 +84,8 @@ parser! {
     }
 }
 
-fn or_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
->
+fn or_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -111,10 +105,8 @@ where
 }
 
 // `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
->
+fn base_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159

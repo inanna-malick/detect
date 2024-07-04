@@ -3,14 +3,13 @@ pub mod short_circuit;
 
 use std::{io, sync::Arc};
 
+use crate::expr::frame::ExprFrame;
 use crate::predicate::Predicate;
 pub(crate) use crate::predicate::{ContentPredicate, MetadataPredicate, NamePredicate};
-use crate::{expr::frame::ExprFrame};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use recursion::CollapsibleExt;
 
 use self::short_circuit::ShortCircuit;
-
 
 /*
 idea: replace predicates with selectors (file name, contents, etc) and have generic ~ (regex), == (exact equals), etc
@@ -29,7 +28,7 @@ pub enum Expr<Predicate> {
     Literal(bool),
 }
 
-impl<A, B, C, D> Expr<Predicate<A, B, C>> {
+impl<A, B, C> Expr<Predicate<A, B, C>> {
     pub fn name_predicate(x: A) -> Self {
         Self::Predicate(Predicate::Name(Arc::new(x)))
     }

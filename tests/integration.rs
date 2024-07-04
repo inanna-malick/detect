@@ -1,6 +1,6 @@
 use std::{env::set_current_dir, fs::create_dir_all};
 
-use detect::{parse, predicate::NamePredicate};
+use detect::predicate::NamePredicate;
 use regex::Regex;
 use tempdir::TempDir;
 
@@ -63,8 +63,12 @@ impl<'a> Case<'a> {
         .await
         .unwrap();
 
+        out.sort();
+        let mut expected = self.expected.to_owned();
+        expected.sort();
+
         // TODO: ordering-agnostic comparison
-        assert_eq!(self.expected, out)
+        assert_eq!(expected, out)
     }
 }
 
@@ -150,17 +154,6 @@ async fn test_not_filename_only() {
 async fn test_name_and_contents() {
     Case {
         expr: "filename(foo) && contains(foo)",
-        expected: &["foo"],
-        files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
-    }
-    .run()
-    .await
-}
-
-#[tokio::test]
-async fn test_name_and_async_program_invocation() {
-    Case {
-        expr: "filename(foo) && process(cat, foo)", // very simple case, equivalent to just checking file contents tbh
         expected: &["foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
