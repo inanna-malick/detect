@@ -8,7 +8,7 @@ use regex::Regex;
 
 
 use crate::expr::*;
-use crate::predicate::{Bound, Op, Predicate, RawPredicate, Selector};
+use crate::predicate::{Bound, Op, NumericaComparisonOp, Predicate, RawPredicate, Selector};
 
 // TODO: use nom instead of combine
 
@@ -148,18 +148,19 @@ where
 
     let selector = {
         choice((
-            string("name").map(|_| Selector::Name),
-            string("size").map(|_| Selector::Size),
+            attempt(string("name").map(|_| Selector::FileName)),
+            attempt(string("path").map(|_| Selector::FilePath)),
+            attempt(string("extension").map(|_| Selector::Extension)),
+            attempt(string("size").map(|_| Selector::Size)),
+            attempt(string("contents").map(|_| Selector::Contents)),
         ))
     };
 
+    // TODO: expand with idk, quotes?
     let regex_str = || {
         many1(
-            // TODO: should do this in a principled way that fully covers all allowed regex chars,
-            //       instead I keep adding characters I want to use. shrug emoji.
-            // TODO: another one of these for valid process stuff
             satisfy(|ch: char| {
-                ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ' || ch == '-'
+                ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == '-'
             })
             .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
         )
@@ -169,9 +170,13 @@ where
 
     let operator = || {
         use Op::*;
+        use NumericaComparisonOp::*;
         choice((
             attempt(string("contains").map(|_| Contains)),
             attempt(string("~=").map(|_| Matches)),
+            attempt(string("==").map(|_| Equality)),
+            attempt(string("<").map(|_| NumericComparison(Less))),
+            attempt(string(">").map(|_| NumericComparison(Greater))),
             //     Matches,  // '~=', 'matches'
             //     Equality, // '==', '=', 'is'
             // //     NumericComparison(NumericaComparisonOp),

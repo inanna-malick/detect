@@ -73,11 +73,11 @@ impl<'a> Case<'a> {
 }
 
 #[tokio::test]
-async fn test_filename_only() {
+async fn test_name_only() {
     Case {
-        expr: "filename(foo)",
+        expr: "name == foo",
         // we get the dir z/foo but not the file z/foo/bar,
-        // proving that it really is just operating on filenames - nice
+        // proving that it really is just operating on names - nice
         expected: &["foo", "z/foo", "bar/foo"],
         files: vec![
             f("foo", "foo"),
@@ -91,11 +91,11 @@ async fn test_filename_only() {
 }
 
 #[tokio::test]
-async fn test_filepath_only() {
+async fn test_path_only() {
     Case {
-        expr: "filepath(bar)",
+        expr: "path ~= bar",
         // we get the dir z/foo but not the file z/foo/bar,
-        // so it really is just operating on filenames - nice
+        // so it really is just operating on names - nice
         expected: &["bar", "bar/baz", "bar/foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
@@ -104,9 +104,9 @@ async fn test_filepath_only() {
 }
 
 #[tokio::test]
-async fn test_not_filename_only() {
+async fn test_not_name_only() {
     Case {
-        expr: "!filename(foo)",
+        expr: "!name == foo",
         // TODO: figure out if I want to filter out empty paths here I guess? currently they're included
         expected: &["", "bar", "bar/baz"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
@@ -118,7 +118,7 @@ async fn test_not_filename_only() {
 #[tokio::test]
 async fn test_name_and_contents() {
     Case {
-        expr: "filename(foo) && contains(foo)",
+        expr: "name == foo && contents ~= foo",
         expected: &["foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
@@ -129,7 +129,7 @@ async fn test_name_and_contents() {
 #[tokio::test]
 async fn test_extension_and_contents() {
     Case {
-        expr: "extension(.rs)",
+        expr: "extension == rs",
         expected: &["test.rs"],
         files: vec![f("test.rs", ""), f("test2", "")],
     }
@@ -140,7 +140,7 @@ async fn test_extension_and_contents() {
 #[tokio::test]
 async fn test_size() {
     Case {
-        expr: "filename(foo) && size(0..5)",
+        expr: "name == foo && size  < 5",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -151,7 +151,7 @@ async fn test_size() {
 #[tokio::test]
 async fn test_size_right() {
     Case {
-        expr: "filename(foo) && size(..5)",
+        expr: "name == foo && size < 5",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -162,7 +162,7 @@ async fn test_size_right() {
 #[tokio::test]
 async fn test_size_left() {
     Case {
-        expr: "filename(foo) && size(5..)",
+        expr: "name == foo && size > 5",
         expected: &["bar/foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -170,14 +170,14 @@ async fn test_size_left() {
     .await
 }
 
-#[tokio::test]
-async fn test_size_kb() {
-    let big_str = "x".repeat(1025);
-    Case {
-        expr: "filename(foo) && size(1kb..2kb)",
-        expected: &["bar/foo"],
-        files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
-    }
-    .run()
-    .await
-}
+// #[tokio::test]
+// async fn test_size_kb() {
+//     let big_str = "x".repeat(1025);
+//     Case {
+//         expr: "name == foo && size(1kb..2kb)",
+//         expected: &["bar/foo"],
+//         files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
+//     }
+//     .run()
+//     .await
+// }

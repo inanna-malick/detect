@@ -10,7 +10,7 @@ fn test_parser() {
 
     let examples: Vec<(&'static str, _)> = vec![
         (
-            "name == foo && filepath ~= bar",
+            "name == foo && path ~= bar",
             // note: order is reversed by parser? eh that's fine (TODO: or is it?)
             Expr::and(
                 filepath("bar"),

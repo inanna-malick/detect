@@ -21,7 +21,7 @@ impl RawPredicate {
         &self,
     ) -> anyhow::Result<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>> {
         Ok(match self.lhs {
-            Selector::Name => {
+            Selector::FileName => {
                 Predicate::name(NamePredicate::Filename(parse_string(&self.op, &self.rhs)?))
             }
             Selector::FilePath => {
@@ -46,7 +46,7 @@ impl RawPredicate {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Selector {
     // NAME:
-    Name,
+    FileName,
     Extension,
     FilePath,
     // METADATA
