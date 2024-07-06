@@ -8,7 +8,7 @@ use regex::Regex;
 
 
 use crate::expr::*;
-use crate::predicate::{Bound, Op, NumericaComparisonOp, Predicate, RawPredicate, Selector};
+use crate::predicate::{Bound, Op, NumericalOp, Predicate, RawPredicate, Selector};
 
 // TODO: use nom instead of combine
 
@@ -169,7 +169,7 @@ where
 
     let operator = || {
         use Op::*;
-        use NumericaComparisonOp::*;
+        use NumericalOp::*;
         choice((
             attempt(string("contains").map(|_| Contains)),
             attempt(string("~=").map(|_| Matches)),

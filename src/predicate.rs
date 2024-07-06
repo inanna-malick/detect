@@ -110,7 +110,7 @@ pub enum Op {
     Contains, // 'contains'
     Matches,  // '~=', 'matches'
     Equality, // '==', '=', 'is'
-    NumericComparison(NumericaComparisonOp),
+    NumericComparison(NumericalOp),
 }
 
 pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
@@ -128,17 +128,17 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
     match op {
         Op::Equality => Ok(NumberMatcher::Equals(parsed_rhs)),
         Op::NumericComparison(op) => Ok(NumberMatcher::In(match op {
-            NumericaComparisonOp::Greater => Bound::Left(parsed_rhs..),
-            NumericaComparisonOp::GreaterOrEqual => Bound::Left(parsed_rhs.saturating_sub(1)..),
-            NumericaComparisonOp::LessOrEqual => Bound::Right(..parsed_rhs),
-            NumericaComparisonOp::Less => Bound::Right(..parsed_rhs.saturating_add(1)),
+            NumericalOp::Greater => Bound::Left(parsed_rhs..),
+            NumericalOp::GreaterOrEqual => Bound::Left(parsed_rhs.saturating_sub(1)..),
+            NumericalOp::LessOrEqual => Bound::Right(..parsed_rhs),
+            NumericalOp::Less => Bound::Right(..parsed_rhs.saturating_add(1)),
         })),
         x => anyhow::bail!("operator {:?} cannot be applied to numerical values", x),
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NumericaComparisonOp {
+pub enum NumericalOp {
     Greater,        // '>'
     GreaterOrEqual, // >=
     LessOrEqual,    // <=
@@ -279,6 +279,12 @@ impl MetadataPredicate {
                 let ft: FileType = metadata.file_type();
                 if ft.is_socket() {
                     matcher.is_match("sock") || matcher.is_match("socket")
+                } else if ft.is_fifo() {
+                    matcher.is_match("fifo")
+                } else if ft.is_block_device() {
+                    matcher.is_match("block")
+                } else if ft.is_char_device() {
+                    matcher.is_match("char")
                 } else if ft.is_dir() {
                     matcher.is_match("dir") || matcher.is_match("directory")
                 } else if ft.is_file() {
