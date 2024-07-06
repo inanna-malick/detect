@@ -152,6 +152,7 @@ where
             attempt(string("path").map(|_| Selector::FilePath)),
             attempt(string("extension").map(|_| Selector::Extension)),
             attempt(string("size").map(|_| Selector::Size)),
+            attempt(string("type").map(|_| Selector::EntityType)),
             attempt(string("contents").map(|_| Selector::Contents)),
         ))
     };
@@ -166,8 +167,6 @@ where
         )
     };
 
-    let regex = || regex_str().map(|s: String| Regex::new(&s).unwrap());
-
     let operator = || {
         use Op::*;
         use NumericaComparisonOp::*;
@@ -177,14 +176,8 @@ where
             attempt(string("==").map(|_| Equality)),
             attempt(string("<").map(|_| NumericComparison(Less))),
             attempt(string(">").map(|_| NumericComparison(Greater))),
-            //     Matches,  // '~=', 'matches'
-            //     Equality, // '==', '=', 'is'
-            // //     NumericComparison(NumericaComparisonOp),
-            // // pub enum NumericaComparisonOp {
-            //     Greater,        // '>'
-            //     GreaterOrEqual, // >=
-            //     LessOrEqual,    // <=
-            //     Less,           // <
+            attempt(string("=<").map(|_| NumericComparison(LessOrEqual))),
+            attempt(string("=>").map(|_| NumericComparison(GreaterOrEqual))),
         ))
     };
 
