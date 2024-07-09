@@ -3,12 +3,9 @@ use combine::error::ParseError;
 use combine::parser::char::{char, digit, space, spaces, string};
 use combine::stream::Stream;
 use combine::*;
-use regex::Regex;
-
-
 
 use crate::expr::*;
-use crate::predicate::{Bound, Op, NumericalOp, Predicate, RawPredicate, Selector};
+use crate::predicate::{Bound, NumericalOp, Op, Predicate, RawPredicate, Selector};
 
 // TODO: use nom instead of combine
 
@@ -47,7 +44,7 @@ where
     ))
 }
 
-// TODO use this, with 'in' operator (range)
+// TODO use this for numerics
 fn kb_mb_bound_<Input>() -> impl Parser<Input, Output = Bound>
 where
     Input: Stream<Token = char>,
@@ -123,13 +120,8 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
-    // I don't think order matters here, inside the choice combinator? idk
     choice((
         attempt(raw_predicate()).map(Expr::Predicate),
-        // attempt(filename_predicate),
-        // attempt(filepath_predicate),
-        // attempt(extension_predicate),
-        // attempt(metadata_predicate),
         parens,
     ))
 }
@@ -160,16 +152,14 @@ where
     // TODO: expand with idk, quotes?
     let regex_str = || {
         many1(
-            satisfy(|ch: char| {
-                ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == '-'
-            })
-            .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
+            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
+                .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
         )
     };
 
     let operator = || {
-        use Op::*;
         use NumericalOp::*;
+        use Op::*;
         choice((
             attempt(string("contains").map(|_| Contains)),
             attempt(string("~=").map(|_| Matches)),
@@ -181,12 +171,18 @@ where
         ))
     };
 
-    (selector, whitespace(), operator(), whitespace(), regex_str())
+    (
+        selector,
+        whitespace(),
+        operator(),
+        whitespace(),
+        regex_str(),
+    )
         .map(|(lhs, _, op, _, rhs)| RawPredicate { lhs, op, rhs })
         .then(|r| match r.parse() {
             Ok(x) => value(x).left(),
             // todo: idk why static str required, follow up later w/ eg format!("{:?}", e)
-            Err(e) => unexpected_any("token").message("fixme").right(),
+            Err(_e) => unexpected_any("token").message("predicate didn't parse").right(),
         })
 }
 

@@ -1,12 +1,11 @@
 use regex::Regex;
 use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
+use std::os::unix::prelude::MetadataExt;
 use std::sync::Arc;
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
-use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
 use crate::expr::short_circuit::ShortCircuit;
-use crate::parse;
 use crate::util::Done;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,9 +35,9 @@ impl RawPredicate {
             Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
                 &self.op, &self.rhs,
             )?)),
-            Selector::Contents => {
-                Predicate::contents(ContentPredicate::Contents(parse_string(&self.op, &self.rhs)?))
-            }
+            Selector::Contents => Predicate::contents(ContentPredicate::Contents(parse_string(
+                &self.op, &self.rhs,
+            )?)),
         })
     }
 }
