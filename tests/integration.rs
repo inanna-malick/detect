@@ -1,6 +1,6 @@
 use std::{env::set_current_dir, fs::create_dir_all};
 
-use detect::{parse, predicate::NamePredicate};
+use detect::predicate::NamePredicate;
 use regex::Regex;
 use tempdir::TempDir;
 
@@ -63,52 +63,21 @@ impl<'a> Case<'a> {
         .await
         .unwrap();
 
+        out.sort();
+        let mut expected = self.expected.to_owned();
+        expected.sort();
+
         // TODO: ordering-agnostic comparison
-        assert_eq!(self.expected, out)
-    }
-}
-
-// TODO: move to own file
-#[test]
-fn test_parser() {
-    use detect::expr::Expr;
-
-    let filepath = |s| Expr::name_predicate(NamePredicate::Path(Regex::new(s).unwrap()));
-    let filename = |s| Expr::name_predicate(NamePredicate::Filename(Regex::new(s).unwrap()));
-
-    let examples: Vec<(&'static str, _)> = vec![
-        (
-            "filename(foo) && filepath(bar)",
-            // note: order is reversed by parser? eh that's fine (TODO: or is it?)
-            Expr::and(
-                filepath("bar"),
-                Expr::name_predicate(NamePredicate::Filename(Regex::new("foo").unwrap())),
-            ),
-        ),
-        (
-            // test confirming that '&&' binds more tightly than ||
-            "filename(foo) || filepath(bar) && filepath(baz)",
-            Expr::or(Expr::and(filepath("baz"), filepath("bar")), filename("foo")),
-        ),
-        (
-            // test confirming that '&&' binds more tightly than || in reverse order
-            "filepath(bar) && filepath(baz) || filename(foo)",
-            Expr::or(filename("foo"), Expr::and(filepath("baz"), filepath("bar"))),
-        ),
-        // TODO: test for ! operator binding I guess?
-    ];
-
-    for (input, expected) in examples.into_iter() {
-        assert_eq!(detect::parse(input).unwrap(), expected)
+        assert_eq!(expected, out)
     }
 }
 
 #[tokio::test]
-async fn test_filename_only() {
+async fn test_name_only() {
     Case {
-        expr: "filename(foo)",
+        expr: "name == foo",
         // we get the dir z/foo but not the file z/foo/bar,
-        // proving that it really is just operating on filenames - nice
+        // proving that it really is just operating on names - nice
         expected: &["foo", "z/foo", "bar/foo"],
         files: vec![
             f("foo", "foo"),
@@ -122,11 +91,11 @@ async fn test_filename_only() {
 }
 
 #[tokio::test]
-async fn test_filepath_only() {
+async fn test_path_only() {
     Case {
-        expr: "filepath(bar)",
+        expr: "path ~= bar",
         // we get the dir z/foo but not the file z/foo/bar,
-        // so it really is just operating on filenames - nice
+        // so it really is just operating on names - nice
         expected: &["bar", "bar/baz", "bar/foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
@@ -135,9 +104,9 @@ async fn test_filepath_only() {
 }
 
 #[tokio::test]
-async fn test_not_filename_only() {
+async fn test_not_name_only() {
     Case {
-        expr: "!filename(foo)",
+        expr: "!name == foo",
         // TODO: figure out if I want to filter out empty paths here I guess? currently they're included
         expected: &["", "bar", "bar/baz"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
@@ -149,18 +118,7 @@ async fn test_not_filename_only() {
 #[tokio::test]
 async fn test_name_and_contents() {
     Case {
-        expr: "filename(foo) && contains(foo)",
-        expected: &["foo"],
-        files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
-    }
-    .run()
-    .await
-}
-
-#[tokio::test]
-async fn test_name_and_async_program_invocation() {
-    Case {
-        expr: "filename(foo) && process(cat, foo)", // very simple case, equivalent to just checking file contents tbh
+        expr: "name == foo && contents ~= foo",
         expected: &["foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
@@ -171,7 +129,7 @@ async fn test_name_and_async_program_invocation() {
 #[tokio::test]
 async fn test_extension_and_contents() {
     Case {
-        expr: "extension(.rs)",
+        expr: "extension == rs",
         expected: &["test.rs"],
         files: vec![f("test.rs", ""), f("test2", "")],
     }
@@ -182,7 +140,7 @@ async fn test_extension_and_contents() {
 #[tokio::test]
 async fn test_size() {
     Case {
-        expr: "filename(foo) && size(0..5)",
+        expr: "name == foo && size  < 5",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -193,7 +151,7 @@ async fn test_size() {
 #[tokio::test]
 async fn test_size_right() {
     Case {
-        expr: "filename(foo) && size(..5)",
+        expr: "name == foo && size < 5",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -204,7 +162,7 @@ async fn test_size_right() {
 #[tokio::test]
 async fn test_size_left() {
     Case {
-        expr: "filename(foo) && size(5..)",
+        expr: "name == foo && size > 5",
         expected: &["bar/foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -212,14 +170,14 @@ async fn test_size_left() {
     .await
 }
 
-#[tokio::test]
-async fn test_size_kb() {
-    let big_str = "x".repeat(1025);
-    Case {
-        expr: "filename(foo) && size(1kb..2kb)",
-        expected: &["bar/foo"],
-        files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
-    }
-    .run()
-    .await
-}
+// #[tokio::test]
+// async fn test_size_kb() {
+//     let big_str = "x".repeat(1025);
+//     Case {
+//         expr: "name == foo && size(1kb..2kb)",
+//         expected: &["bar/foo"],
+//         files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
+//     }
+//     .run()
+//     .await
+// }

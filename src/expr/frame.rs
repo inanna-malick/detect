@@ -1,5 +1,4 @@
 use super::Expr;
-use crate::predicate::Predicate;
 use futures::FutureExt;
 use recursion::experimental::recursive::collapse::CollapsibleAsync;
 use recursion::{
@@ -11,7 +10,6 @@ use tokio::try_join;
 /// short-lived single layer of a filesystem entity matcher expression, used for
 /// expressing recursive algorithms over a single layer of a borrowed Expr
 pub enum ExprFrame<X, P> {
-    // TODO: replace 'P' with 'A', 'B', 'C'
     // borrowed predicate
     Predicate(P),
     // boolean operators

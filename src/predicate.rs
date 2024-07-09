@@ -1,140 +1,252 @@
 use regex::Regex;
+use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
-use std::process::Stdio;
+use std::os::unix::prelude::MetadataExt;
 use std::sync::Arc;
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
-use std::{os::unix::prelude::MetadataExt, os::unix::prelude::PermissionsExt};
 
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
 
-pub mod process;
-pub use process::*;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Predicate<Name, Metadata, Content, Process> {
-    Name(Arc<Name>),
-    Metadata(Arc<Metadata>),
-    Content(Arc<Content>),
-    Process(Arc<Process>),
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RawPredicate {
+    pub lhs: Selector,
+    pub op: Op,
+    pub rhs: String,
 }
 
-impl<A, B, C, D> Clone for Predicate<A, B, C, D> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Name(arg0) => Self::Name(arg0.clone()),
-            Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
-            Self::Content(arg0) => Self::Content(arg0.clone()),
-            Self::Process(arg0) => Self::Process(arg0.clone()),
-        }
+impl RawPredicate {
+    pub fn parse(
+        &self,
+    ) -> anyhow::Result<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>> {
+        Ok(match self.lhs {
+            Selector::FileName => {
+                Predicate::name(NamePredicate::Filename(parse_string(&self.op, &self.rhs)?))
+            }
+            Selector::FilePath => {
+                Predicate::name(NamePredicate::Path(parse_string(&self.op, &self.rhs)?))
+            }
+            Selector::Extension => {
+                Predicate::name(NamePredicate::Extension(parse_string(&self.op, &self.rhs)?))
+            }
+            Selector::EntityType => {
+                Predicate::meta(MetadataPredicate::Type(parse_string(&self.op, &self.rhs)?))
+            }
+            Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
+                &self.op, &self.rhs,
+            )?)),
+            Selector::Contents => Predicate::contents(ContentPredicate::Contents(parse_string(
+                &self.op, &self.rhs,
+            )?)),
+        })
     }
 }
 
-impl<A: Display, B: Display, C: Display, D: Display> Display for Predicate<A, B, C, D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Predicate::Name(x) => write!(f, "{}", x),
-            Predicate::Metadata(x) => write!(f, "{}", x),
-            Predicate::Content(x) => write!(f, "{}", x),
-            Predicate::Process(x) => write!(f, "{}", x),
-        }
-    }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Selector {
+    // NAME:
+    FileName,
+    Extension,
+    FilePath,
+    // METADATA
+    EntityType,
+    Size,
+    // TODO: more
+    // CONTENTS
+    Contents,
+    // Encoding, TODO, eventually?
+    // later - parse contents as json,toml,etc - can run selectors against that
 }
 
-impl<A, B, C> Predicate<NamePredicate, A, B, C> {
-    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, C>> {
-        match self {
-            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
-            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
-            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Process(x) => ShortCircuit::Unknown(Predicate::Process(x)),
-        }
-    }
+#[derive(Clone, Debug)]
+pub enum StringMatcher {
+    Regex(Regex),
+    Equals(String),
+    Contains(String),
 }
 
-impl<A, B, C> Predicate<A, MetadataPredicate, B, C> {
-    pub fn eval_metadata_predicate(
-        self,
-        metadata: &Metadata,
-    ) -> ShortCircuit<Predicate<A, Done, B, C>> {
-        match self {
-            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
-            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Process(x) => ShortCircuit::Unknown(Predicate::Process(x)),
-            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-        }
-    }
-}
-
-impl<A, B, C> Predicate<A, B, ContentPredicate, C> {
-    pub fn eval_file_content_predicate(
-        self,
-        contents: Option<&String>,
-    ) -> ShortCircuit<Predicate<A, B, Done, C>> {
-        match self {
-            Predicate::Content(p) => ShortCircuit::Known(match contents {
-                Some(contents) => p.is_match(contents),
-                None => false,
-            }),
-            Predicate::Process(x) => ShortCircuit::Unknown(Predicate::Process(x)),
-            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum NamePredicate {
-    Filename(Regex),
-    Path(Regex),
-    Extension(String),
-}
-
-// only used for tests
-impl PartialEq for NamePredicate {
+impl PartialEq for StringMatcher {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Filename(l0), Self::Filename(r0)) => l0.as_str() == r0.as_str(),
-            (Self::Path(l0), Self::Path(r0)) => l0.as_str() == r0.as_str(),
-            (Self::Extension(l0), Self::Extension(r0)) => l0 == r0,
+            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Equals(l0), Self::Equals(r0)) => l0 == r0,
+            (Self::Contains(l0), Self::Contains(r0)) => l0 == r0,
             _ => false,
         }
     }
 }
 
-impl Eq for NamePredicate {}
+impl Eq for StringMatcher {}
 
-impl NamePredicate {
-    pub fn is_match(&self, path: &Path) -> bool {
+impl StringMatcher {
+    pub fn is_match(&self, s: &str) -> bool {
         match self {
-            NamePredicate::Filename(regex) => path
-                .file_name()
-                .and_then(|os_str| os_str.to_str())
-                .map_or(false, |s| regex.is_match(s)),
-            NamePredicate::Path(regex) => path
-                .as_os_str()
-                .to_str()
-                .map_or(false, |s| regex.is_match(s)),
-            NamePredicate::Extension(e) => path
-                .file_name()
-                .and_then(|os_str| os_str.to_str())
-                .map_or(false, |s| s.ends_with(e)),
+            StringMatcher::Regex(r) => r.is_match(s),
+            StringMatcher::Equals(cmp) => cmp == s,
+            StringMatcher::Contains(c) => s.contains(c),
         }
     }
 }
 
-impl Display for NamePredicate {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NumberMatcher {
+    In(Bound),
+    Equals(u64),
+}
+
+impl NumberMatcher {
+    pub fn is_match(&self, x: u64) -> bool {
+        match self {
+            NumberMatcher::In(b) => b.contains(&x),
+            NumberMatcher::Equals(cmp) => x == *cmp,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Op {
+    // TODO: choose operator for contains
+    Contains, // 'contains'
+    Matches,  // '~=', 'matches'
+    Equality, // '==', '=', 'is'
+    NumericComparison(NumericalOp),
+}
+
+pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
+    Ok(match op {
+        Op::Contains => StringMatcher::Contains(rhs.to_owned()),
+        Op::Matches => StringMatcher::Regex(Regex::new(rhs)?),
+        Op::Equality => StringMatcher::Equals(rhs.to_owned()),
+        x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
+    })
+}
+
+pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
+    let parsed_rhs: u64 = rhs.parse()?;
+
+    match op {
+        Op::Equality => Ok(NumberMatcher::Equals(parsed_rhs)),
+        Op::NumericComparison(op) => Ok(NumberMatcher::In(match op {
+            NumericalOp::Greater => Bound::Left(parsed_rhs..),
+            NumericalOp::GreaterOrEqual => Bound::Left(parsed_rhs.saturating_sub(1)..),
+            NumericalOp::LessOrEqual => Bound::Right(..parsed_rhs),
+            NumericalOp::Less => Bound::Right(..parsed_rhs.saturating_add(1)),
+        })),
+        x => anyhow::bail!("operator {:?} cannot be applied to numerical values", x),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NumericalOp {
+    Greater,        // '>'
+    GreaterOrEqual, // >=
+    LessOrEqual,    // <=
+    Less,           // <
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Predicate<Name, Metadata, Content> {
+    Name(Arc<Name>),
+    Metadata(Arc<Metadata>),
+    Content(Arc<Content>),
+}
+
+impl<N, M, C> Predicate<N, M, C> {
+    pub fn name(n: N) -> Self {
+        Self::Name(Arc::new(n))
+    }
+    pub fn meta(m: M) -> Self {
+        Self::Metadata(Arc::new(m))
+    }
+    pub fn contents(c: C) -> Self {
+        Self::Content(Arc::new(c))
+    }
+}
+
+impl<A, B, C> Clone for Predicate<A, B, C> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Name(arg0) => Self::Name(arg0.clone()),
+            Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
+            Self::Content(arg0) => Self::Content(arg0.clone()),
+        }
+    }
+}
+
+impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NamePredicate::Filename(r) => write!(f, "filename({})", r.as_str()),
-            NamePredicate::Extension(x) => write!(f, "extension({})", x.as_str()),
-            NamePredicate::Path(r) => write!(f, "filepath({})", r.as_str()),
+            Predicate::Name(x) => write!(f, "{}", x),
+            Predicate::Metadata(x) => write!(f, "{}", x),
+            Predicate::Content(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl<A, B> Predicate<NamePredicate, A, B> {
+    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B>> {
+        match self {
+            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
+            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+        }
+    }
+}
+
+impl<A, B> Predicate<A, MetadataPredicate, B> {
+    pub fn eval_metadata_predicate(
+        self,
+        metadata: &Metadata,
+    ) -> ShortCircuit<Predicate<A, Done, B>> {
+        match self {
+            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+        }
+    }
+}
+
+impl<A, B> Predicate<A, B, ContentPredicate> {
+    pub fn eval_file_content_predicate(
+        self,
+        contents: Option<&String>,
+    ) -> ShortCircuit<Predicate<A, B, Done>> {
+        match self {
+            Predicate::Content(p) => ShortCircuit::Known(match contents {
+                Some(contents) => p.is_match(contents),
+                None => false,
+            }),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NamePredicate {
+    Filename(StringMatcher),
+    Path(StringMatcher),
+    Extension(StringMatcher),
+}
+
+impl NamePredicate {
+    pub fn is_match(&self, path: &Path) -> bool {
+        match self {
+            NamePredicate::Filename(x) => path
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .map_or(false, |s| x.is_match(s)),
+            NamePredicate::Path(x) => path.as_os_str().to_str().map_or(false, |s| x.is_match(s)),
+            NamePredicate::Extension(x) => path
+                .extension()
+                .and_then(|os_str| os_str.to_str())
+                .map_or(false, |s| x.is_match(s)),
         }
     }
 }
 
 /// Enum over range types, allows for x1..x2, ..x2, x1..
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Bound {
     Full(Range<u64>),
     Left(RangeFrom<u64>),
@@ -153,73 +265,49 @@ impl Bound {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MetadataPredicate {
-    Filesize(Bound),
-    Executable(),
-    Dir(),
+    Filesize(NumberMatcher),
+    Type(StringMatcher), //dir, exec, etc
 }
 
 impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
         match self {
-            MetadataPredicate::Filesize(range) => range.contains(&metadata.size()),
-            MetadataPredicate::Executable() => {
-                let permissions = metadata.permissions();
-                let is_executable = permissions.mode() & 0o111 != 0;
-                is_executable && !metadata.is_dir()
+            MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
+            MetadataPredicate::Type(matcher) => {
+                use std::os::unix::fs::FileTypeExt;
+                let ft: FileType = metadata.file_type();
+                if ft.is_socket() {
+                    matcher.is_match("sock") || matcher.is_match("socket")
+                } else if ft.is_fifo() {
+                    matcher.is_match("fifo")
+                } else if ft.is_block_device() {
+                    matcher.is_match("block")
+                } else if ft.is_char_device() {
+                    matcher.is_match("char")
+                } else if ft.is_dir() {
+                    matcher.is_match("dir") || matcher.is_match("directory")
+                } else if ft.is_file() {
+                    matcher.is_match("file")
+                } else {
+                    false
+                }
             }
-            MetadataPredicate::Dir() => metadata.is_dir(),
-        }
-    }
-}
-
-impl Display for MetadataPredicate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MetadataPredicate::Filesize(fs) => match fs {
-                Bound::Full(r) => write!(f, "size({}..{})", r.start, r.end),
-                Bound::Left(r) => write!(f, "size({}..)", r.start),
-                Bound::Right(r) => write!(f, "size(..{})", r.end),
-            },
-            MetadataPredicate::Executable() => write!(f, "executable()"),
-            MetadataPredicate::Dir() => write!(f, "dir()"),
         }
     }
 }
 
 // predicates that scan the entire file
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ContentPredicate {
-    Regex(Regex),
+    Contents(StringMatcher),
     Utf8,
 }
-
-// only used for tests
-impl PartialEq for ContentPredicate {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
-            (Self::Utf8, Self::Utf8) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for ContentPredicate {}
 
 impl ContentPredicate {
     pub fn is_match(&self, utf8_contents: &str) -> bool {
         match self {
-            ContentPredicate::Regex(regex) => regex.is_match(utf8_contents),
+            ContentPredicate::Contents(regex) => regex.is_match(utf8_contents),
             ContentPredicate::Utf8 => true,
-        }
-    }
-}
-
-impl Display for ContentPredicate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ContentPredicate::Regex(r) => write!(f, "contains({})", r.as_str()),
-            ContentPredicate::Utf8 => write!(f, "utf8()"),
         }
     }
 }

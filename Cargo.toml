@@ -1,5 +1,5 @@
 [package]
-name = "detect_rs"
+name = "detect"
 description = "Detect files on your filesystem using arbitrary expression language criteria"
 license = "MIT OR Apache-2.0"
 version = "0.1.0"
@@ -17,6 +17,7 @@ anyhow = "1"
 clap = {version = "4.4", features = ["derive"]}
 combine = "4.6.6"
 futures = "0.3.23"
+nom = "7.1"
 recursion = {version = "0.5", features = ["experimental"]}
 recursion-visualize = {version = "0.5", optional = true}
 regex = "1.6.0"

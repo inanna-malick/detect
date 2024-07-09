@@ -2,8 +2,7 @@
 
 
 ```shell
-➜  detect 'executable() && filename(detect) || 
-                  extension(.rs) && contains(map_frame)'
+➜  detect 'name ~= detect || extension ~= rs && contents ~= map_frame'
 ./target/release/detect
 ./target/release/deps/detect-6395eb2c29a3ed5e
 ./target/debug/detect
@@ -14,25 +13,33 @@
 ./src/expr/frame.rs
 ```
 
-## operators
+## boolean operators
 - `a && b`
 - `a || b`
 - `!a`
 - `(a)`
 
-## file path predicates
 
-- `filename($REGEX)`: file name
-- `filepath($REGEX)`: file path
-- `extension($STRING)` exact match on extension
+## string operators
+- `==`
+- `~=` (regex match)
+- `contains`
 
-## metadata predicates
+## numeric operators
+- `>`, `>=`, `<`, `<=`
+- `==`
 
-- `dir()`: is dir
-- `executable()`: is executable
-- `size(n1..n2)`/`size(..n)`/`size(n..)`: file size in range, supports `1kb`, `1mb`, etc
+## file path selectors
+
+- name
+- path
+- extension
+
+## metadata selectors
+
+- size
+- type
 
 ## file contents predicates
 
-- `contains($REGEX)`: file contents
-- `utf8()`: file contents are utf8
+- contents

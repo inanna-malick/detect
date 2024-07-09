@@ -1,18 +1,16 @@
 // #[macro_use]
 use combine::error::ParseError;
-use combine::parser::char::{char, digit, spaces, string};
+use combine::parser::char::{char, digit, space, spaces, string};
 use combine::stream::Stream;
 use combine::*;
-use regex::Regex;
-use std::sync::Arc;
 
 use crate::expr::*;
-use crate::predicate::{Bound, Predicate, ProcessPredicate};
+use crate::predicate::{Bound, NumericalOp, Op, Predicate, RawPredicate, Selector};
 
-fn and_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
->
+// TODO: use nom instead of combine
+
+fn and_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -30,10 +28,8 @@ where
     })
 }
 
-fn not_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
->
+fn not_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -48,6 +44,7 @@ where
     ))
 }
 
+// TODO use this for numerics
 fn kb_mb_bound_<Input>() -> impl Parser<Input, Output = Bound>
 where
     Input: Stream<Token = char>,
@@ -88,10 +85,8 @@ parser! {
     }
 }
 
-fn or_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
->
+fn or_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -110,11 +105,8 @@ where
         .skip(skip_spaces())
 }
 
-// `impl Parser` can be used to create reusable parsers with zero overhead
-fn base_<Input>() -> impl Parser<
-    Input,
-    Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
->
+fn base_<Input>(
+) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
 where
     Input: Stream<Token = char>,
     // Necessary due to rust-lang/rust#24159
@@ -128,93 +120,70 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
+    choice((
+        attempt(raw_predicate()).map(Expr::Predicate),
+        parens,
+    ))
+}
+
+fn raw_predicate_<Input>(
+) -> impl Parser<Input, Output = Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
+where
+    Input: Stream<Token = char>,
+    // Necessary due to rust-lang/rust#24159
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+{
+    // A parser which skips past whitespace.
+    // Since we aren't interested in knowing that our expression parser
+    // could have accepted additional whitespace between the tokens we also silence the error.
+    let whitespace = || skip_many1(space());
+
+    let selector = {
+        choice((
+            attempt(string("name").map(|_| Selector::FileName)),
+            attempt(string("path").map(|_| Selector::FilePath)),
+            attempt(string("extension").map(|_| Selector::Extension)),
+            attempt(string("size").map(|_| Selector::Size)),
+            attempt(string("type").map(|_| Selector::EntityType)),
+            attempt(string("contents").map(|_| Selector::Contents)),
+        ))
+    };
+
+    // TODO: expand with idk, quotes?
     let regex_str = || {
         many1(
-            // TODO: should do this in a principled way that fully covers all allowed regex chars,
-            //       instead I keep adding characters I want to use. shrug emoji.
-            // TODO: another one of these for valid process stuff
-            satisfy(|ch: char| {
-                ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == ' ' || ch == '-'
-            })
-            .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
+            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
+                .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
         )
     };
 
-    let regex = || regex_str().map(|s: String| Regex::new(&s).unwrap());
+    let operator = || {
+        use NumericalOp::*;
+        use Op::*;
+        choice((
+            attempt(string("contains").map(|_| Contains)),
+            attempt(string("~=").map(|_| Matches)),
+            attempt(string("==").map(|_| Equality)),
+            attempt(string("<").map(|_| NumericComparison(Less))),
+            attempt(string(">").map(|_| NumericComparison(Greater))),
+            attempt(string("=<").map(|_| NumericComparison(LessOrEqual))),
+            attempt(string("=>").map(|_| NumericComparison(GreaterOrEqual))),
+        ))
+    };
 
-    let contains_predicate =
-        (string("contains("), regex(), char(')')).map(|(_, s, _)| ContentPredicate::Regex(s));
-    let contents_predicate = choice((
-        attempt(contains_predicate),
-        string("utf8()").map(|_| ContentPredicate::Utf8),
-    ))
-    .map(Arc::new)
-    .map(Predicate::Content)
-    .map(Expr::Predicate);
-
-    let filename_predicate = (string("filename("), regex(), lex_char(')'))
-        .map(|(_, s, _)| NamePredicate::Filename(s))
-        .map(Arc::new)
-        .map(Predicate::Name)
-        .map(Expr::Predicate);
-
-    let filepath_predicate = (string("filepath("), regex(), lex_char(')'))
-        .map(|(_, s, _)| NamePredicate::Path(s))
-        .map(Arc::new)
-        .map(Predicate::Name)
-        .map(Expr::Predicate);
-
-    let extension_predicate = (
-        string("extension("),
-        many1(
-            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.').expected("letter or digit or ."),
-        ),
-        lex_char(')'),
-    )
-        .map(|(_, s, _)| NamePredicate::Extension(s))
-        .map(Arc::new)
-        .map(Predicate::Name)
-        .map(Expr::Predicate);
-
-    let size_predicate = (string("size("), kb_mb_bound(), lex_char(')'))
-        .map(|(_, range, _)| MetadataPredicate::Filesize(range));
-
-    let metadata_predicate = choice((
-        attempt(size_predicate),
-        attempt(string("executable()").map(|_| MetadataPredicate::Executable())),
-        // TODO: add file/symlink predicate branches
-        attempt(string("dir()").map(|_| MetadataPredicate::Dir())),
-    ))
-    .map(Arc::new)
-    .map(Predicate::Metadata)
-    .map(Expr::Predicate);
-
-    let async_predicate = (
-        string("process("),
+    (
+        selector,
+        whitespace(),
+        operator(),
+        whitespace(),
         regex_str(),
-        lex_char(','),
-        regex(),
-        lex_char(')'),
     )
-        .map(|(_, cmd, _, expected, _)| ProcessPredicate::Process {
-            cmd: cmd.to_string(),
-            expected_stdout: expected,
+        .map(|(lhs, _, op, _, rhs)| RawPredicate { lhs, op, rhs })
+        .then(|r| match r.parse() {
+            Ok(x) => value(x).left(),
+            // todo: idk why static str required, follow up later w/ eg format!("{:?}", e)
+            Err(_e) => unexpected_any("token").message("predicate didn't parse").right(),
         })
-        .map(Arc::new)
-        .map(Predicate::Process)
-        .map(Expr::Predicate);
-
-    // I don't think order matters here, inside the choice combinator? idk
-    choice((
-        attempt(contents_predicate),
-        attempt(filename_predicate),
-        attempt(filepath_predicate),
-        attempt(extension_predicate),
-        attempt(metadata_predicate),
-        attempt(async_predicate),
-        parens,
-    ))
-    .skip(skip_spaces())
 }
 
 // base expr: choice between predicates and parens (recursing back to or) WITH OR
@@ -225,7 +194,7 @@ where
 
 // entry point
 parser! {
-    pub fn or[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    pub fn or[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         or_()
@@ -233,7 +202,7 @@ parser! {
 }
 
 parser! {
-    fn and[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    fn and[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         and_()
@@ -241,7 +210,7 @@ parser! {
 }
 
 parser! {
-    fn not[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    fn not[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         not_()
@@ -249,9 +218,17 @@ parser! {
 }
 
 parser! {
-    fn base[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>
+    fn base[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
     where [Input: Stream<Token = char>]
     {
         base_()
+    }
+}
+
+parser! {
+    fn raw_predicate[Input]()(Input) -> Predicate<NamePredicate, MetadataPredicate, ContentPredicate>
+    where [Input: Stream<Token = char>]
+    {
+        raw_predicate_()
     }
 }

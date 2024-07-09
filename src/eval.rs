@@ -1,26 +1,21 @@
 use crate::expr::Expr;
 use crate::expr::{ContentPredicate, MetadataPredicate, NamePredicate};
-use crate::predicate::{Predicate, ProcessPredicate};
+use crate::predicate::Predicate;
 use crate::util::Done;
-use futures::FutureExt;
 use std::fs::Metadata;
-use std::os::unix::prelude::MetadataExt;
 use std::path::Path;
 use tokio::fs::{self};
 use tokio::io;
-
-// file size at which program-based matchers are run before file content matchers
-const LARGE_FILE_SIZE: u64 = 1024 * 1024; // totally arbitrary
 
 /// multipass evaluation with short circuiting, runs, in order:
 /// - file name matchers
 /// - metadata matchers
 /// - file content matchers
 pub async fn eval(
-    e: &Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate, ProcessPredicate>>,
+    e: &Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
     path: &Path,
 ) -> std::io::Result<bool> {
-    let e: Expr<Predicate<Done, MetadataPredicate, ContentPredicate, ProcessPredicate>> =
+    let e: Expr<Predicate<Done, MetadataPredicate, ContentPredicate>> =
         e.reduce_predicate_and_short_circuit(|p| p.eval_name_predicate(path));
 
     if let Expr::Literal(b) = e {
@@ -30,28 +25,14 @@ pub async fn eval(
     // read metadata
     let metadata = fs::metadata(path).await?;
 
-    let e: Expr<Predicate<Done, Done, ContentPredicate, ProcessPredicate>> =
+    let e: Expr<Predicate<Done, Done, ContentPredicate>> =
         e.reduce_predicate_and_short_circuit(|p| p.eval_metadata_predicate(&metadata));
 
     if let Expr::Literal(b) = e {
         return Ok(b);
     }
 
-    // the ordering of the file contents and process predicates is determined by file
-    // size - for large files it makes more sense to run processes
-    // (that may just peek at the first few bytes) first
-    let e: Expr<Predicate<Done, Done, Done, Done>> = if metadata.size() > LARGE_FILE_SIZE {
-        // run program-based matchers first
-        let e: Expr<Predicate<Done, Done, ContentPredicate, Done>> =
-            run_process_predicate(e, path).await?;
-
-        run_contents_predicate(e, metadata, path).await?
-    } else {
-        let e: Expr<Predicate<Done, Done, Done, ProcessPredicate>> =
-            run_contents_predicate(e, metadata, path).await?;
-
-        run_process_predicate(e, path).await?
-    };
+    let e: Expr<Predicate<Done, Done, Done>> = run_contents_predicate(e, metadata, path).await?;
 
     if let Expr::Literal(b) = e {
         Ok(b)
@@ -62,27 +43,11 @@ pub async fn eval(
     }
 }
 
-async fn run_process_predicate<A, B, C>(
-    e: Expr<Predicate<A, B, C, ProcessPredicate>>,
-    path: &Path,
-) -> io::Result<Expr<Predicate<A, B, C, Done>>>
-where
-    A: Sync + Send + 'static,
-    B: Sync + Send + 'static,
-    C: Sync + Send + 'static,
-{
-    let e = e
-        .reduce_predicate_and_short_circuit_async(|p| p.eval_async_predicate(path).boxed())
-        .await?;
-
-    Ok(e)
-}
-
-async fn run_contents_predicate<A, B, C>(
-    e: Expr<Predicate<A, B, ContentPredicate, C>>,
+async fn run_contents_predicate<A, B>(
+    e: Expr<Predicate<A, B, ContentPredicate>>,
     metadata: Metadata,
     path: &Path,
-) -> io::Result<Expr<Predicate<A, B, Done, C>>> {
+) -> io::Result<Expr<Predicate<A, B, Done>>> {
     // only try to read contents if it's a file according to entity metadata
     let utf8_contents = if metadata.is_file() {
         // read contents
