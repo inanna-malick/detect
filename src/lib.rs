@@ -4,10 +4,11 @@ mod parser;
 pub mod predicate;
 mod util;
 
-use std::path::Path;
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use combine::stream::position::{self, SourcePosition};
 use expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
+use ignore::{WalkBuilder, WalkParallel, WalkState};
 use predicate::Predicate;
 
 use crate::eval::eval;
@@ -24,24 +25,27 @@ pub fn parse(
     Ok(e)
 }
 
-pub async fn parse_and_run<F: FnMut(&Path)>(
-    root: String,
-    s: String,
+pub async fn parse_and_run<F: FnMut(&Path)> (
+    root: PathBuf,
+    respect_gitignore: bool,
+    expr: String,
     mut on_match: F,
 ) -> Result<(), anyhow::Error> {
-    use walkdir::WalkDir;
+    match parse(&expr) {
+        Ok(expr) => {
+            let walker = WalkBuilder::new(root).git_ignore(respect_gitignore).build();
 
-    // NOTE: top level should be and, I think - rain says that binds most tightly
-    match parse(&s) {
-        Ok(e) => {
-            // TODO: debug loggin switch? tracing? idk hell yes
+
+            // walker.run(|| Box::new(on_match));
+
+            // TODO: debug loggin switch? tracing? something of that nature, yes
             // println!("expr: {:?}", e);
-            let walker = WalkDir::new(root).into_iter();
+            let walker = walker.into_iter();
             for entry in walker {
                 let entry = entry?;
                 let path = entry.path();
 
-                let is_match = eval(&e, path).await?;
+                let is_match = eval(&expr, path).await?;
 
                 if is_match {
                     on_match(path);
