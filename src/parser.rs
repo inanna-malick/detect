@@ -135,16 +135,20 @@ where
     // could have accepted additional whitespace between the tokens we also silence the error.
     let whitespace = || skip_many1(space());
 
-    let selector = {
+    let s = |x| attempt(string(x));
+
+    let selector = (
+        string("@"),
         choice((
-            attempt(string("name").map(|_| Selector::FileName)),
-            attempt(string("path").map(|_| Selector::FilePath)),
-            attempt(string("extension").map(|_| Selector::Extension)),
-            attempt(string("size").map(|_| Selector::Size)),
-            attempt(string("type").map(|_| Selector::EntityType)),
-            attempt(string("contents").map(|_| Selector::Contents)),
-        ))
-    };
+            choice((s("name"), s("filename"))).map(|_| Selector::FileName),
+            choice((s("path"), s("filepath"))).map(|_| Selector::FilePath),
+            choice((s("extension"), s("ext"))).map(|_| Selector::Extension),
+            choice((s("size"), s("filesize"))).map(|_| Selector::Size),
+            choice((s("type"), s("filetype"))).map(|_| Selector::EntityType),
+            choice((s("contents"), s("file"))).map(|_| Selector::Contents),
+        )),
+    )
+        .map(|(_, x)| x);
 
     // TODO: expand with idk, quotes?
     let regex_str = || {

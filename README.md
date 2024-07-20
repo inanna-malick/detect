@@ -29,17 +29,21 @@
 - `>`, `>=`, `<`, `<=`
 - `==`
 
+# Selectors
+
+All selectors start with '@', eg '@name'
+
 ## file path selectors
 
-- name
-- path
-- extension
+- name (or filename)
+- path (or filepath)
+- extension (or ext)
 
 ## metadata selectors
 
-- size
-- type
+- size (or filesize)
+- type (or filetype)
 
 ## file contents predicates
 
-- contents
+- contents (or file)
