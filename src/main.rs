@@ -25,28 +25,28 @@ use detect::parse_and_run;
 /// - type
 /// ## file contents predicates
 /// - contents
- #[derive(Parser, Debug)]
- #[command(
-     name = "detect",
-     author,
-     version,
-     about,
-     long_about,
-     verbatim_doc_comment
- )]
- struct Args {
-     /// filtering expr
-     #[clap(index = 1)]
-     expr: String,
-    #[arg(short = 'i', long)]
-     visit_gitignored: bool,
- }
+#[derive(Parser, Debug)]
+#[command(
+    name = "detect",
+    author,
+    version,
+    about,
+    long_about,
+    verbatim_doc_comment
+)]
+struct Args {
+    /// filtering expr
+    #[clap(index = 1)]
+    expr: String,
+    #[arg(short = 'i')]
+    visit_gitignored: bool,
+}
 
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
-    parse_and_run(current_dir()?, !args.visit_gitignored, args.expr, |s| {
+    parse_and_run(&current_dir()?, !args.visit_gitignored, args.expr, |s| {
         println!("{}", s.to_string_lossy())
     })
     .await

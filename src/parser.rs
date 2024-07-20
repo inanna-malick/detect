@@ -120,10 +120,7 @@ where
 
     let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
 
-    choice((
-        attempt(raw_predicate()).map(Expr::Predicate),
-        parens,
-    ))
+    choice((attempt(raw_predicate()).map(Expr::Predicate), parens))
 }
 
 fn raw_predicate_<Input>(
@@ -182,7 +179,9 @@ where
         .then(|r| match r.parse() {
             Ok(x) => value(x).left(),
             // todo: idk why static str required, follow up later w/ eg format!("{:?}", e)
-            Err(_e) => unexpected_any("token").message("predicate didn't parse").right(),
+            Err(_e) => unexpected_any("token")
+                .message("predicate didn't parse")
+                .right(),
         })
 }
 

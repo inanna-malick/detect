@@ -48,12 +48,11 @@ impl<'a> Case<'a> {
 
     async fn run(&self) {
         let tmp_dir = self.build();
-        let tmp_path = tmp_dir.path().to_str().unwrap();
         let mut out = Vec::new();
-        set_current_dir(tmp_path).unwrap();
-        detect::parse_and_run(tmp_path.to_owned(), self.expr.to_owned(), |p| {
+        set_current_dir(tmp_dir.path()).unwrap();
+        detect::parse_and_run(tmp_dir.path(), false, self.expr.to_owned(), |p| {
             let s = p
-                .strip_prefix(&format!("{tmp_path}/"))
+                .strip_prefix(&format!("{}/", tmp_dir.path().to_str().unwrap()))
                 .unwrap()
                 .as_os_str()
                 .to_string_lossy()

@@ -4,11 +4,11 @@ mod parser;
 pub mod predicate;
 mod util;
 
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::path::Path;
 
 use combine::stream::position::{self, SourcePosition};
 use expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
-use ignore::{WalkBuilder, WalkParallel, WalkState};
+use ignore::WalkBuilder;
 use predicate::Predicate;
 
 use crate::eval::eval;
@@ -25,8 +25,8 @@ pub fn parse(
     Ok(e)
 }
 
-pub async fn parse_and_run<F: FnMut(&Path)> (
-    root: PathBuf,
+pub async fn parse_and_run<F: FnMut(&Path)>(
+    root: &Path,
     respect_gitignore: bool,
     expr: String,
     mut on_match: F,
@@ -35,13 +35,9 @@ pub async fn parse_and_run<F: FnMut(&Path)> (
         Ok(expr) => {
             let walker = WalkBuilder::new(root).git_ignore(respect_gitignore).build();
 
-
-            // walker.run(|| Box::new(on_match));
-
             // TODO: debug loggin switch? tracing? something of that nature, yes
             // println!("expr: {:?}", e);
-            let walker = walker.into_iter();
-            for entry in walker {
+            for entry in walker.into_iter() {
                 let entry = entry?;
                 let path = entry.path();
 
