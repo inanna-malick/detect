@@ -1,4 +1,7 @@
 use nom::character::complete::*;
+use nom::error::{Error, ParseError};
+use nom::multi::separated_list1;
+use nom::sequence::delimited;
 use nom::{branch::*, bytes::complete::tag};
 use nom::{IResult, Parser};
 use nom_locate::LocatedSpan;
@@ -13,16 +16,16 @@ use crate::predicate::{NumericalOp, Op, Predicate, RawPredicate, Selector};
 type Span<'a> = LocatedSpan<&'a str, RecursiveInfo>;
 
 
-pub fn expr(s: Span) -> IResult<Span, Expr<RawPredicate>> {
-    alt((parens, or, and, raw_predicate))(s)
+pub fn expr(s: Span) -> IResult<Span, Expr<String>> {
+    alt((parens, or, and, raw_predicate2))(s)
 }
 
 #[recursive_parser]
-pub fn and(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+pub fn and(s: Span) -> IResult<Span, Expr<String>> {
     let (s, x) = expr(s)?;
-    let (s, _) = space1(s)?;
+    let (s, _) = space0(s)?;
     let (s, _) = tag("&&")(s)?;
-    let (s, _) = space1(s)?;
+    let (s, _) = space0(s)?;
     let (s, y) = expr(s)?;
 
     let ret = Expr::and(x, y);
@@ -31,7 +34,7 @@ pub fn and(s: Span) -> IResult<Span, Expr<RawPredicate>> {
 }
 
 #[recursive_parser]
-pub fn parens(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+pub fn parens(s: Span) -> IResult<Span, Expr<String>> {
     let (s, _) = char('(')(s)?;
     let (s, _) = space0(s)?;
     let (s, e) = expr(s)?;
@@ -45,7 +48,7 @@ pub fn parens(s: Span) -> IResult<Span, Expr<RawPredicate>> {
 
 // Apply recursive_parser by custom attribute
 #[recursive_parser]
-pub fn or(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+pub fn or(s: Span) -> IResult<Span, Expr<String>> {
     let (s, x) = expr(s)?;
     let (s, _) = space1(s)?;
     let (s, _) = tag("||")(s)?;
@@ -55,6 +58,13 @@ pub fn or(s: Span) -> IResult<Span, Expr<RawPredicate>> {
     let ret = Expr::or(x, y);
 
     Ok((s, ret))
+}
+
+
+
+pub fn raw_predicate2(s: Span) -> IResult<Span, Expr<String>> {
+    let (s, ret) = alpha1(s)?;
+    Ok((s, Expr::Predicate(ret.to_string())))
 }
 
 pub fn raw_predicate(s: Span) -> IResult<Span, Expr<RawPredicate>> {
@@ -106,11 +116,26 @@ pub fn operator(s: Span) -> IResult<Span, Op> {
     Ok((s, op))
 }
 
+fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+  where
+  F: Fn(&'a str) -> IResult<&'a str, O, E>,
+{
+  delimited(
+    multispace0,
+    inner,
+    multispace0
+  )
+}
+
 
 #[test]
 fn test() {
-    let ret = expr(LocatedSpan::new_extra("@name ~= test || @path == foo && size > 999", RecursiveInfo::new()));
-    println!("{:?}", ret.unwrap().1);
-    let ret = expr(LocatedSpan::new_extra("(@name ~= test)", RecursiveInfo::new()));
+    // let mut or = separated_list1(ws(tag::<&str, &str, Error<_>>("||")), alpha0);
+
+    // let ret = x("a || b || c && d || e");
+    // println!("{:?}", ret.unwrap());
+
+
+    let ret = expr(LocatedSpan::new_extra("test || foo && (size || x)", RecursiveInfo::new()));
     println!("{:?}", ret.unwrap().1);
 }
