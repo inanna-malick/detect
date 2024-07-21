@@ -21,7 +21,7 @@ pub fn expr(s: Span) -> IResult<Span, Expr<RawPredicate>> {
 }
 
 fn _expr(s: Span) -> IResult<Span, Expr<RawPredicate>> {
-    alt((parens, or, and, raw_predicate))(s)
+    alt((parens, or, and, cut(raw_predicate)))(s)
 }
 
 #[recursive_parser]
