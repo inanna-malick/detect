@@ -6,23 +6,27 @@ mod util;
 
 use std::path::Path;
 
-use combine::stream::position::{self, SourcePosition};
 use expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
 use ignore::WalkBuilder;
+use nom_locate::LocatedSpan;
+use nom_recursive::RecursiveInfo;
+use parser::{convert_error, expr};
 use predicate::Predicate;
 
 use crate::eval::eval;
 
 pub fn parse(
-    s: &str,
-) -> Result<
-    Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>,
-    combine::easy::Errors<char, &str, SourcePosition>,
-> {
-    let (e, _source_position) =
-        combine::EasyParser::easy_parse(&mut parser::or(), position::Stream::new(s))?;
+    data: &str,
+) -> Result<Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>, String> {
+    let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
 
-    Ok(e)
+    match expr(data) {
+        Ok(x) => Ok(x.1),
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(convert_error(data, e)),
+        Err(nom::Err::Incomplete(_)) => {
+            unimplemented!("should not hit incomplete case")
+        }
+    }
 }
 
 pub async fn parse_and_run<F: FnMut(&Path)>(
