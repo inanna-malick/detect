@@ -1,4 +1,5 @@
 use nom::character::complete::*;
+use nom::combinator::{all_consuming, cut};
 use nom::error::{Error, ParseError};
 use nom::multi::separated_list1;
 use nom::sequence::delimited;
@@ -15,18 +16,21 @@ use crate::predicate::{NumericalOp, Op, Predicate, RawPredicate, Selector};
 // nom_locate::LocatedSpan<T, RecursiveInfo> implements it.
 type Span<'a> = LocatedSpan<&'a str, RecursiveInfo>;
 
+pub fn expr(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+    all_consuming(_expr)(s)
+}
 
-pub fn expr(s: Span) -> IResult<Span, Expr<String>> {
-    alt((parens, or, and, raw_predicate2))(s)
+fn _expr(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+    alt((parens, or, and, raw_predicate))(s)
 }
 
 #[recursive_parser]
-pub fn and(s: Span) -> IResult<Span, Expr<String>> {
-    let (s, x) = expr(s)?;
+fn and(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+    let (s, x) = _expr(s)?;
     let (s, _) = space0(s)?;
     let (s, _) = tag("&&")(s)?;
     let (s, _) = space0(s)?;
-    let (s, y) = expr(s)?;
+    let (s, y) = _expr(s)?;
 
     let ret = Expr::and(x, y);
 
@@ -34,10 +38,10 @@ pub fn and(s: Span) -> IResult<Span, Expr<String>> {
 }
 
 #[recursive_parser]
-pub fn parens(s: Span) -> IResult<Span, Expr<String>> {
+fn parens(s: Span) -> IResult<Span, Expr<RawPredicate>> {
     let (s, _) = char('(')(s)?;
     let (s, _) = space0(s)?;
-    let (s, e) = expr(s)?;
+    let (s, e) = _expr(s)?;
     let (s, _) = space0(s)?;
     let (s, _) = char(')')(s)?;
 
@@ -48,12 +52,12 @@ pub fn parens(s: Span) -> IResult<Span, Expr<String>> {
 
 // Apply recursive_parser by custom attribute
 #[recursive_parser]
-pub fn or(s: Span) -> IResult<Span, Expr<String>> {
-    let (s, x) = expr(s)?;
+fn or(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+    let (s, x) = _expr(s)?;
     let (s, _) = space1(s)?;
     let (s, _) = tag("||")(s)?;
     let (s, _) = space1(s)?;
-    let (s, y) = expr(s)?;
+    let (s, y) = _expr(s)?;
 
     let ret = Expr::or(x, y);
 
@@ -62,12 +66,12 @@ pub fn or(s: Span) -> IResult<Span, Expr<String>> {
 
 
 
-pub fn raw_predicate2(s: Span) -> IResult<Span, Expr<String>> {
+fn raw_predicate2(s: Span) -> IResult<Span, Expr<String>> {
     let (s, ret) = alpha1(s)?;
     Ok((s, Expr::Predicate(ret.to_string())))
 }
 
-pub fn raw_predicate(s: Span) -> IResult<Span, Expr<RawPredicate>> {
+fn raw_predicate(s: Span) -> IResult<Span, Expr<RawPredicate>> {
     let (s, lhs) = selector(s)?;
     let (s, _) = space1(s)?;
     let (s, op) = operator(s)?;
@@ -78,7 +82,7 @@ pub fn raw_predicate(s: Span) -> IResult<Span, Expr<RawPredicate>> {
 }
 // todo: used escaped to get escaped string values
 
-pub fn selector(s: Span) -> IResult<Span, Selector> {
+fn selector(s: Span) -> IResult<Span, Selector> {
     let (s, _) = char('@')(s)?;
     let mut selector = alt((
         alt((tag("name"), tag("filename"))).map(|_| Selector::FileName),
@@ -95,7 +99,7 @@ pub fn selector(s: Span) -> IResult<Span, Selector> {
 }
 
 
-pub fn operator(s: Span) -> IResult<Span, Op> {
+fn operator(s: Span) -> IResult<Span, Op> {
     let mut operator = {
         use NumericalOp::*;
         use Op::*;
@@ -136,6 +140,6 @@ fn test() {
     // println!("{:?}", ret.unwrap());
 
 
-    let ret = expr(LocatedSpan::new_extra("test || foo && (size || x)", RecursiveInfo::new()));
+    let ret = expr(LocatedSpan::new_extra("@name ~= test || @name == test && (@name == test || @name == test)", RecursiveInfo::new()));
     println!("{:?}", ret.unwrap().1);
 }
