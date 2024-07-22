@@ -14,21 +14,20 @@ fn test_parser() {
 
     let examples: Vec<(&'static str, _)> = vec![
         (
-            "name == foo && path ~= bar",
-            // note: order is reversed by parser? eh that's fine (TODO: or is it?)
-            Expr::and(filepath("bar"), filename("foo".to_string())),
+            "@name == foo && @path ~= bar",
+            Expr::and( filename("foo".to_string()), filepath("bar")),
         ),
-        // (
-        //     // test confirming that '&&' binds more tightly than ||
-        //     "filename(foo) || filepath(bar) && filepath(baz)",
-        //     Expr::or(Expr::and(filepath("baz"), filepath("bar")), filename("foo")),
-        // ),
+        (
+            // test confirming that '&&' binds more tightly than ||, a || (b && c)
+            "@filename == a || @filepath ~= b && @filepath ~= c",
+            Expr::or(filename("a".to_string()), Expr::and(filepath("b"), filepath("c"))),
+        ),
+        // test fails, and is outer binding - c && (b || a)
         // (
         //     // test confirming that '&&' binds more tightly than || in reverse order
-        //     "filepath(bar) && filepath(baz) || filename(foo)",
-        //     Expr::or(filename("foo"), Expr::and(filepath("baz"), filepath("bar"))),
+        //     "@filepath ~= c && @filepath ~= b || @filename == a",
+        //     Expr::or( Expr::and(filepath("c"), filepath("b")), filename("a".to_string()),),
         // ),
-        // TODO: test for ! operator binding I guess?
     ];
 
     for (input, expected) in examples.into_iter() {

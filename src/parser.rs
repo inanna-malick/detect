@@ -1,237 +1,275 @@
-// #[macro_use]
-use combine::error::ParseError;
-use combine::parser::char::{char, digit, space, spaces, string};
-use combine::stream::Stream;
-use combine::*;
+use nom::character::complete::*;
+use nom::combinator::{all_consuming, cut, map_res};
+use nom::error::{VerboseError, VerboseErrorKind};
+use nom::Parser;
+use nom::{branch::*, bytes::complete::tag};
+use nom_locate::LocatedSpan;
+use nom_recursive::{recursive_parser, RecursiveInfo};
 
-use crate::expr::*;
-use crate::predicate::{Bound, NumericalOp, Op, Predicate, RawPredicate, Selector};
+use crate::expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
+use crate::predicate::{NumericalOp, Op, Predicate, RawPredicate, Selector};
 
-// TODO: use nom instead of combine
+// Input type must implement trait HasRecursiveInfo
+// nom_locate::LocatedSpan<T, RecursiveInfo> implements it.
+type Span<'a> = LocatedSpan<&'a str, RecursiveInfo>;
 
-fn and_<Input>(
-) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    let skip_spaces = || spaces().silent();
-    sep_by1(not().skip(skip_spaces()), string("&&").skip(skip_spaces())).map(|mut xs: Vec<_>| {
-        if xs.len() > 1 {
-            let head = xs.pop().unwrap();
-            xs.into_iter().fold(head, Expr::and)
-        } else {
-            // always at least one element if we're here
-            xs.pop().unwrap()
-        }
-    })
+// type IResult<A, B> = IResult<A, B, VerboseError<A>>;
+pub type IResult<I, O, E = VerboseError<I>> = Result<(I, O), nom::Err<E>>;
+
+pub fn expr(
+    s: Span,
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+    all_consuming(_expr)(s)
 }
 
-fn not_<Input>(
-) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    let skip_spaces = || spaces().silent();
-    let lex_char = |c| char(c).skip(skip_spaces());
-
-    choice((
-        (lex_char('!'), base()).map(|(_, x)| Expr::Not(Box::new(x))),
-        base(),
-    ))
+fn _expr(
+    s: Span,
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+    let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
+    alt((parens, and, or, not, cut(predicate)))(s)
 }
 
-// TODO use this for numerics
-fn kb_mb_bound_<Input>() -> impl Parser<Input, Output = Bound>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    let num = || {
-        many1(digit()).map(|s: String| {
-            // `bs` only contains digits which are ascii and thus UTF-8
-            s.parse::<u64>().unwrap()
-        })
+#[recursive_parser]
+fn not(
+    s: Span,
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+    let (s, _) = tag("!")(s)?;
+
+    let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
+    let (s, e) = alt((parens, cut(predicate)))(s)?;
+
+    let ret = Expr::not(e);
+
+    Ok((s, ret))
+}
+
+#[recursive_parser]
+fn and(
+    s: Span,
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+    let (s, x) = _expr(s)?;
+    let (s, _) = space0(s)?;
+    let (s, _) = tag("&&")(s)?;
+    let (s, _) = space0(s)?;
+    let (s, y) = _expr(s)?;
+
+    let ret = Expr::and(x, y);
+
+    Ok((s, ret))
+}
+
+#[recursive_parser]
+fn parens(
+    s: Span,
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+    let (s, _) = char('(')(s)?;
+    let (s, _) = space0(s)?;
+    let (s, e) = _expr(s)?;
+    let (s, _) = space0(s)?;
+    let (s, _) = char(')')(s)?;
+
+    Ok((s, e))
+}
+
+// Apply recursive_parser by custom attribute
+#[recursive_parser]
+fn or(
+    s: Span,
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+    let (s, x) = _expr(s)?;
+    let (s, _) = space1(s)?;
+    let (s, _) = tag("||")(s)?;
+    let (s, _) = space1(s)?;
+    let (s, y) = _expr(s)?;
+
+    let ret = Expr::or(x, y);
+
+    Ok((s, ret))
+}
+
+
+fn raw_predicate(s: Span) -> IResult<Span, RawPredicate> {
+    let (s, lhs) = selector(s)?;
+    let (s, _) = space1(s)?;
+    let (s, op) = operator(s)?;
+    let (s, _) = space1(s)?;
+    let (s, rhs) = alphanumeric1(s)?;
+    let ret = RawPredicate {
+        lhs,
+        rhs: rhs.to_string(),
+        op,
     };
+    Ok((s, ret))
+}
+// todo: used escaped to get escaped string values
 
-    let kb_mb_num = || {
-        choice((
-            attempt((num(), char('k'), char('b'))).map(|(n, _, _)| n * 1024),
-            attempt((num(), char('m'), char('b'))).map(|(n, _, _)| n * 1024 * 1024),
-            attempt(num()),
-        ))
-    };
+fn selector(s: Span) -> IResult<Span, Selector> {
+    let (s, _) = char('@')(s)?;
+    let mut selector = alt((
+        alt((tag("name"), tag("filename"))).map(|_| Selector::FileName),
+        alt((tag("path"), tag("filepath"))).map(|_| Selector::FilePath),
+        alt((tag("extension"), tag("ext"))).map(|_| Selector::Extension),
+        alt((tag("size"), tag("filesize"))).map(|_| Selector::Size),
+        alt((tag("type"), tag("filetype"))).map(|_| Selector::EntityType),
+        alt((tag("contents"), tag("file"))).map(|_| Selector::Contents),
+    ));
 
-    let full_range =
-        (kb_mb_num(), string(".."), kb_mb_num()).map(|(x1, _, x2)| Bound::Full(x1..x2));
-    let left_range = (kb_mb_num(), string("..")).map(|(x1, _)| Bound::Left(x1..));
-    let right_range = (string(".."), kb_mb_num()).map(|(_, x2)| Bound::Right(..x2));
-    choice((
-        attempt(full_range),  // x1..x2
-        attempt(left_range),  // x1..
-        attempt(right_range), // ..x2
-    ))
+    let (s, op) = selector(s)?;
+
+    Ok((s, op))
 }
 
-parser! {
-    fn kb_mb_bound[Input]()(Input) -> Bound
-    where [Input: Stream<Token = char>]
-    {
-        kb_mb_bound_()
-    }
-}
-
-fn or_<Input>(
-) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    let skip_spaces = || spaces().silent();
-    sep_by1(and().skip(skip_spaces()), string("||").skip(skip_spaces()))
-        .map(|mut xs: Vec<_>| {
-            if xs.len() > 1 {
-                let head = xs.pop().unwrap();
-                xs.into_iter().fold(head, Expr::or)
-            } else {
-                xs.pop().unwrap()
-            }
-        })
-        .skip(skip_spaces())
-}
-
-fn base_<Input>(
-) -> impl Parser<Input, Output = Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    // A parser which skips past whitespace.
-    // Since we aren't interested in knowing that our expression parser
-    // could have accepted additional whitespace between the tokens we also silence the error.
-    let skip_spaces = || spaces().silent();
-    let lex_char = |c| char(c).skip(skip_spaces());
-
-    let parens = (lex_char('('), or(), lex_char(')')).map(|(_, e, _)| e);
-
-    choice((attempt(raw_predicate()).map(Expr::Predicate), parens))
-}
-
-fn raw_predicate_<Input>(
-) -> impl Parser<Input, Output = Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
-where
-    Input: Stream<Token = char>,
-    // Necessary due to rust-lang/rust#24159
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    // A parser which skips past whitespace.
-    // Since we aren't interested in knowing that our expression parser
-    // could have accepted additional whitespace between the tokens we also silence the error.
-    let whitespace = || skip_many1(space());
-
-    let s = |x| attempt(string(x));
-
-    let selector = (
-        string("@"),
-        choice((
-            choice((s("name"), s("filename"))).map(|_| Selector::FileName),
-            choice((s("path"), s("filepath"))).map(|_| Selector::FilePath),
-            choice((s("extension"), s("ext"))).map(|_| Selector::Extension),
-            choice((s("size"), s("filesize"))).map(|_| Selector::Size),
-            choice((s("type"), s("filetype"))).map(|_| Selector::EntityType),
-            choice((s("contents"), s("file"))).map(|_| Selector::Contents),
-        )),
-    )
-        .map(|(_, x)| x);
-
-    // TODO: expand with idk, quotes?
-    let regex_str = || {
-        many1(
-            satisfy(|ch: char| ch.is_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
-                .expected("letter or digit or . _ or ' ' or -"), // TODO: clean this up idk
-        )
-    };
-
-    let operator = || {
+fn operator(s: Span) -> IResult<Span, Op> {
+    let mut operator = {
         use NumericalOp::*;
         use Op::*;
-        choice((
-            attempt(string("contains").map(|_| Contains)),
-            attempt(string("~=").map(|_| Matches)),
-            attempt(string("==").map(|_| Equality)),
-            attempt(string("<").map(|_| NumericComparison(Less))),
-            attempt(string(">").map(|_| NumericComparison(Greater))),
-            attempt(string("=<").map(|_| NumericComparison(LessOrEqual))),
-            attempt(string("=>").map(|_| NumericComparison(GreaterOrEqual))),
+        alt((
+            tag("contains").map(|_| Contains),
+            tag("~=").map(|_| Matches),
+            tag("==").map(|_| Equality),
+            tag("<").map(|_| NumericComparison(Less)),
+            tag(">").map(|_| NumericComparison(Greater)),
+            tag("=<").map(|_| NumericComparison(LessOrEqual)),
+            tag("=>").map(|_| NumericComparison(GreaterOrEqual)),
         ))
     };
 
-    (
-        selector,
-        whitespace(),
-        operator(),
-        whitespace(),
-        regex_str(),
-    )
-        .map(|(lhs, _, op, _, rhs)| RawPredicate { lhs, op, rhs })
-        .then(|r| match r.parse() {
-            Ok(x) => value(x).left(),
-            // todo: idk why static str required, follow up later w/ eg format!("{:?}", e)
-            Err(_e) => unexpected_any("token")
-                .message("predicate didn't parse")
-                .right(),
-        })
+    let (s, op) = operator(s)?;
+
+    Ok((s, op))
 }
 
-// base expr: choice between predicates and parens (recursing back to or) WITH OR
-// and expr: not a choice - sep_by_1 w/ base expr
-// or expr: not a choice - sep_by_1 w/ and expr
+#[test]
+fn test() {
+    let data = "@name ~= test || @size == 5 && (@name == test || @name == test)";
 
-// mutually recursive ordering defines precedence
+    let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
 
-// entry point
-parser! {
-    pub fn or[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
-    where [Input: Stream<Token = char>]
-    {
-        or_()
+    let ret = expr(data);
+
+    match ret {
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+            println!(
+                "verbose errors - `root::<VerboseError>(data)`:\n{}",
+                convert_error(data, e)
+            );
+        }
+        Ok(x) => {
+            println!("{:?}", x.1);
+        }
+        _ => {}
     }
 }
 
-parser! {
-    fn and[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
-    where [Input: Stream<Token = char>]
-    {
-        and_()
-    }
-}
+// copy of nom's convert_error specialized to nom_locate span type, fixes type error on Deref
+pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::string::String {
+    use nom::lib::std::fmt::Write;
+    use nom::Offset;
 
-parser! {
-    fn not[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
-    where [Input: Stream<Token = char>]
-    {
-        not_()
-    }
-}
+    let mut result = nom::lib::std::string::String::new();
 
-parser! {
-    fn base[Input]()(Input) -> Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>
-    where [Input: Stream<Token = char>]
-    {
-        base_()
-    }
-}
+    for (i, (substring, kind)) in e.errors.iter().enumerate() {
+        let offset = input.offset(substring);
 
-parser! {
-    fn raw_predicate[Input]()(Input) -> Predicate<NamePredicate, MetadataPredicate, ContentPredicate>
-    where [Input: Stream<Token = char>]
-    {
-        raw_predicate_()
+        if input.is_empty() {
+            match kind {
+                VerboseErrorKind::Char(c) => {
+                    write!(&mut result, "{}: expected '{}', got empty input\n\n", i, c)
+                }
+                VerboseErrorKind::Context(s) => {
+                    write!(&mut result, "{}: in {}, got empty input\n\n", i, s)
+                }
+                VerboseErrorKind::Nom(e) => {
+                    write!(&mut result, "{}: in {:?}, got empty input\n\n", i, e)
+                }
+            }
+        } else {
+            let prefix = &input.as_bytes()[..offset];
+
+            // Count the number of newlines in the first `offset` bytes of input
+            let line_number = prefix.iter().filter(|&&b| b == b'\n').count() + 1;
+
+            // Find the line that includes the subslice:
+            // Find the *last* newline before the substring starts
+            let line_begin = prefix
+                .iter()
+                .rev()
+                .position(|&b| b == b'\n')
+                .map(|pos| offset - pos)
+                .unwrap_or(0);
+
+            // Find the full line after that newline
+            let line = input[line_begin..]
+                .lines()
+                .next()
+                .unwrap_or(&input[line_begin..])
+                .trim_end();
+
+            // The (1-indexed) column number is the offset of our substring into that line
+            let column_number = line.offset(substring) + 1;
+
+            match kind {
+                VerboseErrorKind::Char(c) => {
+                    if let Some(actual) = substring.chars().next() {
+                        write!(
+                            &mut result,
+                            "{i}: at line {line_number}:\n\
+               {line}\n\
+               {caret:>column$}\n\
+               expected '{expected}', found {actual}\n\n",
+                            i = i,
+                            line_number = line_number,
+                            line = line,
+                            caret = '^',
+                            column = column_number,
+                            expected = c,
+                            actual = actual,
+                        )
+                    } else {
+                        write!(
+                            &mut result,
+                            "{i}: at line {line_number}:\n\
+               {line}\n\
+               {caret:>column$}\n\
+               expected '{expected}', got end of input\n\n",
+                            i = i,
+                            line_number = line_number,
+                            line = line,
+                            caret = '^',
+                            column = column_number,
+                            expected = c,
+                        )
+                    }
+                }
+                VerboseErrorKind::Context(s) => write!(
+                    &mut result,
+                    "{i}: at line {line_number}, in {context}:\n\
+             {line}\n\
+             {caret:>column$}\n\n",
+                    i = i,
+                    line_number = line_number,
+                    context = s,
+                    line = line,
+                    caret = '^',
+                    column = column_number,
+                ),
+                VerboseErrorKind::Nom(e) => write!(
+                    &mut result,
+                    "{i}: at line {line_number}, in {nom_err:?}:\n\
+             {line}\n\
+             {caret:>column$}\n\n",
+                    i = i,
+                    line_number = line_number,
+                    nom_err = e,
+                    line = line,
+                    caret = '^',
+                    column = column_number,
+                ),
+            }
+        }
+        // Because `write!` to a `String` is infallible, this `unwrap` is fine.
+        .unwrap();
     }
+
+    result
 }

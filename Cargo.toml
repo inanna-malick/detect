@@ -15,7 +15,6 @@ viz = ["dep:recursion-visualize"]
 [dependencies]
 anyhow = "1"
 clap = {version = "4.4", features = ["derive"]}
-combine = "4.6.6"
 futures = "0.3.23"
 nom = "7.1"
 nom_locate = "4"
