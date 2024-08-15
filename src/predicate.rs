@@ -62,7 +62,6 @@ pub enum Selector {
 pub enum StringMatcher {
     Regex(Regex),
     Equals(String),
-    Contains(String),
 }
 
 impl PartialEq for StringMatcher {
@@ -70,7 +69,6 @@ impl PartialEq for StringMatcher {
         match (self, other) {
             (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
             (Self::Equals(l0), Self::Equals(r0)) => l0 == r0,
-            (Self::Contains(l0), Self::Contains(r0)) => l0 == r0,
             _ => false,
         }
     }
@@ -83,7 +81,6 @@ impl StringMatcher {
         match self {
             StringMatcher::Regex(r) => r.is_match(s),
             StringMatcher::Equals(cmp) => cmp == s,
-            StringMatcher::Contains(c) => s.contains(c),
         }
     }
 }
@@ -106,7 +103,6 @@ impl NumberMatcher {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     // TODO: choose operator for contains
-    Contains, // 'contains'
     Matches,  // '~=', 'matches'
     Equality, // '==', '=', 'is'
     NumericComparison(NumericalOp),
@@ -114,7 +110,6 @@ pub enum Op {
 
 pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
     Ok(match op {
-        Op::Contains => StringMatcher::Contains(rhs.to_owned()),
         Op::Matches => StringMatcher::Regex(Regex::new(rhs)?),
         Op::Equality => StringMatcher::Equals(rhs.to_owned()),
         x => anyhow::bail!("operator {:?} cannot be applied to string values", x),

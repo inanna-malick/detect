@@ -131,7 +131,6 @@ fn operator(s: Span) -> IResult<Span, Op> {
         use NumericalOp::*;
         use Op::*;
         alt((
-            tag("contains").map(|_| Contains),
             tag("~=").map(|_| Matches),
             tag("==").map(|_| Equality),
             tag("<").map(|_| NumericComparison(Less)),

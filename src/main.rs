@@ -12,7 +12,6 @@ use detect::parse_and_run;
 /// ## string operators
 /// - `==`
 /// - `~=` (regex match)
-/// - `contains`
 /// ## numeric operators
 /// - `>`, `>=`, `<`, `<=`
 /// - `==`

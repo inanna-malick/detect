@@ -23,7 +23,6 @@
 ## string operators
 - `==`
 - `~=` (regex match)
-- `contains`
 
 ## numeric operators
 - `>`, `>=`, `<`, `<=`
