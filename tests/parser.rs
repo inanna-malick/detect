@@ -1,4 +1,5 @@
-use detect::predicate::{NamePredicate, StringMatcher};
+use detect::predicate::{MetadataPredicate, NamePredicate, Predicate, StringMatcher};
+use futures::never::Never;
 use regex::Regex;
 
 #[test]
@@ -12,15 +13,21 @@ fn test_parser() {
     };
     let filename = |s| Expr::name_predicate(NamePredicate::Filename(StringMatcher::Equals(s)));
 
-    let examples: Vec<(&'static str, _)> = vec![
+    let examples: Vec<(
+        &'static str,
+        Expr<Predicate<NamePredicate, MetadataPredicate, Never>>,
+    )> = vec![
         (
             "@name == foo && @path ~= bar",
-            Expr::and( filename("foo".to_string()), filepath("bar")),
+            Expr::and(filename("foo".to_string()), filepath("bar")),
         ),
         (
             // test confirming that '&&' binds more tightly than ||, a || (b && c)
             "@filename == a || @filepath ~= b && @filepath ~= c",
-            Expr::or(filename("a".to_string()), Expr::and(filepath("b"), filepath("c"))),
+            Expr::or(
+                filename("a".to_string()),
+                Expr::and(filepath("b"), filepath("c")),
+            ),
         ),
         // test fails, and is outer binding - c && (b || a)
         // (
@@ -31,6 +38,14 @@ fn test_parser() {
     ];
 
     for (input, expected) in examples.into_iter() {
-        assert_eq!(detect::parse(input).unwrap(), expected)
+        assert_eq!(
+            detect::parse(input).unwrap().map_predicate(|p| match p {
+                Predicate::Name(n) => Predicate::Name(n),
+                Predicate::Metadata(m) => Predicate::Metadata(m),
+                // we'll never hit this branch, not touching DFA's b/c no Eq impl
+                Predicate::Content(_) => unreachable!(),
+            }),
+            expected
+        )
     }
 }

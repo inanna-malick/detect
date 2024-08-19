@@ -1,6 +1,5 @@
 use super::Expr;
 use futures::FutureExt;
-use recursion::experimental::recursive::collapse::CollapsibleAsync;
 use recursion::{
     experimental::frame::AsyncMappableFrame, Collapsible, MappableFrame, PartiallyApplied,
 };
@@ -74,7 +73,9 @@ impl<P: Send + Sync + 'static> AsyncMappableFrame for ExprFrame<PartiallyApplied
     }
 }
 
-impl<'a, P: Clone> Collapsible for &'a Expr<P> {
+pub struct MapPredicateRef<'a, P>(pub &'a Expr<P>);
+
+impl<P: Clone> Collapsible for &Expr<P> {
     type FrameToken = ExprFrame<PartiallyApplied, P>;
 
     fn into_frame(self) -> ExprFrame<Self, P> {
@@ -82,15 +83,29 @@ impl<'a, P: Clone> Collapsible for &'a Expr<P> {
             Expr::Not(x) => ExprFrame::Not(x),
             Expr::And(a, b) => ExprFrame::And(a, b),
             Expr::Or(a, b) => ExprFrame::Or(a, b),
-            Expr::Predicate(p) => ExprFrame::Predicate((*p).clone()),
+            Expr::Predicate(p) => ExprFrame::Predicate(p.clone()),
             Expr::Literal(b) => ExprFrame::Literal(*b),
         }
     }
 }
 
-impl<'a, P: Clone + Send + Sync + 'static> CollapsibleAsync for &'a Expr<P> {
-    type AsyncFrameToken = ExprFrame<PartiallyApplied, P>;
+impl<'a, P> Collapsible for MapPredicateRef<'a, P> {
+    type FrameToken = ExprFrame<PartiallyApplied, &'a P>;
+
+    fn into_frame(self) -> ExprFrame<Self, &'a P> {
+        match self.0 {
+            Expr::Not(x) => ExprFrame::Not(MapPredicateRef(x)),
+            Expr::And(a, b) => ExprFrame::And(MapPredicateRef(a), MapPredicateRef(b)),
+            Expr::Or(a, b) => ExprFrame::Or(MapPredicateRef(a), MapPredicateRef(b)),
+            Expr::Predicate(p) => ExprFrame::Predicate(p),
+            Expr::Literal(b) => ExprFrame::Literal(*b),
+        }
+    }
 }
+
+// impl<'a, P: Clone + Send + Sync + 'static> CollapsibleAsync for &'a Expr<P> {
+//     type AsyncFrameToken = ExprFrame<PartiallyApplied, P>;
+// }
 
 // for use in recursion visualizations
 impl<P: Display> Display for ExprFrame<(), P> {

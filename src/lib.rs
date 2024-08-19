@@ -4,16 +4,18 @@ mod parser;
 pub mod predicate;
 mod util;
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
-use expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
+use expr::{Expr, MetadataPredicate, NamePredicate};
 use ignore::WalkBuilder;
 use nom_locate::LocatedSpan;
 use nom_recursive::RecursiveInfo;
 use parser::{convert_error, expr};
-use predicate::Predicate;
+use predicate::{CompiledContentPredicate, Predicate};
 
 use crate::eval::eval;
+
+type ContentPredicate = CompiledContentPredicate;
 
 pub fn parse(
     data: &str,
@@ -38,6 +40,12 @@ pub async fn parse_and_run<F: FnMut(&Path)>(
     match parse(&expr) {
         Ok(expr) => {
             let walker = WalkBuilder::new(root).git_ignore(respect_gitignore).build();
+
+            let expr = expr.map_predicate_ref(|p| match p {
+                Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
+                Predicate::Metadata(m) => Predicate::Metadata(Arc::clone(m)),
+                Predicate::Content(c) => Predicate::Content(c.as_ref()),
+            });
 
             // TODO: debug loggin switch? tracing? something of that nature, yes
             // println!("expr: {:?}", e);
