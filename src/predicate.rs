@@ -1,4 +1,5 @@
 use regex::Regex;
+use regex_automata::dfa::dense::DFA;
 use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
 use std::os::unix::prelude::MetadataExt;
@@ -18,7 +19,7 @@ pub struct RawPredicate {
 impl RawPredicate {
     pub fn parse(
         &self,
-    ) -> anyhow::Result<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>> {
+    ) -> anyhow::Result<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>> {
         Ok(match self.lhs {
             Selector::FileName => {
                 Predicate::name(NamePredicate::Filename(parse_string(&self.op, &self.rhs)?))
@@ -35,9 +36,7 @@ impl RawPredicate {
             Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
                 &self.op, &self.rhs,
             )?)),
-            Selector::Contents => Predicate::contents(ContentPredicate::Contents(parse_string(
-                &self.op, &self.rhs,
-            )?)),
+            Selector::Contents => Predicate::contents(parse_string_dfa(&self.op, &self.rhs)?),
         })
     }
 }
@@ -57,6 +56,8 @@ pub enum Selector {
     // Encoding, TODO, eventually?
     // later - parse contents as json,toml,etc - can run selectors against that
 }
+
+pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
 #[derive(Clone, Debug)]
 pub enum StringMatcher {
@@ -116,6 +117,14 @@ pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
     })
 }
 
+pub fn parse_string_dfa(op: &Op, rhs: &str) -> anyhow::Result<CompiledContentPredicate> {
+    Ok(match op {
+        Op::Matches => DFA::new(rhs)?,
+        Op::Equality => DFA::new(&format!("^{}$", rhs))?,
+        x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
+    })
+}
+
 pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
     let parsed_rhs: u64 = rhs.parse()?;
 
@@ -143,7 +152,7 @@ pub enum NumericalOp {
 pub enum Predicate<Name, Metadata, Content> {
     Name(Arc<Name>),
     Metadata(Arc<Metadata>),
-    Content(Arc<Content>),
+    Content(Content),
 }
 
 impl<N, M, C> Predicate<N, M, C> {
@@ -154,11 +163,11 @@ impl<N, M, C> Predicate<N, M, C> {
         Self::Metadata(Arc::new(m))
     }
     pub fn contents(c: C) -> Self {
-        Self::Content(Arc::new(c))
+        Self::Content(c)
     }
 }
 
-impl<A, B, C> Clone for Predicate<A, B, C> {
+impl<A, B, C: Clone> Clone for Predicate<A, B, C> {
     fn clone(&self) -> Self {
         match self {
             Self::Name(arg0) => Self::Name(arg0.clone()),
@@ -201,21 +210,21 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
     }
 }
 
-impl<A, B> Predicate<A, B, ContentPredicate> {
-    pub fn eval_file_content_predicate(
-        self,
-        contents: Option<&String>,
-    ) -> ShortCircuit<Predicate<A, B, Done>> {
-        match self {
-            Predicate::Content(p) => ShortCircuit::Known(match contents {
-                Some(contents) => p.is_match(contents),
-                None => false,
-            }),
-            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
-        }
-    }
-}
+// impl<'dfa, A, B> Predicate<A, B, ContentPredicate<'dfa>> {
+//     pub fn eval_file_content_predicate(
+//         self,
+//         contents: Option<&String>,
+//     ) -> ShortCircuit<Predicate<A, B, Done>> {
+//         match self {
+//             Predicate::Content(p) => ShortCircuit::Known(match contents {
+//                 Some(contents) => p.is_match(contents),
+//                 None => false,
+//             }),
+//             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+//             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePredicate {
@@ -292,17 +301,7 @@ impl MetadataPredicate {
 }
 
 // predicates that scan the entire file
-#[derive(Debug, Eq, PartialEq)]
-pub enum ContentPredicate {
-    Contents(StringMatcher),
-    Utf8,
-}
+pub type CompiledContentPredicateRef<'a> = DFA<&'a [u32]>;
 
-impl ContentPredicate {
-    pub fn is_match(&self, utf8_contents: &str) -> bool {
-        match self {
-            ContentPredicate::Contents(regex) => regex.is_match(utf8_contents),
-            ContentPredicate::Utf8 => true,
-        }
-    }
-}
+// predicates that scan the entire file
+pub type CompiledContentPredicate = DFA<Vec<u32>>;

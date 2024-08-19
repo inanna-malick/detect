@@ -1,13 +1,15 @@
 use nom::character::complete::*;
 use nom::combinator::{all_consuming, cut, map_res};
 use nom::error::{ErrorKind, VerboseError, VerboseErrorKind};
-use nom::{AsChar, InputTakeAtPosition, Parser};
 use nom::{branch::*, bytes::complete::tag};
+use nom::{AsChar, InputTakeAtPosition, Parser};
 use nom_locate::LocatedSpan;
 use nom_recursive::{recursive_parser, RecursiveInfo};
 
-use crate::expr::{ContentPredicate, Expr, MetadataPredicate, NamePredicate};
-use crate::predicate::{NumericalOp, Op, Predicate, RawPredicate, Selector};
+use crate::expr::{Expr, MetadataPredicate, NamePredicate};
+use crate::predicate::{
+    CompiledContentPredicate, NumericalOp, Op, Predicate, RawPredicate, Selector,
+};
 
 // Input type must implement trait HasRecursiveInfo
 // nom_locate::LocatedSpan<T, RecursiveInfo> implements it.
@@ -18,13 +20,13 @@ pub type IResult<I, O, E = VerboseError<I>> = Result<(I, O), nom::Err<E>>;
 
 pub fn expr(
     s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     all_consuming(_expr)(s)
 }
 
 fn _expr(
     s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
     alt((parens, and, or, not, cut(predicate)))(s)
 }
@@ -32,7 +34,7 @@ fn _expr(
 #[recursive_parser]
 fn not(
     s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let (s, _) = tag("!")(s)?;
 
     let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
@@ -46,7 +48,7 @@ fn not(
 #[recursive_parser]
 fn and(
     s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let (s, x) = _expr(s)?;
     let (s, _) = space0(s)?;
     let (s, _) = tag("&&")(s)?;
@@ -61,7 +63,7 @@ fn and(
 #[recursive_parser]
 fn parens(
     s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let (s, _) = char('(')(s)?;
     let (s, _) = space0(s)?;
     let (s, e) = _expr(s)?;
@@ -75,7 +77,7 @@ fn parens(
 #[recursive_parser]
 fn or(
     s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, ContentPredicate>>> {
+) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let (s, x) = _expr(s)?;
     let (s, _) = space1(s)?;
     let (s, _) = tag("||")(s)?;
@@ -87,16 +89,13 @@ fn or(
     Ok((s, ret))
 }
 
-
 fn raw_predicate(s: Span) -> IResult<Span, RawPredicate> {
     let (s, lhs) = selector(s)?;
     let (s, _) = space1(s)?;
     let (s, op) = operator(s)?;
     let (s, _) = space1(s)?;
 
-    let is_valid_char = |x: char| {
-        x.is_alphanum() || "_-.".contains(x)
-    };
+    let is_valid_char = |x: char| x.is_alphanum() || "_-./".contains(x);
 
     // TODO: this is janky, figure out a better way to handle this + better errorkind
     let (s, rhs) = s.split_at_position1_complete(|x| !is_valid_char(x), ErrorKind::NoneOf)?;

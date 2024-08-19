@@ -1,7 +1,5 @@
 use std::{env::set_current_dir, fs::create_dir_all};
 
-use detect::predicate::NamePredicate;
-use regex::Regex;
 use tempdir::TempDir;
 
 fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
@@ -126,7 +124,7 @@ async fn test_name_and_contents() {
 }
 
 #[tokio::test]
-async fn test_extension_and_contents() {
+async fn test_extension() {
     Case {
         expr: "@extension == rs",
         expected: &["test.rs"],
