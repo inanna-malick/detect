@@ -39,12 +39,14 @@ fn test_parser() {
 
     for (input, expected) in examples.into_iter() {
         assert_eq!(
-            detect::parse(input).unwrap().map_predicate(|p| match p {
-                Predicate::Name(n) => Predicate::Name(n),
-                Predicate::Metadata(m) => Predicate::Metadata(m),
-                // we'll never hit this branch, not touching DFA's b/c no Eq impl
-                Predicate::Content(_) => unreachable!(),
-            }),
+            detect::parse(input)
+                .unwrap()
+                .map_predicate_ref(|p| match p {
+                    Predicate::Name(n) => Predicate::Name(n.clone()),
+                    Predicate::Metadata(m) => Predicate::Metadata(m.clone()),
+                    // we'll never hit this branch, not touching DFA's b/c no Eq impl
+                    Predicate::Content(_) => unreachable!(),
+                }),
             expected
         )
     }

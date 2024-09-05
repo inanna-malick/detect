@@ -4,7 +4,7 @@ mod parser;
 pub mod predicate;
 mod util;
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use expr::{Expr, MetadataPredicate, NamePredicate};
@@ -13,6 +13,7 @@ use nom_locate::LocatedSpan;
 use nom_recursive::RecursiveInfo;
 use parser::{convert_error, expr};
 use predicate::{CompiledContentPredicate, Predicate};
+use slog::{debug, info, Logger};
 
 use crate::eval::eval;
 
@@ -33,6 +34,7 @@ pub fn parse(
 }
 
 pub async fn parse_and_run<F: FnMut(&Path)>(
+    logger: Logger,
     root: &Path,
     respect_gitignore: bool,
     expr: String,
@@ -48,15 +50,21 @@ pub async fn parse_and_run<F: FnMut(&Path)>(
                 Predicate::Content(c) => Predicate::Content(c.as_ref()),
             });
 
-            // TODO: debug loggin switch? tracing? something of that nature, yes
-            // println!("expr: {:?}", e);
+            info!(logger, "parsed expression"; "expr" => %expr);
+
             for entry in walker.into_iter() {
                 let entry = entry?;
                 let path = entry.path();
 
-                let is_match = eval(&expr, path)
+                let start = Instant::now();
+
+                let is_match = eval(&logger, &expr, path)
                     .await
                     .context(format!("failed to eval for ${path:?}"))?;
+
+                let duration = start.elapsed();
+
+                debug!(logger, "visited entity"; "path" => #?path, "duration" => #?duration, "result" => is_match);
 
                 if is_match {
                     on_match(path);
@@ -65,6 +73,6 @@ pub async fn parse_and_run<F: FnMut(&Path)>(
 
             Ok(())
         }
-        Err(err) => panic!("parse error: {}", err),
+        Err(err) => panic!("{}", err),
     }
 }
