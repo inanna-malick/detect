@@ -1,6 +1,7 @@
 use nom::character::complete::*;
 use nom::combinator::{all_consuming, cut, map_res};
-use nom::error::{ErrorKind, VerboseError, VerboseErrorKind};
+use nom::error::{context, ErrorKind, VerboseError, VerboseErrorKind};
+use nom::sequence::preceded;
 use nom::{branch::*, bytes::complete::tag};
 use nom::{AsChar, InputTakeAtPosition, Parser};
 use nom_locate::LocatedSpan;
@@ -21,14 +22,20 @@ pub type IResult<I, O, E = VerboseError<I>> = Result<(I, O), nom::Err<E>>;
 pub fn expr(
     s: Span,
 ) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    all_consuming(_expr)(s)
+    context("root", all_consuming(_expr))(s)
 }
 
 fn _expr(
     s: Span,
 ) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
-    alt((parens, and, or, not, cut(predicate)))(s)
+    alt((
+        context("parens", parens),
+        context("and", and),
+        context("or", or),
+        context("not", not),
+        context("predicate", cut(predicate)),
+    ))(s)
 }
 
 #[recursive_parser]
@@ -52,8 +59,8 @@ fn and(
     let (s, x) = _expr(s)?;
     let (s, _) = space0(s)?;
     let (s, _) = tag("&&")(s)?;
-    let (s, _) = space0(s)?;
-    let (s, y) = _expr(s)?;
+    // let (s, _) = space0(s)?;
+    let (s, y) = preceded(space0, _expr)(s)?;
 
     let ret = Expr::and(x, y);
 
@@ -68,7 +75,7 @@ fn parens(
     let (s, _) = space0(s)?;
     let (s, e) = _expr(s)?;
     let (s, _) = space0(s)?;
-    let (s, _) = char(')')(s)?;
+    let (s, _) = context("closing parentheses ')' not found", cut(char(')')))(s)?;
 
     Ok((s, e))
 }
@@ -110,15 +117,19 @@ fn raw_predicate(s: Span) -> IResult<Span, RawPredicate> {
 // todo: used escaped to get escaped string values
 
 fn selector(s: Span) -> IResult<Span, Selector> {
-    let (s, _) = char('@')(s)?;
-    let mut selector = alt((
-        alt((tag("name"), tag("filename"))).map(|_| Selector::FileName),
-        alt((tag("path"), tag("filepath"))).map(|_| Selector::FilePath),
-        alt((tag("extension"), tag("ext"))).map(|_| Selector::Extension),
-        alt((tag("size"), tag("filesize"))).map(|_| Selector::Size),
-        alt((tag("type"), tag("filetype"))).map(|_| Selector::EntityType),
-        alt((tag("contents"), tag("file"))).map(|_| Selector::Contents),
-    ));
+    // let (s, _) = char('@')(s)?;
+    let (s, _) = context("selectors must start with '@'", char('@'))(s)?;
+    let mut selector = context(
+        "not a valid selector",
+        alt((
+            alt((tag("name"), tag("filename"))).map(|_| Selector::FileName),
+            alt((tag("path"), tag("filepath"))).map(|_| Selector::FilePath),
+            alt((tag("extension"), tag("ext"))).map(|_| Selector::Extension),
+            alt((tag("size"), tag("filesize"))).map(|_| Selector::Size),
+            alt((tag("type"), tag("filetype"))).map(|_| Selector::EntityType),
+            alt((tag("contents"), tag("file"))).map(|_| Selector::Contents),
+        )),
+    );
 
     let (s, op) = selector(s)?;
 
@@ -129,14 +140,17 @@ fn operator(s: Span) -> IResult<Span, Op> {
     let mut operator = {
         use NumericalOp::*;
         use Op::*;
-        alt((
-            tag("~=").map(|_| Matches),
-            tag("==").map(|_| Equality),
-            tag("<").map(|_| NumericComparison(Less)),
-            tag(">").map(|_| NumericComparison(Greater)),
-            tag("=<").map(|_| NumericComparison(LessOrEqual)),
-            tag("=>").map(|_| NumericComparison(GreaterOrEqual)),
-        ))
+        context(
+            "not a valid operator",
+            alt((
+                tag("~=").map(|_| Matches),
+                tag("==").map(|_| Equality),
+                tag("<").map(|_| NumericComparison(Less)),
+                tag(">").map(|_| NumericComparison(Greater)),
+                tag("=<").map(|_| NumericComparison(LessOrEqual)),
+                tag("=>").map(|_| NumericComparison(GreaterOrEqual)),
+            )),
+        )
     };
 
     let (s, op) = operator(s)?;
@@ -144,32 +158,35 @@ fn operator(s: Span) -> IResult<Span, Op> {
     Ok((s, op))
 }
 
-#[test]
-fn test() {
-    let data = "@name ~= test || @size == 5 && (@name == test || @name == test)";
+// #[test]
+// fn test() {
+//     let data = "@name ~= test || @size == 5 && (@name == test || @name == test)";
 
-    let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
+//     let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
 
-    let ret = expr(data);
+//     let ret = expr(data);
 
-    match ret {
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-            println!(
-                "verbose errors - `root::<VerboseError>(data)`:\n{}",
-                convert_error(data, e)
-            );
-        }
-        Ok(x) => {
-            println!("{:?}", x.1);
-        }
-        _ => {}
-    }
-}
+//     match ret {
+//         Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+//             println!(
+//                 "verbose errors - `root::<VerboseError>(data)`:\n{}",
+//                 // convert_error(data, e)
+//                 e
+//             );
+//         }
+//         Ok(x) => {
+//         }
+//         _ => {}
+//     }
+// }
 
 // copy of nom's convert_error specialized to nom_locate span type, fixes type error on Deref
 pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::string::String {
     use nom::lib::std::fmt::Write;
     use nom::Offset;
+
+    // otherwise it has, like, a billion repeated errors in the printed output
+    // e.errors = e.errors.into_iter().last().map_or_else(|| Vec::new(), |x| vec![x]);
 
     let mut result = nom::lib::std::string::String::new();
 
@@ -218,11 +235,10 @@ pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::strin
                     if let Some(actual) = substring.chars().next() {
                         write!(
                             &mut result,
-                            "{i}: at line {line_number}:\n\
+                            "at line {line_number}:\n\
                {line}\n\
                {caret:>column$}\n\
                expected '{expected}', found {actual}\n\n",
-                            i = i,
                             line_number = line_number,
                             line = line,
                             caret = '^',
@@ -233,11 +249,10 @@ pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::strin
                     } else {
                         write!(
                             &mut result,
-                            "{i}: at line {line_number}:\n\
+                            "at line {line_number}:\n\
                {line}\n\
                {caret:>column$}\n\
                expected '{expected}', got end of input\n\n",
-                            i = i,
                             line_number = line_number,
                             line = line,
                             caret = '^',
@@ -248,10 +263,9 @@ pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::strin
                 }
                 VerboseErrorKind::Context(s) => write!(
                     &mut result,
-                    "{i}: at line {line_number}, in {context}:\n\
+                    "at line {line_number}: {context}:\n\
              {line}\n\
              {caret:>column$}\n\n",
-                    i = i,
                     line_number = line_number,
                     context = s,
                     line = line,
@@ -260,10 +274,9 @@ pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::strin
                 ),
                 VerboseErrorKind::Nom(e) => write!(
                     &mut result,
-                    "{i}: at line {line_number}, in {nom_err:?}:\n\
+                    "at line {line_number}: {nom_err:?}:\n\
              {line}\n\
              {caret:>column$}\n\n",
-                    i = i,
                     line_number = line_number,
                     nom_err = e,
                     line = line,
