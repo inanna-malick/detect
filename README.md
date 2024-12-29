@@ -2,7 +2,7 @@
 
 
 ```shell
-➜  detect 'name ~= detect || extension ~= rs && contents ~= map_frame'
+➜  detect '@name ~= detect || @extension ~= rs && @contents ~= map_frame'
 ./target/release/detect
 ./target/release/deps/detect-6395eb2c29a3ed5e
 ./target/debug/detect
@@ -34,15 +34,15 @@ All selectors start with '@', eg '@name'
 
 ## file path selectors
 
-- name (or filename)
-- path (or filepath)
-- extension (or ext)
+- @name (or @filename)
+- @path (or @filepath)
+- @ext (or @extension)
 
 ## metadata selectors
 
-- size (or filesize)
-- type (or filetype)
+- @size (or @filesize)
+- @type (or @filetype)
 
 ## file contents predicates
 
-- contents (or file)
+- @file (or @contents)
