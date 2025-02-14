@@ -79,6 +79,10 @@ impl PartialEq for StringMatcher {
 impl Eq for StringMatcher {}
 
 impl StringMatcher {
+    pub fn regex(s: &str) -> anyhow::Result<Self> {
+        Ok(Self::Regex(Regex::new(s)?))
+    }
+
     pub fn is_match(&self, s: &str) -> bool {
         match self {
             StringMatcher::Regex(r) => r.is_match(s),
@@ -120,10 +124,7 @@ pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
 
 pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<CompiledContentPredicate> {
     Ok(match op {
-        Op::Matches => CompiledContentPredicate {
-            inner: DFA::new(&rhs)?,
-            source: rhs,
-        },
+        Op::Matches => CompiledContentPredicate::new(rhs)?,
         Op::Equality => {
             let regex = format!("^{}$", rhs);
             CompiledContentPredicate {
@@ -344,12 +345,36 @@ pub struct CompiledContentPredicate {
     // source regex, for logging
     source: String,
 }
+
 impl CompiledContentPredicate {
+    pub fn new(source: String) -> anyhow::Result<Self> {
+        Ok(Self {
+            inner: DFA::new(&source)?,
+            source,
+        })
+    }
+
     pub(crate) fn as_ref(&self) -> CompiledContentPredicateRef<'_> {
         CompiledContentPredicateRef {
             inner: self.inner.as_ref(),
             source: &self.source,
         }
+    }
+}
+
+impl PartialEq for CompiledContentPredicate {
+    fn eq(&self, other: &Self) -> bool {
+        // compare source regexes only
+        self.source == other.source
+    }
+}
+
+impl std::fmt::Debug for CompiledContentPredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompiledContentPredicate")
+            .field("inner", &"_")
+            .field("source", &self.source)
+            .finish()
     }
 }
 

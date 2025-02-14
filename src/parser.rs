@@ -1,6 +1,7 @@
 use nom::character::complete::*;
 use nom::combinator::{all_consuming, cut, map_res};
 use nom::error::{context, ErrorKind, VerboseError, VerboseErrorKind};
+use nom::multi::many1;
 use nom::sequence::preceded;
 use nom::{branch::*, bytes::complete::tag};
 use nom::{AsChar, InputTakeAtPosition, Parser};
@@ -9,7 +10,7 @@ use nom_recursive::{recursive_parser, RecursiveInfo};
 
 use crate::expr::{Expr, MetadataPredicate, NamePredicate};
 use crate::predicate::{
-    CompiledContentPredicate, NumericalOp, Op, Predicate, RawPredicate, Selector,
+    CompiledContentPredicate, NumericalOp, Op, Predicate, RawPredicate, Selector, StringMatcher,
 };
 
 // Input type must implement trait HasRecursiveInfo
@@ -18,6 +19,36 @@ type Span<'a> = LocatedSpan<&'a str, RecursiveInfo>;
 
 // type IResult<A, B> = IResult<A, B, VerboseError<A>>;
 pub type IResult<I, O, E = VerboseError<I>> = Result<(I, O), nom::Err<E>>;
+
+
+#[derive(Debug, PartialEq)]
+pub enum Token {
+    OpenParen,
+    CloseParen,
+    Predicate(Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>),
+    And,
+    Or,
+    Not
+}
+
+
+pub fn tokens(s: Span) -> IResult<Span, Vec<Token>> {
+    many1(token)(s)
+}
+
+
+pub fn token(s: Span) -> IResult<Span, Token> {
+    let predicate = map_res(raw_predicate, |p| p.parse());
+    let (s, _) = space0(s)?;
+    alt((
+        tag("&&").map(|_| Token::And),
+        tag("||").map(|_| Token::Or),
+        tag("(").map(|_| Token::OpenParen),
+        tag(")").map(|_| Token::CloseParen),
+        tag("!").map(|_| Token::Not),
+        predicate.map(|p| Token::Predicate(p))
+    ))(s)
+}
 
 pub fn expr(
     s: Span,
@@ -31,8 +62,8 @@ fn _expr(
     let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
     alt((
         context("parens", parens),
-        context("and", and),
         context("or", or),
+        context("and", and),
         context("not", not),
         context("predicate", cut(predicate)),
     ))(s)
@@ -57,10 +88,10 @@ fn and(
     s: Span,
 ) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
     let (s, x) = _expr(s)?;
-    let (s, _) = space0(s)?;
+    let (s, _) = space1(s)?;
     let (s, _) = tag("&&")(s)?;
-    // let (s, _) = space0(s)?;
-    let (s, y) = preceded(space0, _expr)(s)?;
+    let (s, _) = space1(s)?;
+    let (s, y) = _expr(s)?;
 
     let ret = Expr::and(x, y);
 
@@ -158,27 +189,49 @@ fn operator(s: Span) -> IResult<Span, Op> {
     Ok((s, op))
 }
 
-// #[test]
-// fn test() {
-//     let data = "@name ~= test || @size == 5 && (@name == test || @name == test)";
+#[test]
+fn test() {
+    let data = "@name ~= test || @size == 5 && (@name == test || @name == test)";
 
-//     let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
+    let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
 
-//     let ret = expr(data);
+    let ret = expr(data);
 
-//     match ret {
-//         Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-//             println!(
-//                 "verbose errors - `root::<VerboseError>(data)`:\n{}",
-//                 // convert_error(data, e)
-//                 e
-//             );
-//         }
-//         Ok(x) => {
-//         }
-//         _ => {}
-//     }
-// }
+    match ret {
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+            println!(
+                "verbose errors - `root::<VerboseError>(data)`:\n{}",
+                // convert_error(data, e)
+                e
+            );
+            panic!("unexpected error from parsing")
+        }
+        Ok((_, expr)) => {
+            let nr = |s: &str| Predicate::name(NamePredicate::Filename(StringMatcher::regex(s).unwrap()));
+            let ne = |s: &str| {
+                Predicate::name(NamePredicate::Filename(StringMatcher::Equals(
+                    s.to_string(),
+                )))
+            };
+
+            assert_eq!(
+                expr,
+                Expr::or(
+                    Expr::Predicate(nr("test")),
+                    Expr::and(
+                        Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+                            crate::predicate::NumberMatcher::Equals(5)
+                        ))),
+                        Expr::or(Expr::Predicate(ne("test")), Expr::Predicate(ne("test")))
+                    ),
+                ),
+            );
+        }
+        x => {
+            panic!("unexpected: {:?}", x)
+        }
+    }
+}
 
 // copy of nom's convert_error specialized to nom_locate span type, fixes type error on Deref
 pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::string::String {

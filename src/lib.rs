@@ -1,6 +1,6 @@
 mod eval;
 pub mod expr;
-mod parser;
+pub mod parser;
 pub mod predicate;
 mod util;
 
@@ -11,7 +11,7 @@ use expr::{Expr, MetadataPredicate, NamePredicate};
 use ignore::WalkBuilder;
 use nom_locate::LocatedSpan;
 use nom_recursive::RecursiveInfo;
-use parser::{convert_error, expr};
+use parser::{convert_error, expr, tokens, Token};
 use predicate::{CompiledContentPredicate, Predicate};
 use slog::{debug, info, Logger};
 
@@ -25,6 +25,22 @@ pub fn parse(
     let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
 
     match expr(data) {
+        Ok(x) => Ok(x.1),
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(convert_error(data, e)),
+        Err(nom::Err::Incomplete(_)) => {
+            unimplemented!("should not hit incomplete case")
+        }
+    }
+}
+
+
+
+pub fn parse_tokens(
+    data: &str,
+) -> Result<Vec<Token>, String> {
+    let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
+
+    match tokens(data) {
         Ok(x) => Ok(x.1),
         Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(convert_error(data, e)),
         Err(nom::Err::Incomplete(_)) => {
