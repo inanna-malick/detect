@@ -55,7 +55,7 @@ impl<P> Expr<P> {
             ExprFrame::Predicate(p) => Expr::Predicate(f(p)),
             ExprFrame::And(a, b) => Expr::and(a, b),
             ExprFrame::Or(a, b) => Expr::or(a, b),
-            ExprFrame::Not(a) => Expr::not(a),
+            ExprFrame::Not(a) => Expr::negate(a),
             ExprFrame::Literal(x) => Expr::Literal(x),
         })
     }
@@ -66,7 +66,7 @@ impl<P> Expr<P> {
     pub fn or(a: Self, b: Self) -> Self {
         Self::Or(Box::new(a), Box::new(b))
     }
-    pub fn not(a: Self) -> Self {
+    pub fn negate(a: Self) -> Self {
         Self::Not(Box::new(a))
     }
 }
@@ -78,8 +78,19 @@ impl<P: Clone> Expr<P> {
             ExprFrame::Predicate(p) => Expr::Predicate(f(p)),
             ExprFrame::And(a, b) => Expr::and(a, b),
             ExprFrame::Or(a, b) => Expr::or(a, b),
-            ExprFrame::Not(a) => Expr::not(a),
+            ExprFrame::Not(a) => Expr::negate(a),
             ExprFrame::Literal(x) => Expr::Literal(x),
+        })
+    }
+
+    pub fn map_predicate_err<E, B>(self, f: impl Fn(P) -> Result<B, E>) -> Result<Expr<B>, E> {
+        self.collapse_frames(|e| match e {
+            // apply 'f' to Predicate expressions
+            ExprFrame::Predicate(p) => Ok(Expr::Predicate(f(p)?)),
+            ExprFrame::And(a, b) => Ok(Expr::and(a?, b?)),
+            ExprFrame::Or(a, b) => Ok(Expr::or(a?, b?)),
+            ExprFrame::Not(a) => Ok(Expr::negate(a?)),
+            ExprFrame::Literal(x) => Ok(Expr::Literal(x)),
         })
     }
 }

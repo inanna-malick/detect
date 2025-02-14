@@ -1,0 +1,32 @@
+WHITESPACE   =  _{ " " | "\t" | NEWLINE }
+
+
+char = { ASCII_ALPHANUMERIC | "." | "_" | "/" }
+
+
+program         =   { SOI ~ expr ~ EOI }
+  expr          =   { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
+    infix       =  _{ and | or }
+      and       =   { "&&" } // logical and
+      or        =   { "||" } // logical or
+    prefix      =  _{ neg }
+      neg       =   { "!" } // Negation
+    primary     =  _{ predicate | "(" ~ expr ~ ")" }
+
+
+predicate =  { selector ~ op ~ rhs }
+  selector = { "@" ~ (name | path | ext | size | type | contents) }
+    name     = { "filename"  | "name" }
+    path     = { "filepath"  | "path" }
+    ext      = { "extension" | "ext"  }
+    size     = { "filesize"  | "size" }
+    type     = {"filetype"   | "type" }
+    contents = { "contents"  | "file" }
+  op      = _{ eq | like | gteq | lteq | gt | lt}
+    eq    = { "==" | "=" } // exact equals
+    like  = { "~=" | "~" } // regex type situation
+    gteq  = { ">=" }
+    lteq  = { "<=" }
+    gt    = { ">" }
+    lt    = { "<" }
+  rhs     = @{ char+ }
