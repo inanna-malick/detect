@@ -1,280 +1,92 @@
-use nom::character::complete::*;
-use nom::combinator::{all_consuming, cut, map_res};
-use nom::error::{ErrorKind, VerboseError, VerboseErrorKind};
-use nom::{branch::*, bytes::complete::tag};
-use nom::{AsChar, InputTakeAtPosition, Parser};
-use nom_locate::LocatedSpan;
-use nom_recursive::{recursive_parser, RecursiveInfo};
+use anyhow::Context as _;
+use pest::{
+    iterators::Pairs,
+    pratt_parser::{Assoc::*, Op, PrattParser},
+    Parser,
+};
+use pratt_parser::Rule;
 
-use crate::expr::{Expr, MetadataPredicate, NamePredicate};
-use crate::predicate::{
-    CompiledContentPredicate, NumericalOp, Op, Predicate, RawPredicate, Selector,
+use crate::{
+    expr::Expr,
+    predicate::{self, CompiledContentPredicate, Predicate, RawPredicate},
+    MetadataPredicate, NamePredicate,
 };
 
-// Input type must implement trait HasRecursiveInfo
-// nom_locate::LocatedSpan<T, RecursiveInfo> implements it.
-type Span<'a> = LocatedSpan<&'a str, RecursiveInfo>;
+mod pratt_parser {
+    use pest_derive::Parser;
 
-// type IResult<A, B> = IResult<A, B, VerboseError<A>>;
-pub type IResult<I, O, E = VerboseError<I>> = Result<(I, O), nom::Err<E>>;
-
-pub fn expr(
-    s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    all_consuming(_expr)(s)
+    #[derive(Parser)]
+    #[grammar = "expr/expr.pest"]
+    pub struct Parser;
 }
 
-fn _expr(
-    s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
-    alt((parens, and, or, not, cut(predicate)))(s)
-}
+fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<RawPredicate>> {
+    pratt
+        .map_primary(|primary| match primary.as_rule() {
+            Rule::predicate => {
+                let mut inner = primary.into_inner();
+                let lhs = match inner.next().unwrap().into_inner().next().unwrap().as_rule() {
+                    Rule::name => predicate::Selector::FileName,
+                    Rule::path => predicate::Selector::FilePath,
+                    Rule::ext => predicate::Selector::Extension,
+                    Rule::size => predicate::Selector::Size,
+                    Rule::r#type => predicate::Selector::EntityType,
+                    Rule::contents => predicate::Selector::Contents,
+                    x => panic!("{:?}", x),
+                };
 
-#[recursive_parser]
-fn not(
-    s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    let (s, _) = tag("!")(s)?;
-
-    let predicate = map_res(raw_predicate, |p| p.parse()).map(Expr::Predicate);
-    let (s, e) = alt((parens, cut(predicate)))(s)?;
-
-    let ret = Expr::not(e);
-
-    Ok((s, ret))
-}
-
-#[recursive_parser]
-fn and(
-    s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    let (s, x) = _expr(s)?;
-    let (s, _) = space0(s)?;
-    let (s, _) = tag("&&")(s)?;
-    let (s, _) = space0(s)?;
-    let (s, y) = _expr(s)?;
-
-    let ret = Expr::and(x, y);
-
-    Ok((s, ret))
-}
-
-#[recursive_parser]
-fn parens(
-    s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    let (s, _) = char('(')(s)?;
-    let (s, _) = space0(s)?;
-    let (s, e) = _expr(s)?;
-    let (s, _) = space0(s)?;
-    let (s, _) = char(')')(s)?;
-
-    Ok((s, e))
-}
-
-// Apply recursive_parser by custom attribute
-#[recursive_parser]
-fn or(
-    s: Span,
-) -> IResult<Span, Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
-    let (s, x) = _expr(s)?;
-    let (s, _) = space1(s)?;
-    let (s, _) = tag("||")(s)?;
-    let (s, _) = space1(s)?;
-    let (s, y) = _expr(s)?;
-
-    let ret = Expr::or(x, y);
-
-    Ok((s, ret))
-}
-
-fn raw_predicate(s: Span) -> IResult<Span, RawPredicate> {
-    let (s, lhs) = selector(s)?;
-    let (s, _) = space1(s)?;
-    let (s, op) = operator(s)?;
-    let (s, _) = space1(s)?;
-
-    let is_valid_char = |x: char| x.is_alphanum() || "_-./".contains(x);
-
-    // TODO: this is janky, figure out a better way to handle this + better errorkind
-    let (s, rhs) = s.split_at_position1_complete(|x| !is_valid_char(x), ErrorKind::NoneOf)?;
-
-    let ret = RawPredicate {
-        lhs,
-        rhs: rhs.to_string(),
-        op,
-    };
-    Ok((s, ret))
-}
-// todo: used escaped to get escaped string values
-
-fn selector(s: Span) -> IResult<Span, Selector> {
-    let (s, _) = char('@')(s)?;
-    let mut selector = alt((
-        alt((tag("name"), tag("filename"))).map(|_| Selector::FileName),
-        alt((tag("path"), tag("filepath"))).map(|_| Selector::FilePath),
-        alt((tag("extension"), tag("ext"))).map(|_| Selector::Extension),
-        alt((tag("size"), tag("filesize"))).map(|_| Selector::Size),
-        alt((tag("type"), tag("filetype"))).map(|_| Selector::EntityType),
-        alt((tag("contents"), tag("file"))).map(|_| Selector::Contents),
-    ));
-
-    let (s, op) = selector(s)?;
-
-    Ok((s, op))
-}
-
-fn operator(s: Span) -> IResult<Span, Op> {
-    let mut operator = {
-        use NumericalOp::*;
-        use Op::*;
-        alt((
-            tag("~=").map(|_| Matches),
-            tag("==").map(|_| Equality),
-            tag("<").map(|_| NumericComparison(Less)),
-            tag(">").map(|_| NumericComparison(Greater)),
-            tag("=<").map(|_| NumericComparison(LessOrEqual)),
-            tag("=>").map(|_| NumericComparison(GreaterOrEqual)),
-        ))
-    };
-
-    let (s, op) = operator(s)?;
-
-    Ok((s, op))
-}
-
-#[test]
-fn test() {
-    let data = "@name ~= test || @size == 5 && (@name == test || @name == test)";
-
-    let data: LocatedSpan<&str, RecursiveInfo> = LocatedSpan::new_extra(data, RecursiveInfo::new());
-
-    let ret = expr(data);
-
-    match ret {
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-            println!(
-                "verbose errors - `root::<VerboseError>(data)`:\n{}",
-                convert_error(data, e)
-            );
-        }
-        Ok(x) => {
-            println!("{:?}", x.1);
-        }
-        _ => {}
-    }
-}
-
-// copy of nom's convert_error specialized to nom_locate span type, fixes type error on Deref
-pub fn convert_error(input: Span, e: VerboseError<Span>) -> nom::lib::std::string::String {
-    use nom::lib::std::fmt::Write;
-    use nom::Offset;
-
-    let mut result = nom::lib::std::string::String::new();
-
-    for (i, (substring, kind)) in e.errors.iter().enumerate() {
-        let offset = input.offset(substring);
-
-        if input.is_empty() {
-            match kind {
-                VerboseErrorKind::Char(c) => {
-                    write!(&mut result, "{}: expected '{}', got empty input\n\n", i, c)
-                }
-                VerboseErrorKind::Context(s) => {
-                    write!(&mut result, "{}: in {}, got empty input\n\n", i, s)
-                }
-                VerboseErrorKind::Nom(e) => {
-                    write!(&mut result, "{}: in {:?}, got empty input\n\n", i, e)
-                }
-            }
-        } else {
-            let prefix = &input.as_bytes()[..offset];
-
-            // Count the number of newlines in the first `offset` bytes of input
-            let line_number = prefix.iter().filter(|&&b| b == b'\n').count() + 1;
-
-            // Find the line that includes the subslice:
-            // Find the *last* newline before the substring starts
-            let line_begin = prefix
-                .iter()
-                .rev()
-                .position(|&b| b == b'\n')
-                .map(|pos| offset - pos)
-                .unwrap_or(0);
-
-            // Find the full line after that newline
-            let line = input[line_begin..]
-                .lines()
-                .next()
-                .unwrap_or(&input[line_begin..])
-                .trim_end();
-
-            // The (1-indexed) column number is the offset of our substring into that line
-            let column_number = line.offset(substring) + 1;
-
-            match kind {
-                VerboseErrorKind::Char(c) => {
-                    if let Some(actual) = substring.chars().next() {
-                        write!(
-                            &mut result,
-                            "{i}: at line {line_number}:\n\
-               {line}\n\
-               {caret:>column$}\n\
-               expected '{expected}', found {actual}\n\n",
-                            i = i,
-                            line_number = line_number,
-                            line = line,
-                            caret = '^',
-                            column = column_number,
-                            expected = c,
-                            actual = actual,
-                        )
-                    } else {
-                        write!(
-                            &mut result,
-                            "{i}: at line {line_number}:\n\
-               {line}\n\
-               {caret:>column$}\n\
-               expected '{expected}', got end of input\n\n",
-                            i = i,
-                            line_number = line_number,
-                            line = line,
-                            caret = '^',
-                            column = column_number,
-                            expected = c,
-                        )
+                let op = match inner.next().unwrap().as_rule() {
+                    Rule::eq => predicate::Op::Equality,
+                    Rule::like => predicate::Op::Matches,
+                    Rule::gt => predicate::Op::NumericComparison(predicate::NumericalOp::Greater),
+                    Rule::gteq => {
+                        predicate::Op::NumericComparison(predicate::NumericalOp::GreaterOrEqual)
                     }
-                }
-                VerboseErrorKind::Context(s) => write!(
-                    &mut result,
-                    "{i}: at line {line_number}, in {context}:\n\
-             {line}\n\
-             {caret:>column$}\n\n",
-                    i = i,
-                    line_number = line_number,
-                    context = s,
-                    line = line,
-                    caret = '^',
-                    column = column_number,
-                ),
-                VerboseErrorKind::Nom(e) => write!(
-                    &mut result,
-                    "{i}: at line {line_number}, in {nom_err:?}:\n\
-             {line}\n\
-             {caret:>column$}\n\n",
-                    i = i,
-                    line_number = line_number,
-                    nom_err = e,
-                    line = line,
-                    caret = '^',
-                    column = column_number,
-                ),
-            }
-        }
-        // Because `write!` to a `String` is infallible, this `unwrap` is fine.
-        .unwrap();
-    }
+                    Rule::lt => predicate::Op::NumericComparison(predicate::NumericalOp::Less),
+                    Rule::lteq => {
+                        predicate::Op::NumericComparison(predicate::NumericalOp::LessOrEqual)
+                    }
+                    _ => unreachable!(),
+                };
+                let rhs = inner.next().unwrap().as_str().to_string();
 
-    result
+                Ok(Expr::Predicate(RawPredicate { lhs, op, rhs }))
+            }
+            Rule::expr => parse(primary.into_inner(), pratt),
+            _ => unreachable!(),
+        })
+        .map_prefix(|op, rhs| match op.as_rule() {
+            Rule::neg => Ok(Expr::Not(Box::new(rhs?))),
+            _ => unreachable!(),
+        })
+        .map_infix(|lhs, op, rhs| match op.as_rule() {
+            Rule::and => Ok(Expr::And(Box::new(lhs?), Box::new(rhs?))),
+            Rule::or => Ok(Expr::Or(Box::new(lhs?), Box::new(rhs?))),
+            _ => unreachable!(),
+        })
+        .parse(pairs)
+}
+
+pub(crate) fn parse_expr(
+    input: &str,
+) -> anyhow::Result<Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
+    let pratt = PrattParser::new()
+        .op(Op::infix(Rule::or, Left))
+        .op(Op::infix(Rule::and, Left))
+        .op(Op::prefix(Rule::neg));
+
+    let mut parse_tree =
+        pratt_parser::Parser::parse(Rule::program, input).context("failed to parse input")?;
+
+    let pairs = parse_tree
+        .next()
+        .context("inner of program")?
+        .into_inner()
+        .next()
+        .context("inner of expr")?
+        .into_inner();
+
+    let expr = parse(pairs, &pratt)?;
+
+    expr.map_predicate_err(|r| r.parse())
 }

@@ -18,7 +18,7 @@ pub struct RawPredicate {
 
 impl RawPredicate {
     pub fn parse(
-        &self,
+        self,
     ) -> anyhow::Result<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>> {
         Ok(match self.lhs {
             Selector::FileName => {
@@ -36,7 +36,7 @@ impl RawPredicate {
             Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
                 &self.op, &self.rhs,
             )?)),
-            Selector::Contents => Predicate::contents(parse_string_dfa(&self.op, &self.rhs)?),
+            Selector::Contents => Predicate::contents(parse_string_dfa(self.op, self.rhs)?),
         })
     }
 }
@@ -52,6 +52,7 @@ pub enum Selector {
     Size,
     // TODO: more
     // CONTENTS
+    // FIXME: figure out a better Display impl if/when more selectors added
     Contents,
     // Encoding, TODO, eventually?
     // later - parse contents as json,toml,etc - can run selectors against that
@@ -78,6 +79,10 @@ impl PartialEq for StringMatcher {
 impl Eq for StringMatcher {}
 
 impl StringMatcher {
+    pub fn regex(s: &str) -> anyhow::Result<Self> {
+        Ok(Self::Regex(Regex::new(s)?))
+    }
+
     pub fn is_match(&self, s: &str) -> bool {
         match self {
             StringMatcher::Regex(r) => r.is_match(s),
@@ -117,10 +122,16 @@ pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
     })
 }
 
-pub fn parse_string_dfa(op: &Op, rhs: &str) -> anyhow::Result<CompiledContentPredicate> {
+pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<CompiledContentPredicate> {
     Ok(match op {
-        Op::Matches => DFA::new(rhs)?,
-        Op::Equality => DFA::new(&format!("^{}$", rhs))?,
+        Op::Matches => CompiledContentPredicate::new(rhs)?,
+        Op::Equality => {
+            let regex = format!("^{}$", rhs);
+            CompiledContentPredicate {
+                inner: DFA::new(&regex)?,
+                source: regex,
+            }
+        }
         x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
     })
 }
@@ -180,9 +191,9 @@ impl<A, B, C: Clone> Clone for Predicate<A, B, C> {
 impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Predicate::Name(x) => write!(f, "{}", x),
-            Predicate::Metadata(x) => write!(f, "{}", x),
-            Predicate::Content(x) => write!(f, "{}", x),
+            Predicate::Name(x) => write!(f, "name: {}", x),
+            Predicate::Metadata(x) => write!(f, "meta: {}", x),
+            Predicate::Content(x) => write!(f, "file: {}", x),
         }
     }
 }
@@ -249,6 +260,12 @@ impl NamePredicate {
     }
 }
 
+impl Display for NamePredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("{:?}", self))
+    }
+}
+
 /// Enum over range types, allows for x1..x2, ..x2, x1..
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Bound {
@@ -271,6 +288,12 @@ impl Bound {
 pub enum MetadataPredicate {
     Filesize(NumberMatcher),
     Type(StringMatcher), //dir, exec, etc
+}
+
+impl Display for MetadataPredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("{:?}", self))
+    }
 }
 
 impl MetadataPredicate {
@@ -301,7 +324,62 @@ impl MetadataPredicate {
 }
 
 // predicates that scan the entire file
-pub type CompiledContentPredicateRef<'a> = DFA<&'a [u32]>;
+#[derive(Clone, Debug)]
+pub struct CompiledContentPredicateRef<'a> {
+    // compiled automaton
+    pub inner: DFA<&'a [u32]>,
+    // source regex, for logging
+    pub source: &'a str,
+}
+
+impl<'a> Display for CompiledContentPredicateRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("@file ~= {}", self.source))
+    }
+}
 
 // predicates that scan the entire file
-pub type CompiledContentPredicate = DFA<Vec<u32>>;
+pub struct CompiledContentPredicate {
+    // compiled automaton
+    inner: DFA<Vec<u32>>,
+    // source regex, for logging
+    source: String,
+}
+
+impl CompiledContentPredicate {
+    pub fn new(source: String) -> anyhow::Result<Self> {
+        Ok(Self {
+            inner: DFA::new(&source)?,
+            source,
+        })
+    }
+
+    pub(crate) fn as_ref(&self) -> CompiledContentPredicateRef<'_> {
+        CompiledContentPredicateRef {
+            inner: self.inner.as_ref(),
+            source: &self.source,
+        }
+    }
+}
+
+impl PartialEq for CompiledContentPredicate {
+    fn eq(&self, other: &Self) -> bool {
+        // compare source regexes only
+        self.source == other.source
+    }
+}
+
+impl std::fmt::Debug for CompiledContentPredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompiledContentPredicate")
+            .field("inner", &"_")
+            .field("source", &self.source)
+            .finish()
+    }
+}
+
+impl Display for CompiledContentPredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("@file ~= {}", self.source))
+    }
+}

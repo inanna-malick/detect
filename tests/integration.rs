@@ -1,5 +1,6 @@
 use std::{env::set_current_dir, fs::create_dir_all};
 
+use slog::{o, Discard, Logger};
 use tempdir::TempDir;
 
 fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
@@ -48,15 +49,21 @@ impl<'a> Case<'a> {
         let tmp_dir = self.build();
         let mut out = Vec::new();
         set_current_dir(tmp_dir.path()).unwrap();
-        detect::parse_and_run(tmp_dir.path(), false, self.expr.to_owned(), |p| {
-            let s = p
-                .strip_prefix(&format!("{}/", tmp_dir.path().to_str().unwrap()))
-                .unwrap()
-                .as_os_str()
-                .to_string_lossy()
-                .into_owned();
-            out.push(s)
-        })
+        detect::parse_and_run(
+            Logger::root(Discard, o!()),
+            tmp_dir.path(),
+            false,
+            self.expr.to_owned(),
+            |p| {
+                let s = p
+                    .strip_prefix(&format!("{}/", tmp_dir.path().to_str().unwrap()))
+                    .unwrap()
+                    .as_os_str()
+                    .to_string_lossy()
+                    .into_owned();
+                out.push(s)
+            },
+        )
         .await
         .unwrap();
 
