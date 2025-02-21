@@ -1,3 +1,4 @@
+use octorust::types::GitTree;
 use regex::Regex;
 use regex_automata::dfa::dense::DFA;
 use std::fs::FileType;
@@ -219,6 +220,17 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
     }
+
+    pub fn eval_metadata_predicate_github(
+        self,
+        metadata: &GitTree,
+    ) -> ShortCircuit<Predicate<A, Done, B>> {
+        match self {
+            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match_github(metadata)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+        }
+    }
 }
 
 // impl<'dfa, A, B> Predicate<A, B, ContentPredicate<'dfa>> {
@@ -319,6 +331,23 @@ impl MetadataPredicate {
                     false
                 }
             }
+        }
+    }
+
+    pub fn is_match_github(&self, metadata: &GitTree) -> bool {
+        match self {
+            MetadataPredicate::Filesize(range) => {
+                if let Ok(size) = metadata.size.try_into() {
+                    range.is_match(size)
+                } else {
+                    false
+                }
+            }
+            MetadataPredicate::Type(matcher) => match metadata.type_.as_str() {
+                "blob" => matcher.is_match("file"),
+                "tree" => matcher.is_match("dir") || matcher.is_match("directory"),
+                _ => false,
+            },
         }
     }
 }

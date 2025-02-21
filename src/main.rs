@@ -1,7 +1,7 @@
 use std::{env::current_dir, str::FromStr};
 
 use clap::{command, Parser};
-use detect::parse_and_run;
+use detect::{parse_and_run_fs, parse_and_run_github, parser::parse_expr};
 use slog::{o, Drain, Level, Logger};
 
 /// operators
@@ -40,6 +40,9 @@ struct Args {
     expr: String,
     #[arg(short = 'i')]
     visit_gitignored: bool,
+    // TODO: expand to full owner/repo/ref input
+    #[arg(short = 'g')]
+    github: bool,
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
 }
@@ -59,14 +62,18 @@ pub async fn main() -> Result<(), anyhow::Error> {
         o!(),
     );
 
-    parse_and_run(
-        logger,
-        &current_dir()?,
-        !args.visit_gitignored,
-        args.expr,
-        |s| println!("{}", s.to_string_lossy()),
-    )
-    .await
+    let expr = parse_expr(&args.expr)?;
+
+    parse_and_run_github(logger, expr, |s| println!("{}", s)).await
+
+    // parse_and_run_fs(
+    //     logger,
+    //     &current_dir()?,
+    //     !args.visit_gitignored,
+    //     args.expr,
+    //     |s| println!("{}", s.to_string_lossy()),
+    // )
+    // .await
 }
 
 /// Custom Drain logic
