@@ -49,7 +49,7 @@ impl<'a> Case<'a> {
         let tmp_dir = self.build();
         let mut out = Vec::new();
         set_current_dir(tmp_dir.path()).unwrap();
-        detect::parse_and_run(
+        detect::parse_and_run_fs(
             Logger::root(Discard, o!()),
             tmp_dir.path(),
             false,

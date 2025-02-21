@@ -8,7 +8,7 @@ use pratt_parser::Rule;
 
 use crate::{
     expr::Expr,
-    predicate::{self, CompiledContentPredicate, Predicate, RawPredicate},
+    predicate::{self, Predicate, RawPredicate, StreamingCompiledContentPredicate},
     MetadataPredicate, NamePredicate,
 };
 
@@ -25,6 +25,7 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<R
         .map_primary(|primary| match primary.as_rule() {
             Rule::predicate => {
                 let mut inner = primary.into_inner();
+                // TODO: catchall 'invalid selector' to support better error msgs
                 let lhs = match inner.next().unwrap().into_inner().next().unwrap().as_rule() {
                     Rule::name => predicate::Selector::FileName,
                     Rule::path => predicate::Selector::FilePath,
@@ -67,9 +68,11 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<R
         .parse(pairs)
 }
 
-pub(crate) fn parse_expr(
+pub fn parse_expr(
     input: &str,
-) -> anyhow::Result<Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
+) -> anyhow::Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+> {
     let pratt = PrattParser::new()
         .op(Op::infix(Rule::or, Left))
         .op(Op::infix(Rule::and, Left))

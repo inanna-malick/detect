@@ -96,13 +96,13 @@ impl<P: Clone> Expr<P> {
 }
 
 impl<P: Clone> Expr<P> {
-    pub fn reduce_predicate_and_short_circuit<B>(
+    pub fn reduce_predicate_and_short_circuit<B, X: Into<ShortCircuit<B>>>(
         &self,
-        f: impl Fn(P) -> ShortCircuit<B>,
+        f: impl Fn(P) -> X,
     ) -> Expr<B> {
         self.collapse_frames(|e| match e {
             // apply 'f' to Predicate expressions
-            ExprFrame::Predicate(p) => match f(p) {
+            ExprFrame::Predicate(p) => match f(p).into() {
                 ShortCircuit::Known(b) => Expr::Literal(b),
                 ShortCircuit::Unknown(p) => Expr::Predicate(p),
             },
