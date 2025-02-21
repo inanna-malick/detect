@@ -1,7 +1,7 @@
 use crate::expr::short_circuit::ShortCircuit;
 use crate::expr::Expr;
 use crate::expr::{MetadataPredicate, NamePredicate};
-use crate::predicate::{CompiledContentPredicateRef, Predicate};
+use crate::predicate::{Predicate, StreamingCompiledContentPredicateRef};
 use crate::util::Done;
 use futures::TryStreamExt;
 use slog::{debug, o, Logger};
@@ -10,7 +10,7 @@ use tokio::fs::File;
 use tokio::io::BufStream;
 use tokio_util::io::ReaderStream;
 
-use crate::eval::run_contents_predicate;
+use crate::eval::run_contents_predicate_stream;
 
 /// multipass evaluation with short circuiting, runs, in order:
 /// - file name matchers
@@ -18,14 +18,16 @@ use crate::eval::run_contents_predicate;
 /// - file content matchers
 pub async fn eval<'dfa>(
     logger: &Logger,
-    e: &'dfa Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicateRef<'dfa>>>,
+    e: &'dfa Expr<
+        Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicateRef<'dfa>>,
+    >,
     path: &Path,
 ) -> std::io::Result<bool> {
     let logger = logger.new(o!("path" => format!("{:?}", path)));
 
     debug!(logger, "visit entity"; "expr" => %e);
 
-    let e: Expr<Predicate<Done, MetadataPredicate, CompiledContentPredicateRef<'dfa>>> =
+    let e: Expr<Predicate<Done, MetadataPredicate, StreamingCompiledContentPredicateRef<'dfa>>> =
         e.reduce_predicate_and_short_circuit(|p| p.eval_name_predicate(path));
 
     if let Expr::Literal(b) = e {
@@ -40,7 +42,7 @@ pub async fn eval<'dfa>(
 
     let metadata = file.metadata().await?;
 
-    let e: Expr<Predicate<Done, Done, CompiledContentPredicateRef<'dfa>>> =
+    let e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'dfa>>> =
         e.reduce_predicate_and_short_circuit(|p| p.eval_metadata_predicate(&metadata));
 
     if let Expr::Literal(b) = e {
@@ -52,7 +54,7 @@ pub async fn eval<'dfa>(
 
     let e: Expr<Predicate<Done, Done, Done>> = if metadata.is_file() {
         debug!(logger, "evaluating file content predicates");
-        run_contents_predicate(
+        run_contents_predicate_stream(
             e,
             ReaderStream::new(BufStream::new(file)).map_ok(|b| b.to_vec()),
         )

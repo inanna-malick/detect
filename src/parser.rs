@@ -8,7 +8,7 @@ use pratt_parser::Rule;
 
 use crate::{
     expr::Expr,
-    predicate::{self, CompiledContentPredicate, Predicate, RawPredicate},
+    predicate::{self, Predicate, RawPredicate, StreamingCompiledContentPredicate},
     MetadataPredicate, NamePredicate,
 };
 
@@ -70,7 +70,9 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<R
 
 pub fn parse_expr(
     input: &str,
-) -> anyhow::Result<Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>> {
+) -> anyhow::Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+> {
     let pratt = PrattParser::new()
         .op(Op::infix(Rule::or, Left))
         .op(Op::infix(Rule::and, Left))

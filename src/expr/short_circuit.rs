@@ -5,6 +5,12 @@ pub enum ShortCircuit<X> {
     Unknown(X),
 }
 
+impl<X> From<bool> for ShortCircuit<X> {
+    fn from(value: bool) -> Self {
+        ShortCircuit::Known(value)
+    }
+}
+
 impl<X: Display> Display for ShortCircuit<X> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

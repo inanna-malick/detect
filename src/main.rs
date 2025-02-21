@@ -1,7 +1,7 @@
 use std::{env::current_dir, str::FromStr};
 
 use clap::{command, Parser};
-use detect::{parse_and_run_fs, parse_and_run_github, parser::parse_expr};
+use detect::{parse_and_run_fs, parser::parse_expr, run_git};
 use slog::{o, Drain, Level, Logger};
 
 /// operators
@@ -40,9 +40,9 @@ struct Args {
     expr: String,
     #[arg(short = 'i')]
     visit_gitignored: bool,
-    // TODO: expand to full owner/repo/ref input
-    #[arg(short = 'g')]
-    github: bool,
+    /// ref for git repo in current dir or parent of current dir
+    #[arg(short = 'g', long = "gitref")]
+    gitref: Option<String>,
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
 }
@@ -64,16 +64,20 @@ pub async fn main() -> Result<(), anyhow::Error> {
 
     let expr = parse_expr(&args.expr)?;
 
-    parse_and_run_github(logger, expr, |s| println!("{}", s)).await
+    if let Some(ref_) = args.gitref {
+        run_git(logger, &current_dir()?, &ref_, expr, |s| println!("{}", s))?;
+    } else {
+        parse_and_run_fs(
+            logger,
+            &current_dir()?,
+            !args.visit_gitignored,
+            args.expr,
+            |s| println!("{}", s.to_string_lossy()),
+        )
+        .await?;
+    }
 
-    // parse_and_run_fs(
-    //     logger,
-    //     &current_dir()?,
-    //     !args.visit_gitignored,
-    //     args.expr,
-    //     |s| println!("{}", s.to_string_lossy()),
-    // )
-    // .await
+    Ok(())
 }
 
 /// Custom Drain logic

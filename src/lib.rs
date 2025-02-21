@@ -8,38 +8,31 @@ use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use expr::{Expr, MetadataPredicate, NamePredicate};
+use git2::{Repository, RepositoryOpenFlags, TreeWalkResult};
 use ignore::WalkBuilder;
 use parser::parse_expr;
-use predicate::{CompiledContentPredicate, Predicate};
-use slog::{debug, info, Logger};
+use predicate::{Predicate, StreamingCompiledContentPredicate};
+use slog::{debug, error, info, warn, Logger};
 
-pub async fn parse_and_run_github<F: FnMut(&str)>(
+pub fn run_git<F: FnMut(&str)>(
     logger: Logger,
-    // root: &Path,
-    // respect_gitignore: bool,
-    expr: Expr<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>>,
+    root: &Path,
+    ref_: &str,
+    expr: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
     mut on_match: F,
 ) -> Result<(), anyhow::Error> {
-    use octorust::{auth::Credentials, Client};
+    let repository = Repository::open_ext(
+        root,
+        RepositoryOpenFlags::empty(),
+        &[] as &[&std::ffi::OsStr],
+    )?;
 
-    let github = Client::new(String::from("detect-cli-tool"), None).unwrap();
+    let ref_ = repository.revparse_single(ref_).context("ref not found")?;
+    let commit = ref_
+        .as_commit()
+        .ok_or(anyhow::Error::msg("non-commit ref target"))?;
 
-    let owner = "inanna-malick";
-    let repo = "detect";
-    let ref_ = "heads/main";
-
-    let ref_ = github.git().get_ref(owner, repo, ref_).await?;
-
-    let commit = github
-        .git()
-        .get_commit(owner, repo, &ref_.body.object.sha)
-        .await?;
-
-    // assertion: since recursive is passed in this will be the full tree (maybe? need to learn how large trees are handled)
-    let tree = github
-        .git()
-        .get_tree(owner, repo, &commit.body.tree.sha, "true")
-        .await?;
+    let tree = repository.find_tree(commit.tree_id())?;
 
     let expr = expr.map_predicate_ref(|p| match p {
         Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
@@ -47,31 +40,39 @@ pub async fn parse_and_run_github<F: FnMut(&str)>(
         Predicate::Content(c) => Predicate::Content(c.as_ref()),
     });
 
-    for entry in tree.body.tree.into_iter() {
-        // let path = Path::new(&entry.path);
-
+    tree.walk(git2::TreeWalkMode::PreOrder, |parent_path, entry| {
         let start = Instant::now();
 
-        let is_match = eval::github::eval(&logger, &expr, &github, &entry, owner, repo)
-            .await
-            .context(format!("failed to eval for ${entry:?}"))?;
+        let Some(name) = entry.name() else {
+            warn!(logger, "entry without name? weird, skip and continue"; "parent_path" => parent_path);
+            return TreeWalkResult::Skip
+        };
+        let path = format!("{}{}", parent_path, name);
 
-        let duration = start.elapsed();
+        debug!(logger, "walk"; "path" => &path);
 
-        debug!(logger, "visited entity"; "duration" => #?duration, "result" => is_match);
+        match eval::git::eval(&logger, &expr, &repository, &path, entry).context(format!(
+            "failed to eval for ${} ${}",
+            entry.name().unwrap_or("[unnamed]"),
+            entry.id()
+        )) {
+            Ok(is_match) => {
+                let duration = start.elapsed();
 
-        if is_match {
-            let sha = &commit.body.sha;
-            let path = entry.path;
-            let url = format!("https://github.com/{owner}/{repo}/blob/{sha}/{path}");
-// 
-            on_match(&url);
+                debug!(logger, "visited entity"; "duration" => #?duration, "result" => is_match);
+
+                if is_match {
+                    on_match(&path);
+                }
+
+                TreeWalkResult::Ok
+            }
+            Err(e) => {
+                error!(logger, "failed reading git entry, aborting tree walk"; "err" => #?e);
+                TreeWalkResult::Abort
+            }
         }
-
-    }
-
-    // println!("tree: {:?}", tree.body.tree);
-    // let tree_entries = tree.body.tree.into_i
+    })?;
 
     Ok(())
 }

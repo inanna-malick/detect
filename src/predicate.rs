@@ -1,4 +1,4 @@
-use octorust::types::GitTree;
+use git2::Blob;
 use regex::Regex;
 use regex_automata::dfa::dense::DFA;
 use std::fs::FileType;
@@ -20,7 +20,9 @@ pub struct RawPredicate {
 impl RawPredicate {
     pub fn parse(
         self,
-    ) -> anyhow::Result<Predicate<NamePredicate, MetadataPredicate, CompiledContentPredicate>> {
+    ) -> anyhow::Result<
+        Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+    > {
         Ok(match self.lhs {
             Selector::FileName => {
                 Predicate::name(NamePredicate::Filename(parse_string(&self.op, &self.rhs)?))
@@ -123,12 +125,12 @@ pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
     })
 }
 
-pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<CompiledContentPredicate> {
+pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<StreamingCompiledContentPredicate> {
     Ok(match op {
-        Op::Matches => CompiledContentPredicate::new(rhs)?,
+        Op::Matches => StreamingCompiledContentPredicate::new(rhs)?,
         Op::Equality => {
             let regex = format!("^{}$", rhs);
-            CompiledContentPredicate {
+            StreamingCompiledContentPredicate {
                 inner: DFA::new(&regex)?,
                 source: regex,
             }
@@ -221,12 +223,20 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
         }
     }
 
-    pub fn eval_metadata_predicate_github(
+    pub fn eval_metadata_predicate_git_tree(self) -> ShortCircuit<Predicate<A, Done, B>> {
+        match self {
+            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match_git_tree()),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+        }
+    }
+
+    pub fn eval_metadata_predicate_git_blob(
         self,
-        metadata: &GitTree,
+        blob: &Blob,
     ) -> ShortCircuit<Predicate<A, Done, B>> {
         match self {
-            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match_github(metadata)),
+            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match_git_blob(blob)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
@@ -262,12 +272,12 @@ impl NamePredicate {
             NamePredicate::Filename(x) => path
                 .file_name()
                 .and_then(|os_str| os_str.to_str())
-                .map_or(false, |s| x.is_match(s)),
-            NamePredicate::Path(x) => path.as_os_str().to_str().map_or(false, |s| x.is_match(s)),
+                .is_some_and(|s| x.is_match(s)),
+            NamePredicate::Path(x) => path.as_os_str().to_str().is_some_and(|s| x.is_match(s)),
             NamePredicate::Extension(x) => path
                 .extension()
                 .and_then(|os_str| os_str.to_str())
-                .map_or(false, |s| x.is_match(s)),
+                .is_some_and(|s| x.is_match(s)),
         }
     }
 }
@@ -334,48 +344,35 @@ impl MetadataPredicate {
         }
     }
 
-    pub fn is_match_github(&self, metadata: &GitTree) -> bool {
+    pub fn is_match_git_tree(&self) -> bool {
         match self {
-            MetadataPredicate::Filesize(range) => {
-                if let Ok(size) = metadata.size.try_into() {
-                    range.is_match(size)
-                } else {
-                    false
-                }
+            MetadataPredicate::Filesize(_) => {
+                // it's not a file
+                false
             }
-            MetadataPredicate::Type(matcher) => match metadata.type_.as_str() {
-                "blob" => matcher.is_match("file"),
-                "tree" => matcher.is_match("dir") || matcher.is_match("directory"),
-                _ => false,
-            },
+            MetadataPredicate::Type(matcher) => {
+                matcher.is_match("dir") || matcher.is_match("directory")
+            }
+        }
+    }
+
+    pub fn is_match_git_blob(&self, entry: &Blob) -> bool {
+        match self {
+            MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
+            MetadataPredicate::Type(matcher) => matcher.is_match("file"),
         }
     }
 }
 
 // predicates that scan the entire file
-#[derive(Clone, Debug)]
-pub struct CompiledContentPredicateRef<'a> {
-    // compiled automaton
-    pub inner: DFA<&'a [u32]>,
-    // source regex, for logging
-    pub source: &'a str,
-}
-
-impl<'a> Display for CompiledContentPredicateRef<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("@file ~= {}", self.source))
-    }
-}
-
-// predicates that scan the entire file
-pub struct CompiledContentPredicate {
+pub struct StreamingCompiledContentPredicate {
     // compiled automaton
     inner: DFA<Vec<u32>>,
     // source regex, for logging
     source: String,
 }
 
-impl CompiledContentPredicate {
+impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> anyhow::Result<Self> {
         Ok(Self {
             inner: DFA::new(&source)?,
@@ -383,22 +380,22 @@ impl CompiledContentPredicate {
         })
     }
 
-    pub(crate) fn as_ref(&self) -> CompiledContentPredicateRef<'_> {
-        CompiledContentPredicateRef {
+    pub(crate) fn as_ref(&self) -> StreamingCompiledContentPredicateRef<'_> {
+        StreamingCompiledContentPredicateRef {
             inner: self.inner.as_ref(),
             source: &self.source,
         }
     }
 }
 
-impl PartialEq for CompiledContentPredicate {
+impl PartialEq for StreamingCompiledContentPredicate {
     fn eq(&self, other: &Self) -> bool {
         // compare source regexes only
         self.source == other.source
     }
 }
 
-impl std::fmt::Debug for CompiledContentPredicate {
+impl std::fmt::Debug for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompiledContentPredicate")
             .field("inner", &"_")
@@ -407,7 +404,22 @@ impl std::fmt::Debug for CompiledContentPredicate {
     }
 }
 
-impl Display for CompiledContentPredicate {
+impl Display for StreamingCompiledContentPredicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("@file ~= {}", self.source))
+    }
+}
+
+// predicates that scan the entire file
+#[derive(Clone, Debug)]
+pub struct StreamingCompiledContentPredicateRef<'a> {
+    // compiled automaton
+    pub inner: DFA<&'a [u32]>,
+    // source regex, for logging
+    pub source: &'a str,
+}
+
+impl<'a> Display for StreamingCompiledContentPredicateRef<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("@file ~= {}", self.source))
     }
