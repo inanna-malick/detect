@@ -1,4 +1,4 @@
-use std::{env::current_dir, str::FromStr};
+use std::{env::current_dir, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
 use detect::{parse_and_run_fs, parser::parse_expr, run_git};
@@ -38,6 +38,9 @@ struct Args {
     /// filtering expr
     #[clap(index = 1)]
     expr: String,
+    /// target dir
+    #[clap(index = 2)]
+    path: Option<PathBuf>,
     #[arg(short = 'i')]
     visit_gitignored: bool,
     /// ref for git repo in current dir or parent of current dir
@@ -62,14 +65,21 @@ pub async fn main() -> Result<(), anyhow::Error> {
         o!(),
     );
 
+    let root_path = match args.path {
+        Some(path) => path,
+        None => current_dir()?,
+    };
+
+    println!("path: {:?}", root_path);
+
     let expr = parse_expr(&args.expr)?;
 
     if let Some(ref_) = args.gitref {
-        run_git(logger, &current_dir()?, &ref_, expr, |s| println!("{}", s))?;
+        run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
     } else {
         parse_and_run_fs(
             logger,
-            &current_dir()?,
+            &root_path,
             !args.visit_gitignored,
             args.expr,
             |s| println!("{}", s.to_string_lossy()),
