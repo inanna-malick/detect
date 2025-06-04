@@ -11,10 +11,10 @@ program = { SOI ~ query ~ EOI }
 
 query = {
     type_with_pattern    // Type + pattern (e.g., "python TODO")
+  | expression           // Full boolean expressions - before file_type to catch "rust && TODO"
+  | file_type            // Standalone file type (e.g., "rust") - before predicate to avoid "type" conflict
   | predicate            // Standalone predicates (e.g., "size > 1000") - before filtered_search to avoid ambiguity
   | filtered_search      // Filtered searches (includes type + pattern)
-  | file_type            // Standalone file type (e.g., "rust") - must come before expression
-  | expression           // Full boolean expressions  
   | implicit_search      // Simple patterns
 }
 
@@ -62,18 +62,18 @@ search_base = {
   | implicit_search    // "*.rs", "TODO", etc
 }
 
-// Allow type + optional pattern
+// Allow type + pattern - require at least one space to distinguish from standalone types
 type_with_pattern = {
-    file_type ~ implicit_search
+    file_type ~ WHITESPACE+ ~ implicit_search
 }
 
 
-// File types - single letter types must not be followed by letters to avoid matching "contains" as "c"
+// File types - ensure complete word matches to avoid conflicts with selectors like "type"
 file_type = @{
-    "rust" | "rs" | "python" | "py" | "javascript" | "js" |
-    "typescript" | "ts" | "go" | "java" | "cpp" | 
-    ("c" ~ !ASCII_ALPHA) |  // "c" only when not followed by a letter
-    "image" | "video" | "audio" | "text" | "binary"
+    ("rust" | "rs" | "python" | "py" | "javascript" | "js" |
+     "typescript" | "ts" | "go" | "java" | "cpp" | 
+     "image" | "video" | "audio" | "text" | "binary") ~ !ASCII_ALPHANUMERIC |
+    ("c" ~ !ASCII_ALPHA)  // "c" only when not followed by a letter
 }
 
 // Filters

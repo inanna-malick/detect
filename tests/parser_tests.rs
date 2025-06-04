@@ -1078,6 +1078,15 @@ mod parser_tests {
         let just_contains = parse_query("contains");
         println!("Just 'contains': {:?}", just_contains);
     }
+
+    #[test]
+    fn test_file_type_parsing() {
+        let test_cases = vec!["typescript", "ts", "rust", "python", "c"];
+        
+        for case in test_cases {
+            println!("Testing file type '{}': {:?}", case, parse_query(case));
+        }
+    }
     
     #[test]
     fn test_debug_mixed_predicates() {
