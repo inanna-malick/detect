@@ -63,6 +63,11 @@ pub fn eval<'dfa>(
                 MetadataPredicate::Type(string_matcher) => {
                     string_matcher.is_match("directory") | string_matcher.is_match("dir")
                 }
+                MetadataPredicate::SizeGreater(_) => false,
+                MetadataPredicate::SizeLess(_) => false,
+                MetadataPredicate::SizeEquals(_) => false,
+                MetadataPredicate::IsExecutable => false,
+                MetadataPredicate::IsSymlink => false,
             },
             Predicate::Content(_) => false,
             Predicate::Name(_) => unreachable!(),

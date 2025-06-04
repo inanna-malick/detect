@@ -1,4 +1,4 @@
-use std::{env::current_dir, path::PathBuf, str::FromStr};
+use std::{env::current_dir, path::PathBuf, str::FromStr, io::Write};
 
 use clap::{command, Parser};
 use detect::{parse_and_run_fs, parser::parse_expr, run_git};
@@ -75,14 +75,26 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let expr = parse_expr(&args.expr)?;
 
     if let Some(ref_) = args.gitref {
-        run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
+        run_git(logger, &root_path, &ref_, expr, |s| {
+            if let Err(e) = writeln!(std::io::stdout(), "{}", s) {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            }
+        })?;
     } else {
         parse_and_run_fs(
             logger,
             &root_path,
             !args.visit_gitignored,
             args.expr,
-            |s| println!("{}", s.to_string_lossy()),
+            |s| {
+                if let Err(e) = writeln!(std::io::stdout(), "{}", s.to_string_lossy()) {
+                    if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        std::process::exit(0);
+                    }
+                }
+            },
         )
         .await?;
     }

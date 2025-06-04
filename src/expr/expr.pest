@@ -1,32 +1,155 @@
-WHITESPACE   =  _{ " " | "\t" | NEWLINE }
+// Detect Expression Grammar - Progressive Complexity Design
+// More flexible version that handles common use cases better
+
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+program = { SOI ~ query ~ EOI }
+
+query = {
+    filtered_search      // Filtered searches (includes type + pattern)
+  | expression           // Full boolean expressions
+  | implicit_search      // Simple patterns
+}
+
+// ============================================================================
+// LEVEL 1: IMPLICIT SEARCH PATTERNS
+// ============================================================================
+
+implicit_search = {
+    quoted_string        // "exact match.txt"
+  | regex_pattern        // /pattern/flags
+  | glob_pattern         // *.rs, src/**/*.js (must have glob special chars)
+  | bare_word           // TODO, README
+}
+
+quoted_string = { "\"" ~ inner_string ~ "\"" }
+inner_string = @{ (!"\"" ~ ANY)* }
+
+regex_pattern = { "/" ~ regex_body ~ "/" ~ regex_flags? }
+regex_body = @{ (!"/" ~ ANY)* }
+regex_flags = @{ ("i" | "m" | "s" | "x")+ }
+
+// Glob pattern must contain at least one glob special character or path separator
+glob_pattern = @{
+    path_pattern |                                           // paths/like/this
+    (path_chars* ~ glob_special ~ (path_chars | glob_special)*) // *pattern
+}
+path_pattern = @{ path_chars+ ~ "/" ~ (path_chars | glob_special | "/")* }
+path_chars = { ASCII_ALPHANUMERIC | "." | "_" | "-" }
+glob_special = { "*" | "?" | "[" | "]" | "{" | "}" | "," }
+
+bare_word = @{ (ASCII_ALPHANUMERIC | "_" | "-" | ".")+ }
+
+// ============================================================================
+// LEVEL 2: FILTERED SEARCHES
+// ============================================================================
+
+// More flexible: allow any combination of type/pattern + filters
+filtered_search = {
+    type_with_pattern               // "rust TODO"
+  | search_base ~ filter+           // "*.rs >1MB", "rust >1MB"
+}
+
+search_base = {
+    file_type          // just "rust", "python"  
+  | implicit_search    // "*.rs", "TODO", etc
+}
+
+// Allow type + optional pattern
+type_with_pattern = {
+    file_type ~ implicit_search
+}
 
 
-char = { ASCII_ALPHANUMERIC | "." | "_" | "/" }
+file_type = @{
+    "rust" | "rs" | "python" | "py" | "javascript" | "js" |
+    "typescript" | "ts" | "go" | "java" | "cpp" | "c" |
+    "image" | "video" | "audio" | "text" | "binary"
+}
 
+// Filters
+filter = {
+    size_filter
+  | time_filter  
+  | path_filter
+  | property_filter
+}
 
-program         =   { SOI ~ expr ~ EOI }
-  expr          =   { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
-    infix       =  _{ and | or }
-      and       =   { "&&" } // logical and
-      or        =   { "||" } // logical or
-    prefix      =  _{ neg }
-      neg       =   { "!" } // Negation
-    primary     =  _{ predicate | "(" ~ expr ~ ")" }
+// Size filters
+size_filter = { size_op ~ size_value }
+size_op = { ">=" | ">" | "<=" | "<" | "=" }
+size_value = @{ number ~ size_unit? }
+size_unit = { "B" | "KB" | "MB" | "GB" | "K" | "M" | "G" }
 
+// Time filters
+time_filter = { time_selector ~ ":" ~ time_expr }
+time_selector = { "modified" | "created" | "accessed" | "m" | "c" | "a" }
+time_expr = { relative_time | time_keyword }
+relative_time = @{ number ~ time_unit }
+time_unit = { "s" | "m" | "h" | "d" | "w" | "mo" | "y" }
+time_keyword = { "today" | "yesterday" | "now" }
 
-predicate =  { selector ~ op ~ rhs }
-  selector = { "@" ~ (name | path | ext | size | type | contents) }
-    name     = { "filename"  | "name" }
-    path     = { "filepath"  | "path" }
-    ext      = { "extension" | "ext"  }
-    size     = { "filesize"  | "size" }
-    type     = {"filetype"   | "type" }
-    contents = { "contents"  | "file" }
-  op      = _{ eq | like | gteq | lteq | gt | lt}
-    eq    = { "==" | "=" } // exact equals
-    like  = { "~=" | "~" } // regex type situation
-    gteq  = { ">=" }
-    lteq  = { "<=" }
-    gt    = { ">" }
-    lt    = { "<" }
-  rhs     = @{ char+ }
+// Path filters - more flexible with optional quotes
+path_filter = { path_prefix ~ (quoted_string | path_value) }
+path_prefix = { "in:" | "dir:" | "path:" }
+path_value = @{ (!WHITESPACE ~ ANY)+ }
+
+// Properties
+property_filter = {
+    "executable" | "hidden" | "empty" | "binary" | "symlink"
+}
+
+// ============================================================================
+// LEVEL 3: FULL EXPRESSIONS
+// ============================================================================
+
+expression = { or_expr }
+
+or_expr = { and_expr ~ (or_op ~ and_expr)* }
+or_op = { "||" }
+
+and_expr = { not_expr ~ (and_op ~ not_expr)* }
+and_op = { "&&" }
+
+not_expr = { not_op? ~ atom }
+not_op = { "!" }
+
+atom = {
+    "(" ~ expression ~ ")"
+  | predicate
+  | filtered_search
+  | implicit_search  
+}
+
+// Predicates
+predicate = {
+    selector ~ comparison_op ~ value
+  | selector  // Boolean properties
+  | contains_expr
+}
+
+selector = {
+    "name" | "path" | "ext" | "size" | "type" | 
+    "lines" | "binary" | "empty"
+}
+
+contains_expr = { "contains" ~ "(" ~ pattern ~ ")" }
+pattern = { regex_pattern | quoted_string }
+
+comparison_op = { "!=" | ">=" | "<=" | ">" | "<" | "~" | "=" }
+
+value = {
+    quoted_string
+  | number_value  
+  | bare_value
+}
+
+number_value = @{ number ~ (size_unit | time_unit)? }
+bare_value = @{ (ASCII_ALPHANUMERIC | "." | "_" | "-" | "/" | "\\")+ }
+
+// Shared number parsing
+number = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }

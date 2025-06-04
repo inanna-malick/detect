@@ -264,6 +264,8 @@ pub enum NamePredicate {
     Filename(StringMatcher),
     Path(StringMatcher),
     Extension(StringMatcher),
+    Equals(String),
+    Regex(String),
 }
 
 impl NamePredicate {
@@ -278,6 +280,21 @@ impl NamePredicate {
                 .extension()
                 .and_then(|os_str| os_str.to_str())
                 .is_some_and(|s| x.is_match(s)),
+            NamePredicate::Equals(s) => path
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .map(|name| name == s)
+                .unwrap_or(false),
+            NamePredicate::Regex(pattern) => {
+                if let Ok(re) = Regex::new(pattern) {
+                    path.file_name()
+                        .and_then(|os_str| os_str.to_str())
+                        .map(|name| re.is_match(name))
+                        .unwrap_or(false)
+                } else {
+                    false
+                }
+            }
         }
     }
 }
@@ -310,6 +327,11 @@ impl Bound {
 pub enum MetadataPredicate {
     Filesize(NumberMatcher),
     Type(StringMatcher), //dir, exec, etc
+    SizeGreater(u64),
+    SizeLess(u64),
+    SizeEquals(u64),
+    IsExecutable,
+    IsSymlink,
 }
 
 impl Display for MetadataPredicate {
@@ -341,6 +363,14 @@ impl MetadataPredicate {
                     false
                 }
             }
+            MetadataPredicate::SizeGreater(n) => metadata.size() > *n,
+            MetadataPredicate::SizeLess(n) => metadata.size() < *n,
+            MetadataPredicate::SizeEquals(n) => metadata.size() == *n,
+            MetadataPredicate::IsExecutable => {
+                use std::os::unix::fs::PermissionsExt;
+                metadata.permissions().mode() & 0o111 != 0
+            }
+            MetadataPredicate::IsSymlink => metadata.file_type().is_symlink(),
         }
     }
 
@@ -353,6 +383,11 @@ impl MetadataPredicate {
             MetadataPredicate::Type(matcher) => {
                 matcher.is_match("dir") || matcher.is_match("directory")
             }
+            MetadataPredicate::SizeGreater(_) => false,
+            MetadataPredicate::SizeLess(_) => false,
+            MetadataPredicate::SizeEquals(_) => false,
+            MetadataPredicate::IsExecutable => false,
+            MetadataPredicate::IsSymlink => false,
         }
     }
 
@@ -360,9 +395,15 @@ impl MetadataPredicate {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
             MetadataPredicate::Type(matcher) => matcher.is_match("file"),
+            MetadataPredicate::SizeGreater(n) => entry.size() as u64 > *n,
+            MetadataPredicate::SizeLess(n) => (entry.size() as u64) < *n,
+            MetadataPredicate::SizeEquals(n) => entry.size() as u64 == *n,
+            MetadataPredicate::IsExecutable => false, // Can't determine from blob
+            MetadataPredicate::IsSymlink => false, // Can't determine from blob
         }
     }
 }
+
 
 // predicates that scan the entire file
 pub struct StreamingCompiledContentPredicate {

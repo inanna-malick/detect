@@ -2,6 +2,7 @@ mod eval;
 pub mod expr;
 pub mod parser;
 pub mod predicate;
+pub mod query;
 mod util;
 
 use std::{path::Path, sync::Arc, time::Instant};
