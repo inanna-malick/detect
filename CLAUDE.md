@@ -50,7 +50,14 @@ Key architectural decisions:
 - **Frame-based evaluation** (`expr/frame.rs`): Tracks which predicates need evaluation at each stage
 - Uses `recursion` crate for AST transformations and `ignore` crate for respecting .gitignore
 
-## Usage Modes
+## Usage Philosophy: Keep It Simple
+
+**ALWAYS prefer simple syntax over verbose predicates:**
+- ✅ `detect TODO` instead of ❌ `detect 'contains(TODO)'`
+- ✅ `detect '*.rs'` instead of ❌ `detect 'ext == rs'`
+- ✅ `detect '>1MB'` instead of ❌ `detect 'size > 1048576'`
+- ✅ `detect 'rust TODO'` instead of ❌ `detect 'ext == rs && contains(TODO)'`
+- ✅ `detect "parser.rs"` instead of ❌ `detect 'name == parser.rs'`
 
 ### Simple Mode (Default)
 - Bare words search content: `detect TODO`
@@ -59,10 +66,10 @@ Key architectural decisions:
 - Combine easily: `detect --type python TODO`
 
 ### Expression Mode (-e flag)
-For complex queries, use the expression syntax:
-- Predicates: `size > 1MB`, `name = "test.rs"`, `contains(/regex/)`
-- Boolean logic: `&&` (AND), `||` (OR), `!` (NOT)
-- Comparisons: `>`, `>=`, `<`, `<=`, `=`, `~` (regex match)
+Only use for truly complex queries that can't be expressed simply:
+- When you need parentheses for grouping: `detect -e '(*.rs || *.go) && TODO'`
+- When you need specific predicates not available as filters
+- Avoid using verbose predicates when simpler syntax exists
 
 ## Memories
 

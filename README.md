@@ -41,7 +41,7 @@ Add filters for more control:
 ### Full Expressions (Level 3)
 For complex queries, use boolean logic and predicates:
 - Boolean operators: `&&` (AND), `||` (OR), `!` (NOT)
-- Predicates: `name == "test.rs"`, `size > 1000`, `contains(/unsafe/)`
+- Predicates: `name == "test.rs"`, `size > 1000`, `contains(/unsafe/)` (prefer simpler syntax when possible: `"test.rs"`, `>1000`, `unsafe`)
 - Combine everything: `detect '(*.rs || *.go) && size > 1MB && !hidden'`
 
 ## Examples
@@ -63,5 +63,5 @@ detect 'image >10MB'
 detect '*.log modified:7d'
 
 # Complex query: large Rust files with unsafe code
-detect '*.rs && size > 10KB && contains(/unsafe/)'
+detect '*.rs >10KB unsafe'
 ```

@@ -234,7 +234,7 @@ mod llm_syntax_tests {
     #[test]
     fn test_boolean_and() {
         // Boolean AND
-        let cases = vec!["*.rs && TODO", "hidden && empty", "rust && size > 1000"];
+        let cases = vec!["*.rs && TODO", "hidden && empty", "rust && TODO"];
 
         for case in cases {
             let result = parse_query(case);
@@ -275,7 +275,7 @@ mod llm_syntax_tests {
         // Complex queries with parentheses
         let cases = vec![
             "(*.rs || *.go) && size > 1MB",
-            "name = \"test.rs\" || contains(/test/)",
+            "\"test.rs\" || /test/",
             "(rust || go) && !empty",
             "hidden && (*.log || *.tmp)",
         ];
@@ -299,7 +299,11 @@ mod llm_syntax_tests {
 
     #[test]
     fn test_predicates() {
-        // Various predicates
+        // Various predicates - VERBOSE SYNTAX (prefer simpler alternatives)
+        // Testing parser completeness, but users should use:
+        // - '>1000' instead of 'size > 1000'
+        // - '*.rs' instead of 'ext = rs'
+        // - '"test.rs"' instead of 'name = test.rs'
         let cases = vec![
             "size > 1000",
             "size >= 1KB",

@@ -4,16 +4,18 @@ use clap::{command, Parser};
 use detect::{parse_and_run_fs, parser::parse_expr, run_git};
 use slog::{o, Drain, Level, Logger};
 
-/// Fast file finder with intuitive syntax
+/// Fast file finder with intuitive syntax - always prefer simple over verbose
 ///
-/// Examples:
+/// Examples (SIMPLE - preferred):
 ///   detect TODO                              # Search for "TODO" in file contents
 ///   detect "*.rs"                            # Find files matching pattern
 ///   detect --type rust                       # Find all Rust files
-///   detect --type rust TODO                  # Find Rust files containing "TODO"
-///   detect -e "size > 1MB"                   # Use expression syntax
-///   detect --git-range HEAD~10..HEAD TODO    # Find TODOs added in last 10 commits
-///   detect -g main '*.rs'                    # Find Rust files in main branch
+///   detect ">1MB"                            # Files larger than 1MB
+///   detect "*.rs TODO"                       # Rust files containing TODO
+///   
+/// Examples (EXPRESSION MODE - use only when needed):
+///   detect -e "(*.rs || *.go) && TODO"       # Parentheses require -e flag
+///   detect -e "lines > 100"                  # Predicates not available as simple filters
 #[derive(Parser, Debug)]
 #[command(
     name = "detect",
@@ -39,7 +41,7 @@ struct Args {
     #[arg(long = "in")]
     in_path: Option<String>,
 
-    /// Use expression syntax (e.g., "size > 1MB && modified:today")
+    /// Use expression syntax for complex queries (prefer simple syntax when possible)
     #[arg(short = 'e', long = "expr")]
     expression: Option<String>,
 

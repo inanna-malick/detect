@@ -120,19 +120,19 @@ run_test "Large Rust with TODO" \
     "Large Rust files with TODO"
 
 run_test "Contains unsafe code" \
-    "detect 'contains(/unsafe/)'" \
+    "detect 'unsafe'" \
     "Files with unsafe keyword"
 
-run_test "Name equals predicate" \
-    "detect 'name == parser.rs'" \
+run_test "Exact filename match" \
+    "detect '\"parser.rs\"'" \
     "File named exactly parser.rs"
 
 run_test "Size comparison" \
-    "detect 'size > 1000'" \
+    "detect '>1000'" \
     "Files larger than 1000 bytes"
 
 run_test "Extension check" \
-    "detect 'ext == rs'" \
+    "detect '*.rs'" \
     "Files with rs extension"
 
 # Pattern variations
@@ -287,11 +287,11 @@ run_test "Comments with slashes" \
 
 # Numeric comparisons
 run_test "Exactly 0 bytes" \
-    "detect 'size == 0'" \
+    "detect 'empty'" \
     "Empty files"
 
 run_test "Under 100 bytes" \
-    "detect 'size < 100'" \
+    "detect '<100'" \
     "Very small files"
 
 run_test "KB size files" \

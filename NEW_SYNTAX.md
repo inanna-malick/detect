@@ -55,11 +55,11 @@ detect 'not binary'
 
 # Complex queries
 detect '(*.rs or *.go) and size > 1MB'
-detect 'name == "test.rs" or contains(/test/)'
+detect '"test.rs" or /test/'
 
 # Predicates
 detect 'size > 1000 and lines < 100'
-detect 'ext == rs and not contains(/unsafe/)'
+detect '*.rs and not unsafe'
 ```
 
 ## Key Improvements
