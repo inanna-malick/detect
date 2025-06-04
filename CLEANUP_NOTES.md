@@ -32,5 +32,20 @@ Most of the codebase has been updated to use the new syntax. The documentation, 
 - ✅ new_syntax.rs - tests for new parser
 - ✅ parser_tests.rs - updated tests
 
-## Recommendation
-The main cleanup needed is removing the old RawPredicate code in predicate.rs since it appears to be dead code from the previous parser implementation.
+## Cleanup Completed
+
+### Removed Dead Code
+- ✅ `RawPredicate` struct and its `parse` method
+- ✅ Old `Selector` enum (superseded by new Selector in query.rs)
+- ✅ `Op` and `NumericalOp` enums
+- ✅ `parse_string`, `parse_string_dfa`, and `parse_numerical` functions
+- ✅ `Bound` enum (only used in the dead code above)
+- ✅ Removed unused imports: `RangeFrom`, `RangeTo`, `Range`
+
+### Updated Tests
+- ✅ Fixed integration tests to use new syntax
+- ⚠️  Some llm_syntax_tests are failing due to incomplete implementation of certain features
+
+## Remaining Issues
+- Some advanced filter syntax (like standalone predicates) needs more work
+- The parser doesn't fully support all the syntax variations described in the tests

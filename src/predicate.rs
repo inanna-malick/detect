@@ -2,64 +2,13 @@ use git2::Blob;
 use regex::Regex;
 use regex_automata::dfa::dense::DFA;
 use std::fs::FileType;
-use std::ops::{RangeFrom, RangeTo};
 use std::os::unix::prelude::MetadataExt;
 use std::sync::Arc;
-use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
+use std::{fmt::Display, fs::Metadata, path::Path};
 
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RawPredicate {
-    pub lhs: Selector,
-    pub op: Op,
-    pub rhs: String,
-}
-
-impl RawPredicate {
-    pub fn parse(
-        self,
-    ) -> anyhow::Result<
-        Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
-    > {
-        Ok(match self.lhs {
-            Selector::FileName => {
-                Predicate::name(NamePredicate::Filename(parse_string(&self.op, &self.rhs)?))
-            }
-            Selector::FilePath => {
-                Predicate::name(NamePredicate::Path(parse_string(&self.op, &self.rhs)?))
-            }
-            Selector::Extension => {
-                Predicate::name(NamePredicate::Extension(parse_string(&self.op, &self.rhs)?))
-            }
-            Selector::EntityType => {
-                Predicate::meta(MetadataPredicate::Type(parse_string(&self.op, &self.rhs)?))
-            }
-            Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
-                &self.op, &self.rhs,
-            )?)),
-            Selector::Contents => Predicate::contents(parse_string_dfa(self.op, self.rhs)?),
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Selector {
-    // NAME:
-    FileName,
-    Extension,
-    FilePath,
-    // METADATA
-    EntityType,
-    Size,
-    // TODO: more
-    // CONTENTS
-    // FIXME: figure out a better Display impl if/when more selectors added
-    Contents,
-    // Encoding, TODO, eventually?
-    // later - parse contents as json,toml,etc - can run selectors against that
-}
 
 pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
@@ -96,71 +45,17 @@ impl StringMatcher {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NumberMatcher {
-    In(Bound),
     Equals(u64),
 }
 
 impl NumberMatcher {
     pub fn is_match(&self, x: u64) -> bool {
         match self {
-            NumberMatcher::In(b) => b.contains(&x),
             NumberMatcher::Equals(cmp) => x == *cmp,
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Op {
-    // TODO: choose operator for contains
-    Matches,  // '~=', 'matches'
-    Equality, // '==', '=', 'is'
-    NumericComparison(NumericalOp),
-}
-
-pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
-    Ok(match op {
-        Op::Matches => StringMatcher::Regex(Regex::new(rhs)?),
-        Op::Equality => StringMatcher::Equals(rhs.to_owned()),
-        x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
-    })
-}
-
-pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<StreamingCompiledContentPredicate> {
-    Ok(match op {
-        Op::Matches => StreamingCompiledContentPredicate::new(rhs)?,
-        Op::Equality => {
-            let regex = format!("^{}$", rhs);
-            StreamingCompiledContentPredicate {
-                inner: DFA::new(&regex)?,
-                source: regex,
-            }
-        }
-        x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
-    })
-}
-
-pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
-    let parsed_rhs: u64 = rhs.parse()?;
-
-    match op {
-        Op::Equality => Ok(NumberMatcher::Equals(parsed_rhs)),
-        Op::NumericComparison(op) => Ok(NumberMatcher::In(match op {
-            NumericalOp::Greater => Bound::Left(parsed_rhs..),
-            NumericalOp::GreaterOrEqual => Bound::Left(parsed_rhs.saturating_sub(1)..),
-            NumericalOp::LessOrEqual => Bound::Right(..parsed_rhs),
-            NumericalOp::Less => Bound::Right(..parsed_rhs.saturating_add(1)),
-        })),
-        x => anyhow::bail!("operator {:?} cannot be applied to numerical values", x),
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NumericalOp {
-    Greater,        // '>'
-    GreaterOrEqual, // >=
-    LessOrEqual,    // <=
-    Less,           // <
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Predicate<Name, Metadata, Content> {
@@ -305,23 +200,6 @@ impl Display for NamePredicate {
     }
 }
 
-/// Enum over range types, allows for x1..x2, ..x2, x1..
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Bound {
-    Full(Range<u64>),
-    Left(RangeFrom<u64>),
-    Right(RangeTo<u64>),
-}
-
-impl Bound {
-    fn contains(&self, t: &u64) -> bool {
-        match self {
-            Bound::Full(b) => b.contains(t),
-            Bound::Left(b) => b.contains(t),
-            Bound::Right(b) => b.contains(t),
-        }
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MetadataPredicate {
