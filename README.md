@@ -2,7 +2,12 @@
 
 
 ```shell
-➜  detect '@name ~= detect || @extension ~= rs && @contents ~= map_frame'
+# Find files containing "map_frame" or files with name matching "detect" or .rs extension
+➜  detect 'map_frame'
+./src/expr/frame.rs
+
+# Find files with name matching pattern "detect"
+➜  detect '*detect*'
 ./target/release/detect
 ./target/release/deps/detect-6395eb2c29a3ed5e
 ./target/debug/detect
@@ -10,39 +15,53 @@
 ./target/debug/deps/detect-e91a01500af9a97b
 ./target/debug/deps/detect-0b57d7084445c8b2
 ./target/debug/deps/detect-32c3beb592fdbbe3
+
+# Find Rust files containing "map_frame"
+➜  detect '*.rs && map_frame'
 ./src/expr/frame.rs
 ```
 
-## boolean operators
-- `a && b`
-- `a || b`
-- `!a`
-- `(a)`
+## Usage
 
+### Simple Patterns (Level 1)
+Most common searches are simple:
+- Bare words search file contents: `detect TODO`
+- Glob patterns search filenames: `detect '*.rs'`
+- Regex patterns for advanced matching: `detect '/TODO.*urgent/i'`
+- Quoted strings for exact matches: `detect "hello world.txt"`
 
-## string operators
-- `==`
-- `~=` (regex match)
+### Filtered Searches (Level 2)
+Add filters for more control:
+- File types: `detect rust` or `detect python TODO`
+- Size filters: `detect '*.log >1MB'`
+- Time filters: `detect 'modified:today'`
+- Path filters: `detect 'in:src *.py'`
+- Properties: `detect executable` or `detect hidden`
 
-## numeric operators
-- `>`, `>=`, `<`, `<=`
-- `==`
+### Full Expressions (Level 3)
+For complex queries, use boolean logic and predicates:
+- Boolean operators: `&&` (AND), `||` (OR), `!` (NOT)
+- Predicates: `name == "test.rs"`, `size > 1000`, `contains(/unsafe/)`
+- Combine everything: `detect '(*.rs || *.go) && size > 1MB && !hidden'`
 
-# Selectors
+## Examples
 
-All selectors start with '@', eg '@name'
+```shell
+# Find TODO comments
+detect TODO
 
-## file path selectors
+# Find all Rust files
+detect '*.rs'
 
-- @name (or @filename)
-- @path (or @filepath)
-- @ext (or @extension)
+# Find Python files containing TODO
+detect 'python TODO'
 
-## metadata selectors
+# Find large images
+detect 'image >10MB'
 
-- @size (or @filesize)
-- @type (or @filetype)
+# Find recently modified logs
+detect '*.log modified:7d'
 
-## file contents predicates
-
-- @file (or @contents)
+# Complex query: large Rust files with unsafe code
+detect '*.rs && size > 10KB && contains(/unsafe/)'
+```

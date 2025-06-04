@@ -446,7 +446,7 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
 
 impl Display for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("@file ~= {}", self.source))
+        f.write_str(&format!("contents ~= {}", self.source))
     }
 }
 
@@ -461,6 +461,6 @@ pub struct StreamingCompiledContentPredicateRef<'a> {
 
 impl Display for StreamingCompiledContentPredicateRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("@file ~= {}", self.source))
+        f.write_str(&format!("contents ~= {}", self.source))
     }
 }

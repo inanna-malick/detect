@@ -42,7 +42,7 @@ The codebase follows a pipeline architecture:
 3. **Evaluation** (`eval/`): Two evaluation backends:
    - `fs.rs`: Filesystem traversal using async I/O
    - `git.rs`: Git repository traversal at specific refs
-4. **Predicates** (`predicate.rs`): Modular system for different match types (@name, @path, @contents, @size, @type, @extension)
+4. **Predicates** (`predicate.rs`): Modular system for different match types (name, path, contents, size, type, extension)
 
 Key architectural decisions:
 - **Short-circuit evaluation**: Evaluates predicates in cost order (path → metadata → content)
