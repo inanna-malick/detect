@@ -7,11 +7,13 @@ use slog::{o, Drain, Level, Logger};
 /// Fast file finder with intuitive syntax
 ///
 /// Examples:
-///   detect TODO                    # Search for "TODO" in file contents
-///   detect "*.rs"                  # Find files matching pattern
-///   detect --type rust             # Find all Rust files
-///   detect --type rust TODO        # Find Rust files containing "TODO"
-///   detect -e "size > 1MB"         # Use expression syntax
+///   detect TODO                              # Search for "TODO" in file contents
+///   detect "*.rs"                            # Find files matching pattern
+///   detect --type rust                       # Find all Rust files
+///   detect --type rust TODO                  # Find Rust files containing "TODO"
+///   detect -e "size > 1MB"                   # Use expression syntax
+///   detect --git-range HEAD~10..HEAD TODO    # Find TODOs added in last 10 commits
+///   detect -g main '*.rs'                    # Find Rust files in main branch
 #[derive(Parser, Debug)]
 #[command(
     name = "detect",
@@ -48,6 +50,10 @@ struct Args {
     /// Git ref to search at
     #[arg(short = 'g', long = "gitref")]
     gitref: Option<String>,
+    
+    /// Git range to search for changes (e.g., HEAD~10..HEAD, main..feature)
+    #[arg(long = "git-range")]
+    git_range: Option<String>,
 
     /// Log level
     #[arg(short = 'l', default_value = "warn")]
@@ -87,8 +93,21 @@ pub async fn main() -> Result<(), anyhow::Error> {
 
     let expr = parse_expr(&query_str)?;
 
+    // Check for conflicting git options
+    if args.gitref.is_some() && args.git_range.is_some() {
+        anyhow::bail!("Cannot use both --gitref and --git-range at the same time");
+    }
+
     if let Some(ref_) = args.gitref {
         run_git(logger, &root_path, &ref_, expr, |s| {
+            if let Err(e) = writeln!(std::io::stdout(), "{}", s) {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            }
+        })?;
+    } else if let Some(range) = args.git_range {
+        detect::run_git_range(logger, &root_path, &range, expr, |s| {
             if let Err(e) = writeln!(std::io::stdout(), "{}", s) {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
