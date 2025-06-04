@@ -348,7 +348,9 @@ mod parser_tests {
         let q = parse_query("rust TODO").unwrap();
         match q {
             Query::Filtered { base, filters } => {
-                assert!(matches!(base, FilterBase::TypeWithPattern(FileType::Rust, Pattern::Bare(s)) if s == "TODO"));
+                assert!(
+                    matches!(base, FilterBase::TypeWithPattern(FileType::Rust, Pattern::Bare(s)) if s == "TODO")
+                );
                 assert_eq!(filters.len(), 0);
             }
             _ => panic!("Expected filtered query"),
@@ -358,7 +360,9 @@ mod parser_tests {
         let q = parse_query("python *.py").unwrap();
         match q {
             Query::Filtered { base, filters } => {
-                assert!(matches!(base, FilterBase::TypeWithPattern(FileType::Python, Pattern::Glob(s)) if s == "*.py"));
+                assert!(
+                    matches!(base, FilterBase::TypeWithPattern(FileType::Python, Pattern::Glob(s)) if s == "*.py")
+                );
                 assert_eq!(filters.len(), 0);
             }
             _ => panic!("Expected filtered query"),
@@ -409,15 +413,13 @@ mod parser_tests {
         for (size_str, expected_val, expected_unit) in units {
             let q = parse_query(&format!("*.txt >{}", size_str)).unwrap();
             match q {
-                Query::Filtered { base: _, filters } => {
-                    match &filters[0] {
-                        Filter::Size(_, val, unit) => {
-                            assert_eq!(*val, expected_val);
-                            assert_eq!(*unit, expected_unit);
-                        }
-                        _ => panic!("Expected size filter"),
+                Query::Filtered { base: _, filters } => match &filters[0] {
+                    Filter::Size(_, val, unit) => {
+                        assert_eq!(*val, expected_val);
+                        assert_eq!(*unit, expected_unit);
                     }
-                }
+                    _ => panic!("Expected size filter"),
+                },
                 _ => panic!("Expected filtered query"),
             }
         }
@@ -431,7 +433,8 @@ mod parser_tests {
             Query::Filtered { base: _, filters } => {
                 assert_eq!(filters.len(), 1);
                 match &filters[0] {
-                    Filter::Time(TimeSelector::Modified, TimeExpr::Keyword(TimeKeyword::Today)) => {}
+                    Filter::Time(TimeSelector::Modified, TimeExpr::Keyword(TimeKeyword::Today)) => {
+                    }
                     _ => panic!("Expected modified:today filter"),
                 }
             }
@@ -451,14 +454,12 @@ mod parser_tests {
         for (sel_str, expected_sel) in selectors {
             let q = parse_query(&format!("*.txt {}:1d", sel_str)).unwrap();
             match q {
-                Query::Filtered { base: _, filters } => {
-                    match &filters[0] {
-                        Filter::Time(sel, TimeExpr::Relative(1.0, TimeUnit::Days)) => {
-                            assert_eq!(*sel, expected_sel);
-                        }
-                        _ => panic!("Expected time filter"),
+                Query::Filtered { base: _, filters } => match &filters[0] {
+                    Filter::Time(sel, TimeExpr::Relative(1.0, TimeUnit::Days)) => {
+                        assert_eq!(*sel, expected_sel);
                     }
-                }
+                    _ => panic!("Expected time filter"),
+                },
                 _ => panic!("Expected filtered query"),
             }
         }
@@ -477,15 +478,13 @@ mod parser_tests {
         for (time_str, expected_val, expected_unit) in units {
             let q = parse_query(&format!("*.log modified:{}", time_str)).unwrap();
             match q {
-                Query::Filtered { base: _, filters } => {
-                    match &filters[0] {
-                        Filter::Time(_, TimeExpr::Relative(val, unit)) => {
-                            assert_eq!(*val, expected_val);
-                            assert_eq!(*unit, expected_unit);
-                        }
-                        _ => panic!("Expected relative time"),
+                Query::Filtered { base: _, filters } => match &filters[0] {
+                    Filter::Time(_, TimeExpr::Relative(val, unit)) => {
+                        assert_eq!(*val, expected_val);
+                        assert_eq!(*unit, expected_unit);
                     }
-                }
+                    _ => panic!("Expected relative time"),
+                },
                 _ => panic!("Expected filtered query"),
             }
         }
@@ -500,14 +499,12 @@ mod parser_tests {
         for (kw_str, expected_kw) in keywords {
             let q = parse_query(&format!("*.txt created:{}", kw_str)).unwrap();
             match q {
-                Query::Filtered { base: _, filters } => {
-                    match &filters[0] {
-                        Filter::Time(_, TimeExpr::Keyword(kw)) => {
-                            assert_eq!(*kw, expected_kw);
-                        }
-                        _ => panic!("Expected time keyword"),
+                Query::Filtered { base: _, filters } => match &filters[0] {
+                    Filter::Time(_, TimeExpr::Keyword(kw)) => {
+                        assert_eq!(*kw, expected_kw);
                     }
-                }
+                    _ => panic!("Expected time keyword"),
+                },
                 _ => panic!("Expected filtered query"),
             }
         }
@@ -533,12 +530,10 @@ mod parser_tests {
         for prefix in prefixes {
             let q = parse_query(&format!("*.py {}~/projects", prefix)).unwrap();
             match q {
-                Query::Filtered { base: _, filters } => {
-                    match &filters[0] {
-                        Filter::Path(path) => assert_eq!(path, "~/projects"),
-                        _ => panic!("Expected path filter"),
-                    }
-                }
+                Query::Filtered { base: _, filters } => match &filters[0] {
+                    Filter::Path(path) => assert_eq!(path, "~/projects"),
+                    _ => panic!("Expected path filter"),
+                },
                 _ => panic!("Expected filtered query"),
             }
         }
@@ -546,12 +541,10 @@ mod parser_tests {
         // Path with spaces (quoted)
         let q = parse_query("*.txt in:\"My Documents/Projects\"").unwrap();
         match q {
-            Query::Filtered { base: _, filters } => {
-                match &filters[0] {
-                    Filter::Path(path) => assert_eq!(path, "My Documents/Projects"),
-                    _ => panic!("Expected path filter"),
-                }
-            }
+            Query::Filtered { base: _, filters } => match &filters[0] {
+                Filter::Path(path) => assert_eq!(path, "My Documents/Projects"),
+                _ => panic!("Expected path filter"),
+            },
             _ => panic!("Expected filtered query"),
         }
     }
@@ -565,7 +558,7 @@ mod parser_tests {
             ("binary", Property::Binary),
             ("symlink", Property::Symlink),
         ];
-        
+
         for (prop_str, expected_prop) in properties {
             let q = parse_query(&format!("*.txt {}", prop_str)).unwrap();
             match q {
@@ -588,13 +581,13 @@ mod parser_tests {
             Query::Filtered { base, filters } => {
                 assert!(matches!(base, FilterBase::Type(FileType::Rust)));
                 assert_eq!(filters.len(), 4);
-                
+
                 // Check each filter type is present
                 let has_size = filters.iter().any(|f| matches!(f, Filter::Size(_, _, _)));
                 let has_time = filters.iter().any(|f| matches!(f, Filter::Time(_, _)));
                 let has_path = filters.iter().any(|f| matches!(f, Filter::Path(_)));
                 let has_prop = filters.iter().any(|f| matches!(f, Filter::Property(_)));
-                
+
                 assert!(has_size && has_time && has_path && has_prop);
             }
             _ => panic!("Expected filtered query"),
@@ -669,7 +662,7 @@ mod parser_tests {
         // Nested parentheses
         assert!(parse_query("((*.rs || *.py) && TODO) || *.md").is_ok());
         assert!(parse_query("(((*.rs)))").is_ok());
-        
+
         // Complex nesting
         assert!(parse_query("((*.rs && !hidden) || (*.py && executable)) && size > 100KB").is_ok());
     }
@@ -692,8 +685,7 @@ mod parser_tests {
 
         // All selectors
         let selectors = vec![
-            "name", "path", "ext", "size", "type", 
-            "content", "lines", "binary", "empty"
+            "name", "path", "ext", "size", "type", "content", "lines", "binary", "empty",
         ];
 
         for sel in &selectors {
@@ -750,7 +742,10 @@ mod parser_tests {
         let q = parse_query("contains(/TODO/)").unwrap();
         match q {
             Query::Expression(expr) => match expr.as_ref() {
-                Expression::Atom(Atom::Predicate(PredicateExpr::Contains(Pattern::Regex(p, f)))) => {
+                Expression::Atom(Atom::Predicate(PredicateExpr::Contains(Pattern::Regex(
+                    p,
+                    f,
+                )))) => {
                     assert_eq!(p, "TODO");
                     assert_eq!(f, "");
                 }
@@ -775,7 +770,10 @@ mod parser_tests {
         let q = parse_query("contains(/todo/i)").unwrap();
         match q {
             Query::Expression(expr) => match expr.as_ref() {
-                Expression::Atom(Atom::Predicate(PredicateExpr::Contains(Pattern::Regex(p, f)))) => {
+                Expression::Atom(Atom::Predicate(PredicateExpr::Contains(Pattern::Regex(
+                    p,
+                    f,
+                )))) => {
                     assert_eq!(p, "todo");
                     assert_eq!(f, "i");
                 }
@@ -816,7 +814,9 @@ mod parser_tests {
         match q {
             Query::Expression(expr) => match expr.as_ref() {
                 Expression::Atom(Atom::Predicate(PredicateExpr::Comparison(_, _, val))) => {
-                    assert!(matches!(val, Value::Number(n, Some(SizeUnit::Megabytes)) if *n == 2.5));
+                    assert!(
+                        matches!(val, Value::Number(n, Some(SizeUnit::Megabytes)) if *n == 2.5)
+                    );
                 }
                 _ => panic!("Expected numeric comparison"),
             },
@@ -839,9 +839,9 @@ mod parser_tests {
         assert!(matches!(q, Query::Expression(_)));
 
         // Very complex query
-        let q = parse_query(
-            "(rust TODO || python FIXME) && size > 100KB && modified:7d && !hidden"
-        ).unwrap();
+        let q =
+            parse_query("(rust TODO || python FIXME) && size > 100KB && modified:7d && !hidden")
+                .unwrap();
         assert!(matches!(q, Query::Expression(_)));
     }
 
@@ -876,7 +876,7 @@ mod parser_tests {
 
         // Invalid regex
         assert!(parse_query("/unclosed").is_err());
-        
+
         // Invalid contains
         assert!(parse_query("contains()").is_err());
         assert!(parse_query("contains(bare)").is_err());

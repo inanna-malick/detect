@@ -399,11 +399,10 @@ impl MetadataPredicate {
             MetadataPredicate::SizeLess(n) => (entry.size() as u64) < *n,
             MetadataPredicate::SizeEquals(n) => entry.size() as u64 == *n,
             MetadataPredicate::IsExecutable => false, // Can't determine from blob
-            MetadataPredicate::IsSymlink => false, // Can't determine from blob
+            MetadataPredicate::IsSymlink => false,    // Can't determine from blob
         }
     }
 }
-
 
 // predicates that scan the entire file
 pub struct StreamingCompiledContentPredicate {

@@ -10,8 +10,11 @@ WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 program = { SOI ~ query ~ EOI }
 
 query = {
-    filtered_search      // Filtered searches (includes type + pattern)
-  | expression           // Full boolean expressions
+    type_with_pattern    // Type + pattern (e.g., "python TODO")
+  | file_type            // Standalone file type (e.g., "rust") - must come before implicit_search
+  | filtered_search      // Filtered searches (includes type + pattern)
+  | expression           // Full boolean expressions  
+  | predicate            // Standalone predicates (e.g., "size > 1000")
   | implicit_search      // Simple patterns
 }
 

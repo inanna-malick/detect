@@ -1,51 +1,55 @@
-use std::{env::current_dir, path::PathBuf, str::FromStr, io::Write};
+use std::{env::current_dir, io::Write, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
 use detect::{parse_and_run_fs, parser::parse_expr, run_git};
 use slog::{o, Drain, Level, Logger};
 
-/// operators
-/// - `a && b` a and b
-/// - `a || b`: a or b
-/// - `!a`: not a
-/// - `(a)`: parens to clarify grouping
+/// Fast file finder with intuitive syntax
 ///
-/// ## string operators
-/// - `==`
-/// - `~=` (regex match)
-/// ## numeric operators
-/// - `>`, `>=`, `<`, `<=`
-/// - `==`
-/// ## file path selectors
-/// - name
-/// - path
-/// - extension
-/// ## metadata selectors
-/// - size
-/// - type
-/// ## file contents predicates
-/// - contents
+/// Examples:
+///   detect TODO                    # Search for "TODO" in file contents
+///   detect "*.rs"                  # Find files matching pattern
+///   detect --type rust             # Find all Rust files
+///   detect --type rust TODO        # Find Rust files containing "TODO"
+///   detect -e "size > 1MB"         # Use expression syntax
 #[derive(Parser, Debug)]
 #[command(
     name = "detect",
     author,
     version,
-    about,
-    long_about,
-    verbatim_doc_comment
+    about = "Fast file finder with intuitive syntax",
+    long_about = None,
 )]
 struct Args {
-    /// filtering expr
+    /// Search pattern (searches content by default, or filenames if pattern contains wildcards)
     #[clap(index = 1)]
-    expr: String,
-    /// target dir
+    pattern: Option<String>,
+
+    /// Target directory (defaults to current directory)
     #[clap(index = 2)]
     path: Option<PathBuf>,
+
+    /// File type filter (rust, python, js, go, etc.)
+    #[arg(short = 't', long = "type")]
+    file_type: Option<String>,
+
+    /// Search only in this path
+    #[arg(long = "in")]
+    in_path: Option<String>,
+
+    /// Use expression syntax (e.g., "size > 1MB && modified:today")
+    #[arg(short = 'e', long = "expr")]
+    expression: Option<String>,
+
+    /// Include gitignored files
     #[arg(short = 'i')]
     visit_gitignored: bool,
-    /// ref for git repo in current dir or parent of current dir
+
+    /// Git ref to search at
     #[arg(short = 'g', long = "gitref")]
     gitref: Option<String>,
+
+    /// Log level
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
 }
@@ -65,14 +69,23 @@ pub async fn main() -> Result<(), anyhow::Error> {
         o!(),
     );
 
-    let root_path = match args.path {
-        Some(path) => path,
+    let root_path = match &args.path {
+        Some(path) => path.clone(),
         None => current_dir()?,
     };
 
     println!("path: {:?}", root_path);
 
-    let expr = parse_expr(&args.expr)?;
+    // Build the query based on CLI arguments
+    let query_str = if let Some(expr) = args.expression {
+        // Explicit expression mode
+        expr
+    } else {
+        // Build query from flags and pattern
+        build_query_from_args(&args)?
+    };
+
+    let expr = parse_expr(&query_str)?;
 
     if let Some(ref_) = args.gitref {
         run_git(logger, &root_path, &ref_, expr, |s| {
@@ -83,23 +96,56 @@ pub async fn main() -> Result<(), anyhow::Error> {
             }
         })?;
     } else {
-        parse_and_run_fs(
-            logger,
-            &root_path,
-            !args.visit_gitignored,
-            args.expr,
-            |s| {
-                if let Err(e) = writeln!(std::io::stdout(), "{}", s.to_string_lossy()) {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
+        parse_and_run_fs(logger, &root_path, !args.visit_gitignored, query_str, |s| {
+            if let Err(e) = writeln!(std::io::stdout(), "{}", s.to_string_lossy()) {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
                 }
-            },
-        )
+            }
+        })
         .await?;
     }
 
     Ok(())
+}
+
+/// Build a query string from CLI arguments using the new syntax
+fn build_query_from_args(args: &Args) -> Result<String, anyhow::Error> {
+    // Handle the simple cases with the new syntax
+
+    // Just a pattern
+    if let Some(pattern) = &args.pattern {
+        if args.file_type.is_none() && args.in_path.is_none() {
+            // Simple case - just the pattern
+            return Ok(pattern.clone());
+        }
+
+        // Pattern with filters
+        let mut query = String::new();
+
+        // File type + pattern
+        if let Some(file_type) = &args.file_type {
+            query.push_str(file_type);
+            query.push(' ');
+        }
+
+        query.push_str(pattern);
+
+        // Add path filter
+        if let Some(in_path) = &args.in_path {
+            query.push_str(&format!(" in:{}", in_path));
+        }
+
+        return Ok(query);
+    }
+
+    // Just file type
+    if let Some(file_type) = &args.file_type {
+        return Ok(file_type.clone());
+    }
+
+    // Default to all files
+    Ok("*".to_string())
 }
 
 /// Custom Drain logic

@@ -28,7 +28,7 @@ pub fn parse_query(input: &str) -> anyhow::Result<Query> {
         .next()
         .and_then(|p| p.into_inner().next())
         .ok_or_else(|| anyhow::anyhow!("expected query"))?;
-    
+
     parse_query_pair(query_pair)
 }
 
@@ -41,6 +41,31 @@ fn parse_query_pair(pair: Pair<Rule>) -> anyhow::Result<Query> {
         Rule::implicit_search => Ok(Query::Implicit(parse_pattern(pair)?)),
         Rule::filtered_search => parse_filtered_search(pair),
         Rule::expression => Ok(Query::Expression(Box::new(parse_expression(pair)?))),
+        Rule::type_with_pattern => {
+            // Type + pattern at top level
+            let mut parts = pair.into_inner();
+            let file_type = parse_file_type_str(parts.next().unwrap().as_str())?;
+            let pattern = parse_pattern(parts.next().unwrap())?;
+            Ok(Query::Filtered {
+                base: FilterBase::TypeWithPattern(file_type, pattern),
+                filters: vec![],
+            })
+        }
+        Rule::file_type => {
+            // Standalone file type becomes a filtered query with just the type
+            let file_type = parse_file_type_str(pair.as_str())?;
+            Ok(Query::Filtered {
+                base: FilterBase::Type(file_type),
+                filters: vec![],
+            })
+        }
+        Rule::predicate => {
+            // Standalone predicate becomes an expression
+            let predicate = parse_predicate(pair)?;
+            Ok(Query::Expression(Box::new(Expression::Atom(
+                Atom::Predicate(predicate),
+            ))))
+        }
         _ => anyhow::bail!("unexpected rule: {:?}", pair.as_rule()),
     }
 }
@@ -55,7 +80,10 @@ fn parse_pattern(pair: Pair<Rule>) -> anyhow::Result<Pattern> {
         Rule::regex_pattern => {
             let mut parts = inner.into_inner();
             let pattern = parts.next().unwrap().as_str().to_string();
-            let flags = parts.next().map(|f| f.as_str().to_string()).unwrap_or_default();
+            let flags = parts
+                .next()
+                .map(|f| f.as_str().to_string())
+                .unwrap_or_default();
             Ok(Pattern::Regex(pattern, flags))
         }
         Rule::glob_pattern => Ok(Pattern::Glob(inner.as_str().to_string())),
@@ -67,7 +95,7 @@ fn parse_pattern(pair: Pair<Rule>) -> anyhow::Result<Pattern> {
 fn parse_filtered_search(pair: Pair<Rule>) -> anyhow::Result<Query> {
     let mut base = None;
     let mut filters = Vec::new();
-    
+
     for part in pair.into_inner() {
         match part.as_rule() {
             Rule::type_with_pattern => {
@@ -87,7 +115,7 @@ fn parse_filtered_search(pair: Pair<Rule>) -> anyhow::Result<Query> {
             _ => {}
         }
     }
-    
+
     Ok(Query::Filtered {
         base: base.ok_or_else(|| anyhow::anyhow!("filtered search needs base"))?,
         filters,
@@ -128,16 +156,12 @@ fn parse_file_type_str(s: &str) -> anyhow::Result<FileType> {
     }
 }
 
-fn parse_file_type(pair: Pair<Rule>) -> anyhow::Result<FileType> {
-    let file_type_str = pair.into_inner().next().unwrap().as_str();
-    parse_file_type_str(file_type_str)
-}
 
 fn parse_size_filter(pair: Pair<Rule>) -> anyhow::Result<Filter> {
     let mut inner = pair.into_inner();
     let op_str = inner.next().unwrap().as_str();
     let size_value_pair = inner.next().unwrap();
-    
+
     let op = match op_str {
         ">" => SizeOp::Greater,
         ">=" => SizeOp::GreaterEqual,
@@ -146,7 +170,7 @@ fn parse_size_filter(pair: Pair<Rule>) -> anyhow::Result<Filter> {
         "=" => SizeOp::Equal,
         _ => anyhow::bail!("unknown size op: {}", op_str),
     };
-    
+
     let (value, unit) = parse_size_value(size_value_pair.as_str())?;
     Ok(Filter::Size(op, value, unit))
 }
@@ -154,7 +178,7 @@ fn parse_size_filter(pair: Pair<Rule>) -> anyhow::Result<Filter> {
 fn parse_size_value(s: &str) -> anyhow::Result<(f64, SizeUnit)> {
     let mut chars = s.chars().peekable();
     let mut num_str = String::new();
-    
+
     while let Some(&ch) = chars.peek() {
         if ch.is_numeric() || ch == '.' {
             num_str.push(ch);
@@ -163,10 +187,10 @@ fn parse_size_value(s: &str) -> anyhow::Result<(f64, SizeUnit)> {
             break;
         }
     }
-    
+
     let value: f64 = num_str.parse()?;
     let unit_str: String = chars.collect();
-    
+
     let unit = match unit_str.to_uppercase().as_str() {
         "" | "B" => SizeUnit::Bytes,
         "K" | "KB" => SizeUnit::Kilobytes,
@@ -174,7 +198,7 @@ fn parse_size_value(s: &str) -> anyhow::Result<(f64, SizeUnit)> {
         "G" | "GB" => SizeUnit::Gigabytes,
         _ => anyhow::bail!("unknown size unit: {}", unit_str),
     };
-    
+
     Ok((value, unit))
 }
 
@@ -182,14 +206,14 @@ fn parse_time_filter(pair: Pair<Rule>) -> anyhow::Result<Filter> {
     let mut inner = pair.into_inner();
     let selector_str = inner.next().unwrap().as_str();
     let time_expr_pair = inner.next().unwrap();
-    
+
     let selector = match selector_str {
         "modified" | "m" => TimeSelector::Modified,
         "created" | "c" => TimeSelector::Created,
         "accessed" | "a" => TimeSelector::Accessed,
         _ => anyhow::bail!("unknown time selector: {}", selector_str),
     };
-    
+
     let time_expr = parse_time_expr(time_expr_pair)?;
     Ok(Filter::Time(selector, time_expr))
 }
@@ -215,7 +239,7 @@ fn parse_time_expr(pair: Pair<Rule>) -> anyhow::Result<TimeExpr> {
 fn parse_relative_time(s: &str) -> anyhow::Result<(f64, TimeUnit)> {
     let mut chars = s.chars().peekable();
     let mut num_str = String::new();
-    
+
     while let Some(&ch) = chars.peek() {
         if ch.is_numeric() || ch == '.' {
             num_str.push(ch);
@@ -224,10 +248,10 @@ fn parse_relative_time(s: &str) -> anyhow::Result<(f64, TimeUnit)> {
             break;
         }
     }
-    
+
     let value: f64 = num_str.parse()?;
     let unit_str: String = chars.collect();
-    
+
     let unit = match unit_str.as_str() {
         "s" => TimeUnit::Seconds,
         "m" => TimeUnit::Minutes,
@@ -238,7 +262,7 @@ fn parse_relative_time(s: &str) -> anyhow::Result<(f64, TimeUnit)> {
         "y" => TimeUnit::Years,
         _ => anyhow::bail!("unknown time unit: {}", unit_str),
     };
-    
+
     Ok((value, unit))
 }
 
@@ -246,15 +270,13 @@ fn parse_path_filter(pair: Pair<Rule>) -> anyhow::Result<Filter> {
     let mut inner = pair.into_inner();
     let _prefix = inner.next(); // Skip prefix
     let path_value = inner.next().unwrap();
-    
+
     let path = match path_value.as_rule() {
-        Rule::quoted_string => {
-            path_value.into_inner().next().unwrap().as_str().to_string()
-        }
+        Rule::quoted_string => path_value.into_inner().next().unwrap().as_str().to_string(),
         Rule::path_value => path_value.as_str().to_string(),
         _ => anyhow::bail!("unexpected path value rule: {:?}", path_value.as_rule()),
     };
-    
+
     Ok(Filter::Path(path))
 }
 
@@ -267,7 +289,7 @@ fn parse_property_filter(pair: Pair<Rule>) -> anyhow::Result<Filter> {
         "symlink" => Property::Symlink,
         _ => anyhow::bail!("unknown property: {}", pair.as_str()),
     };
-    
+
     Ok(Filter::Property(prop))
 }
 
@@ -276,7 +298,7 @@ fn parse_expression(pair: Pair<Rule>) -> anyhow::Result<Expression> {
         .op(Op::infix(Rule::or_op, Left))
         .op(Op::infix(Rule::and_op, Left))
         .op(Op::prefix(Rule::not_op));
-    
+
     parse_expr_pratt(pair.into_inner(), &pratt)
 }
 
@@ -291,9 +313,15 @@ fn parse_expr_pratt(
                     let inner = primary.into_inner().next().unwrap();
                     match inner.as_rule() {
                         Rule::expression => parse_expression(inner),
-                        Rule::predicate => Ok(Expression::Atom(Atom::Predicate(parse_predicate(inner)?))),
-                        Rule::filtered_search => Ok(Expression::Atom(Atom::Query(parse_filtered_search(inner)?))),
-                        Rule::implicit_search => Ok(Expression::Atom(Atom::Query(Query::Implicit(parse_pattern(inner)?)))),
+                        Rule::predicate => {
+                            Ok(Expression::Atom(Atom::Predicate(parse_predicate(inner)?)))
+                        }
+                        Rule::filtered_search => {
+                            Ok(Expression::Atom(Atom::Query(parse_filtered_search(inner)?)))
+                        }
+                        Rule::implicit_search => Ok(Expression::Atom(Atom::Query(
+                            Query::Implicit(parse_pattern(inner)?),
+                        ))),
                         _ => anyhow::bail!("unexpected atom rule: {:?}", inner.as_rule()),
                     }
                 }
@@ -318,7 +346,7 @@ fn parse_expr_pratt(
 fn parse_predicate(pair: Pair<Rule>) -> anyhow::Result<PredicateExpr> {
     let mut inner = pair.into_inner();
     let first = inner.next().unwrap();
-    
+
     match first.as_rule() {
         Rule::selector => {
             let selector = parse_selector(first)?;
@@ -331,7 +359,11 @@ fn parse_predicate(pair: Pair<Rule>) -> anyhow::Result<PredicateExpr> {
             }
         }
         Rule::contains_expr => {
-            let pattern_pair = first.into_inner().nth(1).unwrap();
+            let mut inner = first.into_inner();
+            // Skip "contains" and "("
+            let pattern_pair = inner
+                .find(|p| matches!(p.as_rule(), Rule::pattern))
+                .ok_or_else(|| anyhow::anyhow!("expected pattern in contains expression"))?;
             let pattern = parse_contains_pattern(pattern_pair)?;
             Ok(PredicateExpr::Contains(pattern))
         }
@@ -385,7 +417,7 @@ fn parse_value(pair: Pair<Rule>) -> anyhow::Result<Value> {
 fn parse_number_value(s: &str) -> anyhow::Result<(f64, Option<SizeUnit>)> {
     let mut chars = s.chars().peekable();
     let mut num_str = String::new();
-    
+
     while let Some(&ch) = chars.peek() {
         if ch.is_numeric() || ch == '.' {
             num_str.push(ch);
@@ -394,10 +426,10 @@ fn parse_number_value(s: &str) -> anyhow::Result<(f64, Option<SizeUnit>)> {
             break;
         }
     }
-    
+
     let value: f64 = num_str.parse()?;
     let unit_str: String = chars.collect();
-    
+
     if unit_str.is_empty() {
         Ok((value, None))
     } else {
@@ -418,7 +450,10 @@ fn parse_contains_pattern(pair: Pair<Rule>) -> anyhow::Result<Pattern> {
         Rule::regex_pattern => {
             let mut parts = inner.into_inner();
             let pattern = parts.next().unwrap().as_str().to_string();
-            let flags = parts.next().map(|f| f.as_str().to_string()).unwrap_or_default();
+            let flags = parts
+                .next()
+                .map(|f| f.as_str().to_string())
+                .unwrap_or_default();
             Ok(Pattern::Regex(pattern, flags))
         }
         Rule::quoted_string => {

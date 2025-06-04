@@ -7,7 +7,7 @@ mod tests {
     fn test_implicit_searches() {
         // For single patterns, they get wrapped in Expression(Atom(Query(Implicit(...))))
         // This is expected behavior from the grammar
-        
+
         // Bare word
         let q = parse_query("TODO").unwrap();
         match q {
@@ -41,7 +41,9 @@ mod tests {
             Query::Filtered { base, filters } => {
                 assert!(matches!(base, FilterBase::Type(FileType::Rust)));
                 assert_eq!(filters.len(), 1);
-                assert!(matches!(&filters[0], Filter::Size(SizeOp::Greater, v, SizeUnit::Megabytes) if *v == 1.0));
+                assert!(
+                    matches!(&filters[0], Filter::Size(SizeOp::Greater, v, SizeUnit::Megabytes) if *v == 1.0)
+                );
             }
             _ => panic!("Expected filtered query"),
         }

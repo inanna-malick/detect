@@ -17,12 +17,20 @@ cargo build --release    # Release build
 cargo test              # Run all tests
 
 # Run
-cargo run -- '<expression>' [path]
+cargo run -- [PATTERN] [PATH]           # Simple search
+cargo run -- -e '<expression>' [PATH]   # Expression mode
 
-# Examples
-cargo run -- '@name ~= detect'
-cargo run -- '@extension == rs && @size > 1000'
-cargo run -- -g HEAD '@contents ~= TODO'
+# Examples (New Simple Syntax)
+cargo run -- TODO                       # Find "TODO" in files
+cargo run -- '*.rs'                     # Find Rust files
+cargo run -- --type rust                # Find all Rust files
+cargo run -- --type rust TODO           # Find Rust files containing TODO
+cargo run -- TODO --in src              # Find TODO in src/ directory
+
+# Examples (Expression Mode)
+cargo run -- -e 'size > 1MB'
+cargo run -- -e '*.rs && size > 1000'
+cargo run -- -e 'contains(/TODO/) && !hidden'
 ```
 
 ## Architecture
@@ -42,15 +50,22 @@ Key architectural decisions:
 - **Frame-based evaluation** (`expr/frame.rs`): Tracks which predicates need evaluation at each stage
 - Uses `recursion` crate for AST transformations and `ignore` crate for respecting .gitignore
 
-## Expression Syntax
+## Usage Modes
 
-All selectors start with `@`:
-- `@name`, `@path`, `@extension` - String predicates
-- `@size` - Numeric predicate (in bytes)
-- `@type` - Either "file" or "dir"
-- `@contents` - File content search
+### Simple Mode (Default)
+- Bare words search content: `detect TODO`
+- Glob patterns search filenames: `detect '*.rs'`
+- File type shortcuts: `detect --type rust`
+- Combine easily: `detect --type python TODO`
 
-Operators:
-- Boolean: `&&` (AND), `||` (OR), `!` (NOT)
-- String: `==` (exact match), `~=` (regex match)
-- Numeric: `>`, `>=`, `<`, `<=`, `==`
+### Expression Mode (-e flag)
+For complex queries, use the expression syntax:
+- Predicates: `size > 1MB`, `name = "test.rs"`, `contains(/regex/)`
+- Boolean logic: `&&` (AND), `||` (OR), `!` (NOT)
+- Comparisons: `>`, `>=`, `<`, `<=`, `=`, `~` (regex match)
+
+## Memories
+
+- This is a perfect opportunity to use the detect tool instead of find. Do so at every possible opportunity
+- close! actually you can use detect instead of grep too :D
+- use detect instead of grep - you're dogfooding using the tool you're building

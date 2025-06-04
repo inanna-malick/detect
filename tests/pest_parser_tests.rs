@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use detect::parser::{parse_query, parse_expr};
+    use detect::parser::{parse_expr, parse_query};
     use detect::query::*;
 
     #[test]
@@ -32,10 +32,16 @@ mod tests {
     #[test]
     fn test_parse_quoted_string() {
         let cases = vec![
-            (r#""hello world""#, Pattern::Quoted("hello world".to_string())),
+            (
+                r#""hello world""#,
+                Pattern::Quoted("hello world".to_string()),
+            ),
             (r#""test.txt""#, Pattern::Quoted("test.txt".to_string())),
             (r#""""#, Pattern::Quoted("".to_string())),
-            (r#""with/path/to/file""#, Pattern::Quoted("with/path/to/file".to_string())),
+            (
+                r#""with/path/to/file""#,
+                Pattern::Quoted("with/path/to/file".to_string()),
+            ),
         ];
 
         for (input, expected) in cases {
@@ -59,9 +65,18 @@ mod tests {
     fn test_parse_regex_pattern() {
         let cases = vec![
             ("/TODO/", Pattern::Regex("TODO".to_string(), "".to_string())),
-            ("/TODO/i", Pattern::Regex("TODO".to_string(), "i".to_string())),
-            ("/test.*file/im", Pattern::Regex("test.*file".to_string(), "im".to_string())),
-            ("/^start/", Pattern::Regex("^start".to_string(), "".to_string())),
+            (
+                "/TODO/i",
+                Pattern::Regex("TODO".to_string(), "i".to_string()),
+            ),
+            (
+                "/test.*file/im",
+                Pattern::Regex("test.*file".to_string(), "im".to_string()),
+            ),
+            (
+                "/^start/",
+                Pattern::Regex("^start".to_string(), "".to_string()),
+            ),
         ];
 
         for (input, expected) in cases {
@@ -133,9 +148,21 @@ mod tests {
         }
 
         let type_with_pattern_cases = vec![
-            ("rust TODO", FileType::Rust, Pattern::Bare("TODO".to_string())),
-            ("python main", FileType::Python, Pattern::Bare("main".to_string())),
-            ("js *.test.js", FileType::JavaScript, Pattern::Glob("*.test.js".to_string())),
+            (
+                "rust TODO",
+                FileType::Rust,
+                Pattern::Bare("TODO".to_string()),
+            ),
+            (
+                "python main",
+                FileType::Python,
+                Pattern::Bare("main".to_string()),
+            ),
+            (
+                "js *.test.js",
+                FileType::JavaScript,
+                Pattern::Glob("*.test.js".to_string()),
+            ),
         ];
 
         for (input, expected_type, expected_pattern) in type_with_pattern_cases {
@@ -160,7 +187,12 @@ mod tests {
     fn test_parse_size_filters() {
         let cases = vec![
             ("*.rs >1MB", SizeOp::Greater, 1.0, SizeUnit::Megabytes),
-            ("*.rs >=100KB", SizeOp::GreaterEqual, 100.0, SizeUnit::Kilobytes),
+            (
+                "*.rs >=100KB",
+                SizeOp::GreaterEqual,
+                100.0,
+                SizeUnit::Kilobytes,
+            ),
             ("*.rs <10GB", SizeOp::Less, 10.0, SizeUnit::Gigabytes),
             ("*.rs <=500B", SizeOp::LessEqual, 500.0, SizeUnit::Bytes),
             ("*.rs =1024", SizeOp::Equal, 1024.0, SizeUnit::Bytes),
@@ -189,12 +221,36 @@ mod tests {
     #[test]
     fn test_parse_time_filters() {
         let cases = vec![
-            ("*.rs modified:10d", TimeSelector::Modified, TimeExpr::Relative(10.0, TimeUnit::Days)),
-            ("*.rs created:2h", TimeSelector::Created, TimeExpr::Relative(2.0, TimeUnit::Hours)),
-            ("*.rs accessed:30m", TimeSelector::Accessed, TimeExpr::Relative(30.0, TimeUnit::Minutes)),
-            ("*.rs m:1w", TimeSelector::Modified, TimeExpr::Relative(1.0, TimeUnit::Weeks)),
-            ("*.rs c:today", TimeSelector::Created, TimeExpr::Keyword(TimeKeyword::Today)),
-            ("*.rs a:yesterday", TimeSelector::Accessed, TimeExpr::Keyword(TimeKeyword::Yesterday)),
+            (
+                "*.rs modified:10d",
+                TimeSelector::Modified,
+                TimeExpr::Relative(10.0, TimeUnit::Days),
+            ),
+            (
+                "*.rs created:2h",
+                TimeSelector::Created,
+                TimeExpr::Relative(2.0, TimeUnit::Hours),
+            ),
+            (
+                "*.rs accessed:30m",
+                TimeSelector::Accessed,
+                TimeExpr::Relative(30.0, TimeUnit::Minutes),
+            ),
+            (
+                "*.rs m:1w",
+                TimeSelector::Modified,
+                TimeExpr::Relative(1.0, TimeUnit::Weeks),
+            ),
+            (
+                "*.rs c:today",
+                TimeSelector::Created,
+                TimeExpr::Keyword(TimeKeyword::Today),
+            ),
+            (
+                "*.rs a:yesterday",
+                TimeSelector::Accessed,
+                TimeExpr::Keyword(TimeKeyword::Yesterday),
+            ),
         ];
 
         for (input, expected_selector, expected_expr) in cases {
@@ -274,11 +330,22 @@ mod tests {
             Query::Filtered { base, filters } => {
                 assert!(matches!(base, FilterBase::Pattern(Pattern::Glob(s)) if s == "*.rs"));
                 assert_eq!(filters.len(), 4);
-                
-                assert!(matches!(&filters[0], Filter::Size(SizeOp::Greater, v, SizeUnit::Kilobytes) if *v == 100.0));
-                assert!(matches!(&filters[1], Filter::Time(TimeSelector::Modified, TimeExpr::Keyword(TimeKeyword::Today))));
+
+                assert!(
+                    matches!(&filters[0], Filter::Size(SizeOp::Greater, v, SizeUnit::Kilobytes) if *v == 100.0)
+                );
+                assert!(matches!(
+                    &filters[1],
+                    Filter::Time(
+                        TimeSelector::Modified,
+                        TimeExpr::Keyword(TimeKeyword::Today)
+                    )
+                ));
                 assert!(matches!(&filters[2], Filter::Path(p) if p == "src"));
-                assert!(matches!(&filters[3], Filter::Property(Property::Executable)));
+                assert!(matches!(
+                    &filters[3],
+                    Filter::Property(Property::Executable)
+                ));
             }
             _ => panic!("Expected filtered query"),
         }
@@ -287,12 +354,42 @@ mod tests {
     #[test]
     fn test_parse_predicates() {
         let cases = vec![
-            ("name = \"test.rs\"", Selector::Name, CompOp::Equal, Value::String("test.rs".to_string())),
-            ("path ~ /src/", Selector::Path, CompOp::Matches, Value::String("/src/".to_string())),
-            ("size > 1000", Selector::Size, CompOp::Greater, Value::Number(1000.0, None)),
-            ("size >= 1MB", Selector::Size, CompOp::GreaterEqual, Value::Number(1.0, Some(SizeUnit::Megabytes))),
-            ("type = file", Selector::Type, CompOp::Equal, Value::String("file".to_string())),
-            ("ext != rs", Selector::Ext, CompOp::NotEqual, Value::String("rs".to_string())),
+            (
+                "name = \"test.rs\"",
+                Selector::Name,
+                CompOp::Equal,
+                Value::String("test.rs".to_string()),
+            ),
+            (
+                "path ~ /src/",
+                Selector::Path,
+                CompOp::Matches,
+                Value::String("/src/".to_string()),
+            ),
+            (
+                "size > 1000",
+                Selector::Size,
+                CompOp::Greater,
+                Value::Number(1000.0, None),
+            ),
+            (
+                "size >= 1MB",
+                Selector::Size,
+                CompOp::GreaterEqual,
+                Value::Number(1.0, Some(SizeUnit::Megabytes)),
+            ),
+            (
+                "type = file",
+                Selector::Type,
+                CompOp::Equal,
+                Value::String("file".to_string()),
+            ),
+            (
+                "ext != rs",
+                Selector::Ext,
+                CompOp::NotEqual,
+                Value::String("rs".to_string()),
+            ),
         ];
 
         for (input, expected_sel, expected_op, expected_val) in cases {
@@ -337,7 +434,10 @@ mod tests {
     fn test_parse_contains_expr() {
         let cases = vec![
             (r#"contains("TODO")"#, Pattern::Quoted("TODO".to_string())),
-            ("contains(/unsafe/i)", Pattern::Regex("unsafe".to_string(), "i".to_string())),
+            (
+                "contains(/unsafe/i)",
+                Pattern::Regex("unsafe".to_string(), "i".to_string()),
+            ),
         ];
 
         for (input, expected_pattern) in cases {
@@ -358,15 +458,21 @@ mod tests {
     fn test_parse_boolean_expressions() {
         // AND
         let q = parse_query("*.rs && size > 1000").unwrap();
-        assert!(matches!(q, Query::Expression(ref expr) if matches!(expr.as_ref(), Expression::And(_, _))));
+        assert!(
+            matches!(q, Query::Expression(ref expr) if matches!(expr.as_ref(), Expression::And(_, _)))
+        );
 
         // OR
         let q = parse_query("*.rs || *.go").unwrap();
-        assert!(matches!(q, Query::Expression(ref expr) if matches!(expr.as_ref(), Expression::Or(_, _))));
+        assert!(
+            matches!(q, Query::Expression(ref expr) if matches!(expr.as_ref(), Expression::Or(_, _)))
+        );
 
         // NOT
         let q = parse_query("!hidden").unwrap();
-        assert!(matches!(q, Query::Expression(ref expr) if matches!(expr.as_ref(), Expression::Not(_))));
+        assert!(
+            matches!(q, Query::Expression(ref expr) if matches!(expr.as_ref(), Expression::Not(_)))
+        );
     }
 
     #[test]
@@ -378,7 +484,9 @@ mod tests {
                 Expression::Or(left, right) => {
                     // Left should be 'a'
                     match left.as_ref() {
-                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => assert_eq!(s, "a"),
+                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => {
+                            assert_eq!(s, "a")
+                        }
                         _ => panic!("Expected 'a' on left"),
                     }
                     // Right should be 'b && c'
@@ -398,7 +506,9 @@ mod tests {
                     assert!(matches!(left.as_ref(), Expression::Or(_, _)));
                     // Right should be 'c'
                     match right.as_ref() {
-                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => assert_eq!(s, "c"),
+                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => {
+                            assert_eq!(s, "c")
+                        }
                         _ => panic!("Expected 'c' on right"),
                     }
                 }
@@ -430,7 +540,9 @@ mod tests {
                     assert!(matches!(left.as_ref(), Expression::Not(_)));
                     // Right should be 'b'
                     match right.as_ref() {
-                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => assert_eq!(s, "b"),
+                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => {
+                            assert_eq!(s, "b")
+                        }
                         _ => panic!("Expected 'b' on right"),
                     }
                 }
@@ -462,7 +574,9 @@ mod tests {
                     assert!(matches!(left.as_ref(), Expression::And(_, _)));
                     // Right should be 'e'
                     match right.as_ref() {
-                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => assert_eq!(s, "e"),
+                        Expression::Atom(Atom::Query(Query::Implicit(Pattern::Bare(s)))) => {
+                            assert_eq!(s, "e")
+                        }
                         _ => panic!("Expected 'e' on right"),
                     }
                 }
@@ -495,48 +609,48 @@ mod tests {
         assert!(parse_query("()").is_err());
         assert!(parse_query("name ==").is_err());
         assert!(parse_query("size >").is_err());
-        
+
         // Unclosed quotes
         assert!(parse_query(r#""unclosed"#).is_err());
-        
+
         // Invalid regex
         assert!(parse_query("/unclosed").is_err());
-        
+
         // Invalid operators
         assert!(parse_query("size >> 100").is_err());
-        
+
         // Missing parentheses
         assert!(parse_query("contains()").is_err());
-        
+
         // Invalid time units
         assert!(parse_query("*.rs modified:10x").is_err());
-        
+
         // Invalid size units
         assert!(parse_query("*.rs >10XB").is_err());
-        
+
         // Malformed expressions
         assert!(parse_query("name == == value").is_err());
         assert!(parse_query("and and").is_err());
         assert!(parse_query("or or").is_err());
-        
+
         // Missing operands
         assert!(parse_query("&&c").is_err());
         assert!(parse_query("a||").is_err());
         assert!(parse_query("!").is_err());
-        
+
         // Invalid predicates
         assert!(parse_query("unknown_selector == value").is_err());
-        
+
         // Unbalanced parentheses
         assert!(parse_query("(a && b").is_err());
         assert!(parse_query("a && b)").is_err());
         assert!(parse_query("((a && b)").is_err());
-        
+
         // Invalid filter syntax
         assert!(parse_query("*.rs >").is_err());
         assert!(parse_query("*.rs modified:").is_err());
         assert!(parse_query("*.rs in:").is_err());
-        
+
         // Empty expressions
         assert!(parse_query("").is_err());
         assert!(parse_query("   ").is_err());
@@ -563,7 +677,11 @@ mod tests {
         let q = parse_query("size > 1.5MB").unwrap();
         match q {
             Query::Expression(expr) => match expr.as_ref() {
-                Expression::Atom(Atom::Predicate(PredicateExpr::Comparison(_, _, Value::Number(v, _)))) => {
+                Expression::Atom(Atom::Predicate(PredicateExpr::Comparison(
+                    _,
+                    _,
+                    Value::Number(v, _),
+                ))) => {
                     assert_eq!(v, &1.5);
                 }
                 _ => panic!("Expected size comparison"),
@@ -654,7 +772,11 @@ mod tests {
         let q = parse_query("name = Test").unwrap();
         match q {
             Query::Expression(expr) => match expr.as_ref() {
-                Expression::Atom(Atom::Predicate(PredicateExpr::Comparison(_, _, Value::String(s)))) => {
+                Expression::Atom(Atom::Predicate(PredicateExpr::Comparison(
+                    _,
+                    _,
+                    Value::String(s),
+                ))) => {
                     assert_eq!(s, "Test"); // Should preserve case
                 }
                 _ => panic!("Expected comparison predicate"),

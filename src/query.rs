@@ -1,20 +1,22 @@
 //! New progressive query AST
 
 use crate::expr::Expr;
-use crate::predicate::{Predicate, NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate};
+use crate::predicate::{
+    MetadataPredicate, NamePredicate, Predicate, StreamingCompiledContentPredicate,
+};
 
 /// Progressive query types that map to the new grammar
 #[derive(Debug, Clone, PartialEq)]
 pub enum Query {
     /// Simple implicit search
     Implicit(Pattern),
-    
+
     /// Search with filters
     Filtered {
         base: FilterBase,
         filters: Vec<Filter>,
     },
-    
+
     /// Full boolean expression
     Expression(Box<Expression>),
 }
@@ -30,8 +32,8 @@ pub enum FilterBase {
 /// Simple patterns without operators
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
-    Quoted(String),         // "exact match"
-    Regex(String, String),  // /pattern/flags
+    Quoted(String),        // "exact match"
+    Regex(String, String), // /pattern/flags
     Glob(String),          // *.rs, **/*.js
     Bare(String),          // TODO, main
 }
@@ -175,7 +177,15 @@ pub enum Value {
 // ============================================================================
 
 impl Query {
-    pub fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    pub fn to_expr(
+        self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+        self.to_expr_ref()
+    }
+    
+    fn to_expr_ref(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
             Query::Implicit(pattern) => pattern.to_expr(),
             Query::Filtered { base, filters } => {
@@ -191,7 +201,9 @@ impl Query {
 }
 
 impl FilterBase {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
             FilterBase::Type(file_type) => file_type.to_expr(),
             FilterBase::Pattern(pattern) => pattern.to_expr(),
@@ -204,44 +216,44 @@ impl FilterBase {
 }
 
 impl Pattern {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
             Pattern::Quoted(s) => {
                 // Try as filename, then content
                 Expr::or(
                     Expr::name_predicate(NamePredicate::Equals(s.clone())),
                     Expr::content_predicate(
-                        StreamingCompiledContentPredicate::new(regex::escape(&s)).unwrap()
+                        StreamingCompiledContentPredicate::new(regex::escape(s)).unwrap(),
                     ),
                 )
             }
             Pattern::Regex(pattern, flags) => {
                 let regex_str = if flags.is_empty() {
-                    pattern
+                    pattern.clone()
                 } else {
                     format!("(?{}){}", flags, pattern)
                 };
-                Expr::content_predicate(
-                    StreamingCompiledContentPredicate::new(regex_str).unwrap()
-                )
+                Expr::content_predicate(StreamingCompiledContentPredicate::new(regex_str).unwrap())
             }
             Pattern::Glob(glob) => {
                 // If it's a path pattern, match against full path
                 if glob.contains('/') {
-                    let regex = glob_to_regex(&glob);
+                    let regex = glob_to_regex(glob);
                     Expr::name_predicate(NamePredicate::Path(
-                        crate::predicate::StringMatcher::regex(&regex).unwrap()
+                        crate::predicate::StringMatcher::regex(&regex).unwrap(),
                     ))
                 } else {
                     // Otherwise match against filename only
-                    let regex = glob_to_regex(&glob);
+                    let regex = glob_to_regex(glob);
                     Expr::name_predicate(NamePredicate::Regex(regex))
                 }
             }
             Pattern::Bare(word) => {
                 // Content search
                 Expr::content_predicate(
-                    StreamingCompiledContentPredicate::new(regex::escape(&word)).unwrap()
+                    StreamingCompiledContentPredicate::new(regex::escape(word)).unwrap(),
                 )
             }
         }
@@ -249,7 +261,9 @@ impl Pattern {
 }
 
 impl FileType {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         let extensions = match self {
             FileType::Rust => vec!["rs"],
             FileType::Python => vec!["py", "pyw"],
@@ -268,25 +282,25 @@ impl FileType {
 
         extensions
             .into_iter()
-            .map(|ext| {
-                Expr::name_predicate(NamePredicate::Regex(format!(r"\.{}$", ext)))
-            })
+            .map(|ext| Expr::name_predicate(NamePredicate::Regex(format!(r"\.{}$", ext))))
             .reduce(Expr::or)
             .unwrap_or(Expr::Literal(false))
     }
 }
 
 impl Filter {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
             Filter::Size(op, value, unit) => {
                 let bytes = match unit {
-                    SizeUnit::Bytes => value as u64,
-                    SizeUnit::Kilobytes => (value * 1024.0) as u64,
-                    SizeUnit::Megabytes => (value * 1024.0 * 1024.0) as u64,
-                    SizeUnit::Gigabytes => (value * 1024.0 * 1024.0 * 1024.0) as u64,
+                    SizeUnit::Bytes => *value as u64,
+                    SizeUnit::Kilobytes => (*value * 1024.0) as u64,
+                    SizeUnit::Megabytes => (*value * 1024.0 * 1024.0) as u64,
+                    SizeUnit::Gigabytes => (*value * 1024.0 * 1024.0 * 1024.0) as u64,
                 };
-                
+
                 match op {
                     SizeOp::Greater => Expr::meta_predicate(MetadataPredicate::SizeGreater(bytes)),
                     SizeOp::GreaterEqual => {
@@ -308,7 +322,7 @@ impl Filter {
                 Expr::Literal(true)
             }
             Filter::Path(path) => {
-                Expr::name_predicate(NamePredicate::Regex(format!("^{}", regex::escape(&path))))
+                Expr::name_predicate(NamePredicate::Regex(format!("^{}", regex::escape(path))))
             }
             Filter::Property(prop) => match prop {
                 Property::Executable => Expr::meta_predicate(MetadataPredicate::IsExecutable),
@@ -322,7 +336,9 @@ impl Filter {
 }
 
 impl Expression {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
             Expression::And(a, b) => Expr::and(a.to_expr(), b.to_expr()),
             Expression::Or(a, b) => Expr::or(a.to_expr(), b.to_expr()),
@@ -333,30 +349,34 @@ impl Expression {
 }
 
 impl Atom {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
-            Atom::Query(q) => q.to_expr(),
+            Atom::Query(q) => q.to_expr_ref(),
             Atom::Predicate(p) => p.to_expr(),
         }
     }
 }
 
 impl PredicateExpr {
-    fn to_expr(self) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn to_expr(
+        &self,
+    ) -> Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
         match self {
             PredicateExpr::Comparison(selector, op, value) => {
                 match (selector, op, value) {
                     (Selector::Name, CompOp::Equal, Value::String(s)) => {
-                        Expr::name_predicate(NamePredicate::Equals(s))
+                        Expr::name_predicate(NamePredicate::Equals(s.clone()))
                     }
                     (Selector::Name, CompOp::Matches, Value::String(s)) => {
-                        Expr::name_predicate(NamePredicate::Regex(s))
+                        Expr::name_predicate(NamePredicate::Regex(s.clone()))
                     }
                     (Selector::Size, CompOp::Greater, Value::Number(n, _)) => {
-                        Expr::meta_predicate(MetadataPredicate::SizeGreater(n as u64))
+                        Expr::meta_predicate(MetadataPredicate::SizeGreater(*n as u64))
                     }
                     (Selector::Size, CompOp::Less, Value::Number(n, _)) => {
-                        Expr::meta_predicate(MetadataPredicate::SizeLess(n as u64))
+                        Expr::meta_predicate(MetadataPredicate::SizeLess(*n as u64))
                     }
                     // TODO: implement other combinations
                     _ => Expr::Literal(true),
@@ -378,7 +398,7 @@ impl PredicateExpr {
 fn glob_to_regex(glob: &str) -> String {
     let mut regex = String::new();
     let mut chars = glob.chars().peekable();
-    
+
     while let Some(ch) = chars.next() {
         match ch {
             '*' => {
@@ -392,7 +412,7 @@ fn glob_to_regex(glob: &str) -> String {
             '?' => regex.push('.'),
             '[' => {
                 regex.push('[');
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     regex.push(ch);
                     if ch == ']' {
                         break;
@@ -406,6 +426,6 @@ fn glob_to_regex(glob: &str) -> String {
             _ => regex.push(ch),
         }
     }
-    
+
     regex
 }
