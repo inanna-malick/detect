@@ -970,4 +970,132 @@ mod parser_tests {
             "(rust || python) && size > 1KB && modified:30d && contains(/TODO/) && !path ~= /vendor/"
         ).is_ok());
     }
+
+    // ============================================================================
+    // DEBUG TESTS FOR FAILING LLM SYNTAX TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_debug_boolean_and_expressions() {
+        // Test the specific failing cases from llm_syntax_tests
+        let failing_cases = vec![
+            "*.rs && TODO",
+            "hidden && empty", 
+            "rust && TODO"
+        ];
+
+        for case in failing_cases {
+            println!("\nDebug parsing: '{}'", case);
+            let result = parse_query(case);
+            match &result {
+                Ok(query) => println!("SUCCESS: {:?}", query),
+                Err(e) => println!("ERROR: {}", e),
+            }
+            assert!(result.is_ok(), "Failed to parse: {}", case);
+        }
+    }
+
+    #[test] 
+    fn test_debug_size_filters() {
+        // First, let's test the pattern we see in test_size_filters
+        let working_input = "*.rs >100";
+        println!("\nTesting known pattern: '{}'", working_input);
+        match parse_query(working_input) {
+            Ok(q) => println!("Result: {:?}", q),
+            Err(e) => println!("Error: {}", e),
+        }
+        
+        // Now test with spaces
+        let spaced_input = "*.rs > 1MB";
+        println!("\nTesting with explicit space: '{}'", spaced_input);
+        match parse_query(spaced_input) {
+            Ok(q) => println!("Result: {:?}", q),
+            Err(e) => println!("Error: {}", e),
+        }
+        
+        // Test if the issue is with the top-level parsing
+        // Maybe the grammar needs to be more specific about when to parse as filtered vs expression
+        
+        // The problem might be that after successfully parsing the `search_base`, 
+        // the parser isn't continuing to look for filters
+        
+        // Let's just verify filters work at all by checking the actual test_size_filters test
+        assert!(true); // Placeholder for now
+    }
+
+    #[test]
+    fn test_debug_predicates() {
+        let failing_cases = vec![
+            "size > 1000",
+            "size >= 1KB",
+            "lines < 100",
+            "lines <= 500",
+            "ext = rs",
+            "ext = \"rs\"",
+            "name = test.rs",
+            "name = \"test.rs\"",
+            "type = file",
+            "type = dir",
+            "path ~ /src/",
+            "contains(/unsafe/)",
+            "contains(\"TODO\")",
+            "binary",  // Test a simple property predicate for comparison
+        ];
+
+        for case in failing_cases {
+            println!("\nDebug parsing predicate: '{}'", case);
+            let result = parse_query(case);
+            match &result {
+                Ok(query) => println!("SUCCESS: {:?}", query),
+                Err(e) => println!("ERROR: {}", e),
+            }
+            assert!(result.is_ok(), "Failed to parse predicate: {}", case);
+        }
+    }
+
+    #[test]
+    fn test_contains_minimal() {
+        // Test just contains expression
+        println!("\nMinimal contains test");
+        
+        // This should work if contains is parsed as expression -> atom -> predicate -> contains_expr
+        let expr_contains = parse_query("contains(/test/)");
+        println!("Direct contains: {:?}", expr_contains);
+        
+        // Let's also test it in an expression context
+        let and_contains = parse_query("*.rs && contains(/test/)");
+        println!("AND with contains: {:?}", and_contains);
+        
+        // Test if wrapping in parens helps (forces expression parsing)
+        let paren_contains = parse_query("(contains(/test/))");
+        println!("Parenthesized contains: {:?}", paren_contains);
+        
+        // Test other predicates that work
+        let binary_pred = parse_query("binary");
+        println!("Binary predicate: {:?}", binary_pred);
+        
+        // Test what happens with just "contains" 
+        let just_contains = parse_query("contains");
+        println!("Just 'contains': {:?}", just_contains);
+    }
+    
+    #[test]
+    fn test_debug_mixed_predicates() {
+        let failing_cases = vec![
+            "ext = rs && !contains(/unsafe/)",
+            "size > 1000 && lines < 100",
+            "*.test.js && contains(/describe/)",
+            "python && size < 10KB && TODO",
+        ];
+
+        for case in failing_cases {
+            println!("\nDebug parsing mixed expression: '{}'", case);
+            let result = parse_query(case);
+            match &result {
+                Ok(query) => println!("SUCCESS: {:?}", query),
+                Err(e) => println!("ERROR: {}", e),
+            }
+            assert!(result.is_ok(), "Failed to parse mixed expression: {}", case);
+        }
+    }
 }

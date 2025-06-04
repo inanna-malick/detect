@@ -11,10 +11,10 @@ program = { SOI ~ query ~ EOI }
 
 query = {
     type_with_pattern    // Type + pattern (e.g., "python TODO")
-  | file_type            // Standalone file type (e.g., "rust") - must come before implicit_search
+  | predicate            // Standalone predicates (e.g., "size > 1000") - before filtered_search to avoid ambiguity
   | filtered_search      // Filtered searches (includes type + pattern)
+  | file_type            // Standalone file type (e.g., "rust") - must come before expression
   | expression           // Full boolean expressions  
-  | predicate            // Standalone predicates (e.g., "size > 1000")
   | implicit_search      // Simple patterns
 }
 
@@ -68,9 +68,11 @@ type_with_pattern = {
 }
 
 
+// File types - single letter types must not be followed by letters to avoid matching "contains" as "c"
 file_type = @{
     "rust" | "rs" | "python" | "py" | "javascript" | "js" |
-    "typescript" | "ts" | "go" | "java" | "cpp" | "c" |
+    "typescript" | "ts" | "go" | "java" | "cpp" | 
+    ("c" ~ !ASCII_ALPHA) |  // "c" only when not followed by a letter
     "image" | "video" | "audio" | "text" | "binary"
 }
 
@@ -125,19 +127,21 @@ atom = {
     "(" ~ expression ~ ")"
   | predicate
   | filtered_search
+  | file_type           // Allow standalone file types in expressions
   | implicit_search  
 }
 
 // Predicates
 predicate = {
-    selector ~ comparison_op ~ value
+    contains_expr  // Check this first to avoid "contains" being parsed as something else
+  | selector ~ comparison_op ~ value
   | selector  // Boolean properties
-  | contains_expr
 }
 
 selector = {
     "name" | "path" | "ext" | "size" | "type" | 
     "lines" | "binary" | "empty"
+    // Note: "contains" is handled separately as contains_expr, not as a selector
 }
 
 contains_expr = { "contains" ~ "(" ~ pattern ~ ")" }

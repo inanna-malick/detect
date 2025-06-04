@@ -112,6 +112,17 @@ fn parse_filtered_search(pair: Pair<Rule>) -> anyhow::Result<Query> {
             Rule::time_filter => filters.push(parse_time_filter(part)?),
             Rule::path_filter => filters.push(parse_path_filter(part)?),
             Rule::property_filter => filters.push(parse_property_filter(part)?),
+            Rule::filter => {
+                // Handle generic filter rule
+                let inner = part.into_inner().next().unwrap();
+                match inner.as_rule() {
+                    Rule::size_filter => filters.push(parse_size_filter(inner)?),
+                    Rule::time_filter => filters.push(parse_time_filter(inner)?),
+                    Rule::path_filter => filters.push(parse_path_filter(inner)?),
+                    Rule::property_filter => filters.push(parse_property_filter(inner)?),
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
@@ -322,6 +333,13 @@ fn parse_expr_pratt(
                         Rule::implicit_search => Ok(Expression::Atom(Atom::Query(
                             Query::Implicit(parse_pattern(inner)?),
                         ))),
+                        Rule::file_type => {
+                            let file_type = parse_file_type_str(inner.as_str())?;
+                            Ok(Expression::Atom(Atom::Query(Query::Filtered {
+                                base: FilterBase::Type(file_type),
+                                filters: vec![],
+                            })))
+                        }
                         _ => anyhow::bail!("unexpected atom rule: {:?}", inner.as_rule()),
                     }
                 }
