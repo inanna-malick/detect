@@ -1094,6 +1094,31 @@ mod parser_tests {
         // Test file types with filters
         println!("rust >1MB: {:?}", parse_query("rust >1MB"));
         println!("image >5MB: {:?}", parse_query("image >5MB"));
+        
+        // Test type with pattern
+        println!("rust TODO: {:?}", parse_query("rust TODO"));
+        println!("python FIXME: {:?}", parse_query("python FIXME"));
+        println!("rust  TODO (2 spaces): {:?}", parse_query("rust  TODO"));
+        
+        // Test the failing mixed expressions
+        let mixed_cases = vec![
+            "ext = rs && !contains(/unsafe/)",
+            "size > 1000 && lines < 100", 
+            "*.test.js && contains(/describe/)",
+            "python && size < 10KB && TODO",
+        ];
+        
+        for case in &mixed_cases {
+            println!("{}: {:?}", case, parse_query(case));
+        }
+        
+        // Debug the failing case  
+        println!("size > 1000: {:?}", parse_query("size > 1000"));
+        println!("lines < 100: {:?}", parse_query("lines < 100"));
+        
+        // Check if individual parts are being parsed as filtered search  
+        println!("size: {:?}", parse_query("size"));
+        println!("size >1000: {:?}", parse_query("size >1000"));
     }
     
     #[test]

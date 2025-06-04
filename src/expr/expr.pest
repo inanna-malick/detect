@@ -12,9 +12,8 @@ program = { SOI ~ query ~ EOI }
 query = {
     type_with_pattern    // Type + pattern (e.g., "python TODO")
   | standalone_file_type // Standalone file type only when not part of expression
-  | predicate            // Standalone predicates (e.g., "size > 1000") - before filtered_search to avoid ambiguity
+  | expression           // Full boolean expressions - before filtered_search to catch predicates
   | filtered_search      // Filtered searches (includes type + pattern)
-  | expression           // Full boolean expressions - after standalone items
   | implicit_search      // Simple patterns
 }
 
@@ -62,14 +61,19 @@ search_base = {
   | implicit_search    // "*.rs", "TODO", etc
 }
 
-// Allow type + pattern - require at least one space to distinguish from standalone types
+// Allow type + pattern  
 type_with_pattern = {
-    file_type ~ WHITESPACE+ ~ implicit_search
+    file_type ~ implicit_search
 }
 
-// Standalone file type only when not followed by boolean operators or filters
+// Standalone file type only when at end of input  
 standalone_file_type = {
-    file_type ~ !(WHITESPACE* ~ (and_op | or_op | filter | implicit_search))
+    file_type ~ &EOI
+}
+
+// Standalone predicate only when not followed by boolean operators
+standalone_predicate = {
+    predicate ~ !(WHITESPACE* ~ (and_op | or_op))
 }
 
 

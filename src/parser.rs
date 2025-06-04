@@ -68,8 +68,16 @@ fn parse_query_pair(pair: Pair<Rule>) -> anyhow::Result<Query> {
                 filters: vec![],
             })
         }
-        Rule::predicate => {
+        Rule::standalone_predicate => {
             // Standalone predicate becomes an expression
+            let predicate_pair = pair.into_inner().next().unwrap();
+            let predicate = parse_predicate(predicate_pair)?;
+            Ok(Query::Expression(Box::new(Expression::Atom(
+                Atom::Predicate(predicate),
+            ))))
+        }
+        Rule::predicate => {
+            // Standalone predicate becomes an expression (fallback)
             let predicate = parse_predicate(pair)?;
             Ok(Query::Expression(Box::new(Expression::Atom(
                 Atom::Predicate(predicate),
