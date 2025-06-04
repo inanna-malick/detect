@@ -11,10 +11,10 @@ program = { SOI ~ query ~ EOI }
 
 query = {
     type_with_pattern    // Type + pattern (e.g., "python TODO")
-  | expression           // Full boolean expressions - before file_type to catch "rust && TODO"
-  | file_type            // Standalone file type (e.g., "rust") - before predicate to avoid "type" conflict
+  | standalone_file_type // Standalone file type only when not part of expression
   | predicate            // Standalone predicates (e.g., "size > 1000") - before filtered_search to avoid ambiguity
   | filtered_search      // Filtered searches (includes type + pattern)
+  | expression           // Full boolean expressions - after standalone items
   | implicit_search      // Simple patterns
 }
 
@@ -65,6 +65,11 @@ search_base = {
 // Allow type + pattern - require at least one space to distinguish from standalone types
 type_with_pattern = {
     file_type ~ WHITESPACE+ ~ implicit_search
+}
+
+// Standalone file type only when not followed by boolean operators or filters
+standalone_file_type = {
+    file_type ~ !(WHITESPACE* ~ (and_op | or_op | filter | implicit_search))
 }
 
 

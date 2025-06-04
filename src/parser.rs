@@ -51,8 +51,17 @@ fn parse_query_pair(pair: Pair<Rule>) -> anyhow::Result<Query> {
                 filters: vec![],
             })
         }
-        Rule::file_type => {
+        Rule::standalone_file_type => {
             // Standalone file type becomes a filtered query with just the type
+            let file_type_pair = pair.into_inner().next().unwrap();
+            let file_type = parse_file_type_str(file_type_pair.as_str())?;
+            Ok(Query::Filtered {
+                base: FilterBase::Type(file_type),
+                filters: vec![],
+            })
+        }
+        Rule::file_type => {
+            // Standalone file type becomes a filtered query with just the type (fallback)
             let file_type = parse_file_type_str(pair.as_str())?;
             Ok(Query::Filtered {
                 base: FilterBase::Type(file_type),

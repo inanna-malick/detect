@@ -1086,6 +1086,14 @@ mod parser_tests {
         for case in test_cases {
             println!("Testing file type '{}': {:?}", case, parse_query(case));
         }
+        
+        // Test boolean expressions with file types
+        println!("rust && TODO: {:?}", parse_query("rust && TODO"));
+        println!("python || FIXME: {:?}", parse_query("python || FIXME"));
+        
+        // Test file types with filters
+        println!("rust >1MB: {:?}", parse_query("rust >1MB"));
+        println!("image >5MB: {:?}", parse_query("image >5MB"));
     }
     
     #[test]
