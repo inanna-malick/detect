@@ -38,7 +38,8 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<R
 
                 let op = match inner.next().unwrap().as_rule() {
                     Rule::eq => predicate::Op::Equality,
-                    Rule::like => predicate::Op::Matches,
+                    Rule::ne => predicate::Op::NotEqual,
+                    Rule::like | Rule::match_ => predicate::Op::Matches,
                     Rule::gt => predicate::Op::NumericComparison(predicate::NumericalOp::Greater),
                     Rule::gteq => {
                         predicate::Op::NumericComparison(predicate::NumericalOp::GreaterOrEqual)
@@ -47,9 +48,51 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<R
                     Rule::lteq => {
                         predicate::Op::NumericComparison(predicate::NumericalOp::LessOrEqual)
                     }
+                    Rule::in_ => predicate::Op::In,
+                    Rule::contains => predicate::Op::Contains,
+                    Rule::glob => predicate::Op::Glob,
                     _ => unreachable!(),
                 };
-                let rhs = inner.next().unwrap().as_str().to_string();
+                let rhs_pair = inner.next().unwrap();
+                let rhs = match rhs_pair.as_rule() {
+                    Rule::rhs => {
+                        let inner_rhs = rhs_pair.into_inner().next().unwrap();
+                        match inner_rhs.as_rule() {
+                            Rule::quoted_string => {
+                                // Extract the inner string without quotes
+                                let quoted = inner_rhs.into_inner().next().unwrap();
+                                let inner_str = quoted.into_inner().next().unwrap();
+                                inner_str.as_str().to_string()
+                            }
+                            Rule::bare_token => inner_rhs.as_str().to_string(),
+                            Rule::set_literal => {
+                                // For set literals, we'll encode them as a special format
+                                // that parse_string can recognize
+                                let set_items = inner_rhs.into_inner().next().unwrap();
+                                let mut items = Vec::new();
+                                for item in set_items.into_inner() {
+                                    if item.as_rule() == Rule::set_item {
+                                        let inner_item = item.into_inner().next().unwrap();
+                                        let value = match inner_item.as_rule() {
+                                            Rule::quoted_string => {
+                                                let quoted = inner_item.into_inner().next().unwrap();
+                                                let inner_str = quoted.into_inner().next().unwrap();
+                                                inner_str.as_str().to_string()
+                                            }
+                                            Rule::bare_token => inner_item.as_str().to_string(),
+                                            _ => unreachable!(),
+                                        };
+                                        items.push(value);
+                                    }
+                                }
+                                // Encode as JSON array string for now
+                                serde_json::to_string(&items).unwrap()
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    _ => unreachable!(),
+                };
 
                 Ok(Expr::Predicate(RawPredicate { lhs, op, rhs }))
             }

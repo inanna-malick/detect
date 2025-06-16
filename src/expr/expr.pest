@@ -1,7 +1,8 @@
 WHITESPACE   =  _{ " " | "\t" | NEWLINE }
 
 
-char = { ASCII_ALPHANUMERIC | "." | "_" | "/" }
+bare_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" }
+inner_char = @{ !("\"" | "'") ~ ANY }
 
 
 program         =   { SOI ~ expr ~ EOI }
@@ -22,11 +23,26 @@ predicate =  { selector ~ op ~ rhs }
     size     = { "filesize"  | "size" }
     type     = {"filetype"   | "type" }
     contents = { "contents"  | "file" }
-  op      = _{ eq | like | gteq | lteq | gt | lt}
-    eq    = { "==" | "=" } // exact equals
-    like  = { "~=" | "~" } // regex type situation
-    gteq  = { ">=" }
-    lteq  = { "<=" }
-    gt    = { ">" }
-    lt    = { "<" }
-  rhs     = @{ char+ }
+  op      = _{ match_ | ne | eq | gteq | lteq | gt | lt | like | in_ | contains | glob }
+    eq       = { "==" | "=" }         // exact equals
+    ne       = { "!=" }               // not equal
+    like     = { "~=" | "~" }         // regex (backward compat)
+    match_   = { "=~" }               // regex (explicit)
+    gteq     = { ">=" }
+    lteq     = { "<=" }
+    gt       = { ">" }
+    lt       = { "<" }
+    in_      = { "in" }               // set membership
+    contains = { "contains" }         // substring match
+    glob     = { "glob" }             // glob pattern
+  rhs     = { set_literal | quoted_string | bare_token }
+    set_literal = { "[" ~ ws* ~ set_items ~ ws* ~ "]" }
+      set_items = { set_item ~ (ws* ~ "," ~ ws* ~ set_item)* }
+      set_item = { quoted_string | bare_token }
+    quoted_string = ${ double_quoted | single_quoted }
+      double_quoted = { "\"" ~ inner_double ~ "\"" }
+      single_quoted = { "'" ~ inner_single ~ "'" }
+      inner_double = @{ (!"\"" ~ ANY)* }
+      inner_single = @{ (!"'" ~ ANY)* }
+    bare_token = @{ bare_char+ }
+  ws = _{ " " | "\t" }

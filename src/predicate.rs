@@ -10,6 +10,42 @@ use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
 
+fn glob_to_regex(glob: &str) -> String {
+    let mut regex = String::from("^");
+    let mut chars = glob.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        match ch {
+            '*' => {
+                if chars.peek() == Some(&'*') {
+                    chars.next();
+                    regex.push_str(".*");
+                } else {
+                    regex.push_str("[^/]*");
+                }
+            }
+            '?' => regex.push('.'),
+            '[' => {
+                regex.push('[');
+                while let Some(ch) = chars.next() {
+                    regex.push(ch);
+                    if ch == ']' {
+                        break;
+                    }
+                }
+            }
+            '.' | '(' | ')' | '+' | '|' | '^' | '$' | '@' | '%' => {
+                regex.push('\\');
+                regex.push(ch);
+            }
+            _ => regex.push(ch),
+        }
+    }
+    
+    regex.push('$');
+    regex
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RawPredicate {
     pub lhs: Selector,
@@ -67,6 +103,10 @@ pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 pub enum StringMatcher {
     Regex(Regex),
     Equals(String),
+    NotEquals(String),
+    Contains(String),
+    Glob(String),
+    In(Vec<String>),
 }
 
 impl PartialEq for StringMatcher {
@@ -74,6 +114,10 @@ impl PartialEq for StringMatcher {
         match (self, other) {
             (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
             (Self::Equals(l0), Self::Equals(r0)) => l0 == r0,
+            (Self::NotEquals(l0), Self::NotEquals(r0)) => l0 == r0,
+            (Self::Contains(l0), Self::Contains(r0)) => l0 == r0,
+            (Self::Glob(l0), Self::Glob(r0)) => l0 == r0,
+            (Self::In(l0), Self::In(r0)) => l0 == r0,
             _ => false,
         }
     }
@@ -90,6 +134,14 @@ impl StringMatcher {
         match self {
             StringMatcher::Regex(r) => r.is_match(s),
             StringMatcher::Equals(cmp) => cmp == s,
+            StringMatcher::NotEquals(cmp) => cmp != s,
+            StringMatcher::Contains(substr) => s.contains(substr),
+            StringMatcher::Glob(pattern) => {
+                // Convert glob pattern to regex
+                let regex_pattern = glob_to_regex(pattern);
+                Regex::new(&regex_pattern).map(|r| r.is_match(s)).unwrap_or(false)
+            }
+            StringMatcher::In(values) => values.contains(&s.to_string()),
         }
     }
 }
@@ -111,16 +163,33 @@ impl NumberMatcher {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
-    // TODO: choose operator for contains
-    Matches,  // '~=', 'matches'
-    Equality, // '==', '=', 'is'
+    Matches,  // '~=', '~', '=~' - regex
+    Equality, // '==', '='
+    NotEqual, // '!='
     NumericComparison(NumericalOp),
+    In,       // 'in' - set membership
+    Contains, // 'contains' - substring
+    Glob,     // 'glob' - glob pattern
 }
 
 pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
     Ok(match op {
         Op::Matches => StringMatcher::Regex(Regex::new(rhs)?),
         Op::Equality => StringMatcher::Equals(rhs.to_owned()),
+        Op::NotEqual => StringMatcher::NotEquals(rhs.to_owned()),
+        Op::Contains => StringMatcher::Contains(rhs.to_owned()),
+        Op::Glob => StringMatcher::Glob(rhs.to_owned()),
+        Op::In => {
+            // Check if rhs is a JSON-encoded array (from set literal)
+            if rhs.starts_with('[') && rhs.ends_with(']') {
+                match serde_json::from_str::<Vec<String>>(rhs) {
+                    Ok(values) => StringMatcher::In(values),
+                    Err(_) => StringMatcher::In(vec![rhs.to_owned()]),
+                }
+            } else {
+                StringMatcher::In(vec![rhs.to_owned()])
+            }
+        }
         x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
     })
 }
@@ -129,13 +198,27 @@ pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<StreamingCompiled
     Ok(match op {
         Op::Matches => StreamingCompiledContentPredicate::new(rhs)?,
         Op::Equality => {
-            let regex = format!("^{}$", rhs);
+            let regex = format!("^{}$", regex::escape(&rhs));
             StreamingCompiledContentPredicate {
                 inner: DFA::new(&regex)?,
                 source: regex,
             }
         }
-        x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
+        Op::Contains => {
+            let regex = regex::escape(&rhs);
+            StreamingCompiledContentPredicate {
+                inner: DFA::new(&regex)?,
+                source: regex,
+            }
+        }
+        Op::Glob => {
+            let regex = glob_to_regex(&rhs);
+            StreamingCompiledContentPredicate {
+                inner: DFA::new(&regex)?,
+                source: regex,
+            }
+        }
+        x => anyhow::bail!("operator {:?} cannot be applied to contents", x),
     })
 }
 

@@ -185,3 +185,208 @@ async fn test_size_left() {
 //     .run()
 //     .await
 // }
+
+#[tokio::test]
+async fn test_quoted_strings() {
+    Case {
+        expr: r#"@name == "my file.txt""#,
+        expected: &["my file.txt"],
+        files: vec![
+            f("my file.txt", "content"),
+            f("myfile.txt", "other"),
+            f("other.txt", "test"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_quoted_strings_with_spaces() {
+    Case {
+        expr: r#"@name ~= "test file""#,
+        expected: &["test file 1.txt", "test file 2.doc"],
+        files: vec![
+            f("test file 1.txt", "content"),
+            f("test file 2.doc", "other"),
+            f("testfile3.txt", "no match"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_single_quotes() {
+    Case {
+        expr: r"@name == 'config.json'",
+        expected: &["config.json"],
+        files: vec![
+            f("config.json", "{}"),
+            f("config.yaml", "test: true"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_backward_compatibility() {
+    // Ensure bare tokens still work
+    Case {
+        expr: "@name == README.md",
+        expected: &["README.md"],
+        files: vec![
+            f("README.md", "# Hello"),
+            f("readme.md", "# hello"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_not_equal_operator() {
+    Case {
+        expr: "@ext != txt",
+        expected: &["script.sh", "config.json", ""],
+        files: vec![
+            f("readme.txt", "text"),
+            f("script.sh", "#!/bin/bash"),
+            f("config.json", "{}"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_contains_operator() {
+    Case {
+        expr: r#"@contents contains "TODO""#,
+        expected: &["main.rs", "lib.rs"],
+        files: vec![
+            f("main.rs", "// TODO: implement feature"),
+            f("lib.rs", "/* TODO: add tests */"),
+            f("done.rs", "// All tasks completed"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_glob_operator() {
+    Case {
+        expr: r#"@name glob "test_*.rs""#,
+        expected: &["test_utils.rs", "test_integration.rs"],
+        files: vec![
+            f("test_utils.rs", ""),
+            f("test_integration.rs", ""),
+            f("main_test.rs", ""),
+            f("tests.rs", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_glob_with_double_star() {
+    Case {
+        expr: r#"@path glob "**/test/*.rs""#,
+        expected: &["src/test/utils.rs", "lib/test/helpers.rs", "test/main.rs"],
+        files: vec![
+            f("src/test/utils.rs", ""),
+            f("lib/test/helpers.rs", ""),
+            f("test/main.rs", ""),
+            f("src/main.rs", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_match_operator() {
+    // Test the explicit =~ regex operator with quoted regex
+    Case {
+        expr: r#"@name =~ "^test_.*\.rs$""#,
+        expected: &["test_utils.rs", "test_integration.rs"],
+        files: vec![
+            f("test_utils.rs", ""),
+            f("test_integration.rs", ""),
+            f("main_test.rs", ""),
+            f("tests.rs", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_match_operator_bare() {
+    // Test the =~ operator with simple pattern
+    Case {
+        expr: r#"@name =~ test_.*"#,
+        expected: &["test_utils.rs", "test_integration.rs"],
+        files: vec![
+            f("test_utils.rs", ""),
+            f("test_integration.rs", ""),
+            f("main_test.rs", ""),
+            f("tests.rs", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_in_operator_with_set() {
+    Case {
+        expr: r#"@ext in [js, ts, jsx, tsx]"#,
+        expected: &["app.js", "lib.ts", "component.jsx", "page.tsx"],
+        files: vec![
+            f("app.js", ""),
+            f("lib.ts", ""),
+            f("component.jsx", ""),
+            f("page.tsx", ""),
+            f("style.css", ""),
+            f("index.html", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_in_operator_with_quoted_set() {
+    Case {
+        expr: r#"@name in ["my file.txt", "another file.doc", config.json]"#,
+        expected: &["my file.txt", "another file.doc", "config.json"],
+        files: vec![
+            f("my file.txt", ""),
+            f("another file.doc", ""),
+            f("config.json", ""),
+            f("readme.md", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_in_operator_single_value() {
+    // Test that 'in' works with a single value (not a set)
+    Case {
+        expr: r#"@ext in "js""#,
+        expected: &["app.js", "index.js"],
+        files: vec![
+            f("app.js", ""),
+            f("index.js", ""),
+            f("style.css", ""),
+        ],
+    }
+    .run()
+    .await
+}
