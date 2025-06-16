@@ -1,48 +1,79 @@
-## detect: a command line tool for finding filesystem entities using expressions
+# detect
 
+A fast, powerful tool for finding files by name, content, and metadata using an expressive query language. Drop-in replacement for complex `find`/`grep` pipelines.
 
 ```shell
-➜  detect '@name ~= detect || @extension ~= rs && @contents ~= map_frame'
-./target/release/detect
-./target/release/deps/detect-6395eb2c29a3ed5e
-./target/debug/detect
-./target/debug/deps/detect-34cec1d5ea27ff11
-./target/debug/deps/detect-e91a01500af9a97b
-./target/debug/deps/detect-0b57d7084445c8b2
-./target/debug/deps/detect-32c3beb592fdbbe3
-./src/expr/frame.rs
+➜  detect 'path.extension == rs && contents ~= async'
+./src/main.rs
+./src/lib.rs
+./src/eval/fs.rs
+
+➜  detect 'size > 50kb && modified > -7d && contents contains TODO'
+./docs/planning.md
+./src/experimental.rs
 ```
 
-## boolean operators
-- `a && b`
-- `a || b`
-- `!a`
-- `(a)`
+## Quick Start
 
+```bash
+cargo install detect
 
-## string operators
-- `==`
-- `~=` (regex match)
+# Find files by name pattern
+detect 'path.name == README.md'
 
-## numeric operators
-- `>`, `>=`, `<`, `<=`
-- `==`
+# Search file contents
+detect 'contents contains TODO'
 
-# Selectors
+# Complex queries with boolean logic
+detect 'path.ext == ts && contents ~= @Injectable && !path.full contains test'
+```
 
-All selectors start with '@', eg '@name'
+## Why detect?
 
-## file path selectors
+Traditional Unix tools require chaining multiple commands with complex syntax:
 
-- @name (or @filename)
-- @path (or @filepath)
-- @ext (or @extension)
+```bash
+# Old way: find TypeScript files >5KB modified in last week containing TODO
+find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 
-## metadata selectors
+# New way: same query, readable syntax
+detect 'path.ext == ts && size > 5kb && modified > -7d && contents contains TODO'
+```
 
-- @size (or @filesize)
-- @type (or @filetype)
+## Key Features
 
-## file contents predicates
+- **Unified search** - content AND metadata in single query
+- **Natural syntax** - readable boolean expressions instead of cryptic flags  
+- **Regex support** - powerful pattern matching across all text fields
+- **Fast execution** - optimized query planning (metadata filters before content scanning)
+- **Time queries** - intuitive relative/absolute date filtering
+- **Type safety** - prevents nonsensical queries at parse time
 
-- @file (or @contents)
+## Practical Examples
+
+```bash
+# Security audit: find config files with secrets
+detect 'path.ext in [env,json,yml] && contents ~= (password|secret|api_key)'
+
+# Code quality: large files without tests or docs
+detect 'size > 10kb && !contents contains test && !contents contains TODO'
+
+# Angular components with specific decorators
+detect 'path.ext == ts && contents ~= @(Component|Injectable|Directive)'
+
+# Recent changes to build files
+detect 'modified > -7d && path.name ~= (Makefile|.*\.mk|build\.)'
+
+# Complex boolean logic with grouping
+detect '(path.ext == js || path.ext == ts) && (contents contains import || contents contains require) && size > 1kb'
+```
+
+**Full syntax reference and advanced features**: `detect --help`
+
+## Performance
+
+detect optimizes query execution automatically:
+- Applies fast metadata filters first (name, size, dates)
+- Only scans file contents for files passing metadata filters
+- Uses streaming regex engines for large file content matching
+- Respects `.gitignore` by default (override with `-i`)
