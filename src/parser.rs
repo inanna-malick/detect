@@ -33,6 +33,9 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> anyhow::Result<Expr<R
                     Rule::size => predicate::Selector::Size,
                     Rule::r#type => predicate::Selector::EntityType,
                     Rule::contents => predicate::Selector::Contents,
+                    Rule::modified => predicate::Selector::Modified,
+                    Rule::created => predicate::Selector::Created,
+                    Rule::accessed => predicate::Selector::Accessed,
                     x => panic!("{:?}", x),
                 };
 

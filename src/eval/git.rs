@@ -63,6 +63,10 @@ pub fn eval<'dfa>(
                 MetadataPredicate::Type(string_matcher) => {
                     string_matcher.is_match("directory") | string_matcher.is_match("dir")
                 }
+                MetadataPredicate::Modified(_) | MetadataPredicate::Created(_) | MetadataPredicate::Accessed(_) => {
+                    // Git trees don't have timestamps
+                    false
+                }
             },
             Predicate::Content(_) => false,
             Predicate::Name(_) => unreachable!(),

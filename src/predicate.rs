@@ -9,6 +9,7 @@ use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
+use chrono::{DateTime, Local, NaiveDate, Duration};
 
 fn glob_to_regex(glob: &str) -> String {
     let mut regex = String::from("^");
@@ -46,6 +47,54 @@ fn glob_to_regex(glob: &str) -> String {
     regex
 }
 
+fn parse_time_value(s: &str) -> anyhow::Result<DateTime<Local>> {
+    // Handle relative time formats
+    if s.starts_with('-') {
+        let parts: Vec<&str> = s[1..].split('.').collect();
+        if parts.len() == 2 {
+            let number: i64 = parts[0].parse()?;
+            let unit = parts[1];
+            
+            let duration = match unit {
+                "seconds" | "second" | "secs" | "sec" | "s" => Duration::seconds(number),
+                "minutes" | "minute" | "mins" | "min" | "m" => Duration::minutes(number),
+                "hours" | "hour" | "hrs" | "hr" | "h" => Duration::hours(number),
+                "days" | "day" | "d" => Duration::days(number),
+                "weeks" | "week" | "w" => Duration::weeks(number),
+                _ => anyhow::bail!("Unknown time unit: {}", unit),
+            };
+            
+            return Ok(Local::now() - duration);
+        }
+    }
+    
+    // Handle special keywords
+    match s {
+        "now" => return Ok(Local::now()),
+        "today" => {
+            let today = Local::now().date_naive();
+            return Ok(today.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap());
+        }
+        "yesterday" => {
+            let yesterday = Local::now().date_naive() - Duration::days(1);
+            return Ok(yesterday.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap());
+        }
+        _ => {}
+    }
+    
+    // Try parsing as absolute date/datetime
+    if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        return Ok(date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap());
+    }
+    
+    // Try parsing as ISO datetime
+    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+        return Ok(dt.with_timezone(&Local));
+    }
+    
+    anyhow::bail!("Cannot parse time value: {}", s)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RawPredicate {
     pub lhs: Selector,
@@ -75,6 +124,15 @@ impl RawPredicate {
             Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
                 &self.op, &self.rhs,
             )?)),
+            Selector::Modified => Predicate::meta(MetadataPredicate::Modified(parse_temporal(
+                &self.op, &self.rhs,
+            )?)),
+            Selector::Created => Predicate::meta(MetadataPredicate::Created(parse_temporal(
+                &self.op, &self.rhs,
+            )?)),
+            Selector::Accessed => Predicate::meta(MetadataPredicate::Accessed(parse_temporal(
+                &self.op, &self.rhs,
+            )?)),
             Selector::Contents => Predicate::contents(parse_string_dfa(self.op, self.rhs)?),
         })
     }
@@ -89,6 +147,10 @@ pub enum Selector {
     // METADATA
     EntityType,
     Size,
+    // TEMPORAL
+    Modified,
+    Created,
+    Accessed,
     // TODO: more
     // CONTENTS
     // FIXME: figure out a better Display impl if/when more selectors added
@@ -151,6 +213,44 @@ pub enum NumberMatcher {
     In(Bound),
     Equals(u64),
 }
+
+#[derive(Clone, Debug)]
+pub enum TimeMatcher {
+    Before(DateTime<Local>),
+    After(DateTime<Local>),
+    Equals(DateTime<Local>),
+}
+
+impl TimeMatcher {
+    pub fn is_match(&self, timestamp: i64) -> bool {
+        use std::time::UNIX_EPOCH;
+        
+        let file_time = UNIX_EPOCH + std::time::Duration::from_secs(timestamp as u64);
+        let file_datetime: DateTime<Local> = file_time.into();
+        
+        match self {
+            TimeMatcher::Before(dt) => file_datetime < *dt,
+            TimeMatcher::After(dt) => file_datetime > *dt,
+            TimeMatcher::Equals(dt) => {
+                // For equality, we'll consider same day
+                file_datetime.date_naive() == dt.date_naive()
+            }
+        }
+    }
+}
+
+impl PartialEq for TimeMatcher {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (TimeMatcher::Before(a), TimeMatcher::Before(b)) => a == b,
+            (TimeMatcher::After(a), TimeMatcher::After(b)) => a == b,
+            (TimeMatcher::Equals(a), TimeMatcher::Equals(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for TimeMatcher {}
 
 impl NumberMatcher {
     pub fn is_match(&self, x: u64) -> bool {
@@ -234,6 +334,19 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
             NumericalOp::Less => Bound::Right(..parsed_rhs.saturating_add(1)),
         })),
         x => anyhow::bail!("operator {:?} cannot be applied to numerical values", x),
+    }
+}
+
+pub fn parse_temporal(op: &Op, rhs: &str) -> anyhow::Result<TimeMatcher> {
+    let parsed_time = parse_time_value(rhs)?;
+    
+    match op {
+        Op::Equality => Ok(TimeMatcher::Equals(parsed_time)),
+        Op::NumericComparison(op) => Ok(match op {
+            NumericalOp::Greater | NumericalOp::GreaterOrEqual => TimeMatcher::After(parsed_time),
+            NumericalOp::Less | NumericalOp::LessOrEqual => TimeMatcher::Before(parsed_time),
+        }),
+        x => anyhow::bail!("operator {:?} cannot be applied to temporal values", x),
     }
 }
 
@@ -389,10 +502,13 @@ impl Bound {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum MetadataPredicate {
     Filesize(NumberMatcher),
     Type(StringMatcher), //dir, exec, etc
+    Modified(TimeMatcher),
+    Created(TimeMatcher),
+    Accessed(TimeMatcher),
 }
 
 impl Display for MetadataPredicate {
@@ -400,6 +516,21 @@ impl Display for MetadataPredicate {
         f.write_str(&format!("{:?}", self))
     }
 }
+
+impl PartialEq for MetadataPredicate {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MetadataPredicate::Filesize(a), MetadataPredicate::Filesize(b)) => a == b,
+            (MetadataPredicate::Type(a), MetadataPredicate::Type(b)) => a == b,
+            (MetadataPredicate::Modified(a), MetadataPredicate::Modified(b)) => a == b,
+            (MetadataPredicate::Created(a), MetadataPredicate::Created(b)) => a == b,
+            (MetadataPredicate::Accessed(a), MetadataPredicate::Accessed(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for MetadataPredicate {}
 
 impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
@@ -424,6 +555,9 @@ impl MetadataPredicate {
                     false
                 }
             }
+            MetadataPredicate::Modified(matcher) => matcher.is_match(metadata.mtime()),
+            MetadataPredicate::Created(matcher) => matcher.is_match(metadata.ctime()),
+            MetadataPredicate::Accessed(matcher) => matcher.is_match(metadata.atime()),
         }
     }
 
@@ -436,6 +570,10 @@ impl MetadataPredicate {
             MetadataPredicate::Type(matcher) => {
                 matcher.is_match("dir") || matcher.is_match("directory")
             }
+            MetadataPredicate::Modified(_) | MetadataPredicate::Created(_) | MetadataPredicate::Accessed(_) => {
+                // Git trees don't have timestamps
+                false
+            }
         }
     }
 
@@ -443,6 +581,10 @@ impl MetadataPredicate {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
             MetadataPredicate::Type(matcher) => matcher.is_match("file"),
+            MetadataPredicate::Modified(_) | MetadataPredicate::Created(_) | MetadataPredicate::Accessed(_) => {
+                // Git blobs don't have timestamps
+                false
+            }
         }
     }
 }
