@@ -4,6 +4,9 @@ pub mod parser;
 pub mod predicate;
 mod util;
 
+#[cfg(test)]
+mod parser_tests;
+
 use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;

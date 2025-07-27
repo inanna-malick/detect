@@ -390,3 +390,401 @@ async fn test_in_operator_single_value() {
     .run()
     .await
 }
+
+// ===== Complex Grammar Interaction Tests =====
+
+#[tokio::test]
+async fn test_glob_with_brackets() {
+    Case {
+        expr: r#"@name glob "file[1-3].txt""#,
+        expected: &["file1.txt", "file2.txt", "file3.txt"],
+        files: vec![
+            f("file1.txt", ""),
+            f("file2.txt", ""),
+            f("file3.txt", ""),
+            f("file4.txt", ""),
+            f("file0.txt", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_glob_with_question_mark() {
+    Case {
+        expr: r#"@name glob "file?.txt""#,
+        expected: &["file1.txt", "file2.txt", "fileA.txt"],
+        files: vec![
+            f("file1.txt", ""),
+            f("file2.txt", ""),
+            f("fileA.txt", ""),
+            f("file10.txt", ""), // Two characters, won't match
+            f("file.txt", ""),   // Zero characters, won't match
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_contains_with_regex_special_chars() {
+    Case {
+        expr: r#"@contents contains "function(""#,
+        expected: &["main.js", "lib.js"],
+        files: vec![
+            f("main.js", "function() { return 42; }"),
+            f("lib.js", "const fn = function( arg ) { }"),
+            f("class.js", "class MyClass { }"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_multiple_in_operators() {
+    Case {
+        expr: r#"@ext in [js, ts] && @name in [index, main]"#,
+        expected: &["index.js", "main.js", "index.ts", "main.ts"],
+        files: vec![
+            f("index.js", ""),
+            f("main.js", ""),
+            f("index.ts", ""),
+            f("main.ts", ""),
+            f("app.js", ""),      // Wrong name
+            f("index.html", ""),  // Wrong extension
+            f("main.css", ""),    // Wrong extension
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_complex_nested_expression() {
+    Case {
+        expr: r#"(@ext in [rs, toml] || @name glob "*.md") && (@size < 1000 || @contents contains "important")"#,
+        expected: &["small.rs", "README.md", "config.toml", "large.rs"],
+        files: vec![
+            f("small.rs", "fn main() {}"),  // Small .rs file
+            f("README.md", "# Project"),     // .md file (matches first part)
+            f("config.toml", "[package]"),   // Small .toml file
+            f("large.rs", &"x".repeat(2000).replace("xxxxx", "important")), // Large but contains "important"
+            f("large.txt", &"x".repeat(2000)), // Large .txt file (no match)
+            f("small.txt", "hello"),         // Small .txt file (no match)
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_mixed_quotes_in_values() {
+    Case {
+        expr: r#"@name == "file with 'quotes'.txt""#,
+        expected: &["file with 'quotes'.txt"],
+        files: vec![
+            f("file with 'quotes'.txt", ""),
+            f("file with quotes.txt", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_escape_sequences_in_regex() {
+    Case {
+        expr: r#"@contents ~= "\$\d+\.\d{2}""#,  // Matches dollar amounts like $19.99
+        expected: &["prices.txt", "invoice.txt"],
+        files: vec![
+            f("prices.txt", "Item costs $19.99"),
+            f("invoice.txt", "Total: $1234.56"),
+            f("notes.txt", "Price is around 20 dollars"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_glob_recursive_with_extension() {
+    Case {
+        expr: r#"@path glob "**/*.test.js""#,
+        expected: &[
+            "unit.test.js",
+            "src/component.test.js",
+            "src/utils/helper.test.js",
+        ],
+        files: vec![
+            f("unit.test.js", ""),
+            f("src/component.test.js", ""),
+            f("src/utils/helper.test.js", ""),
+            f("src/component.js", ""),      // Not a test file
+            f("test.js", ""),               // Missing .test pattern
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_complex_path_patterns() {
+    Case {
+        expr: r#"@path ~= "src/.*/(test|spec)/.*\.js$""#,
+        expected: &[
+            "src/components/test/button.js",
+            "src/utils/spec/helper.js",
+        ],
+        files: vec![
+            f("src/components/test/button.js", ""),
+            f("src/utils/spec/helper.js", ""),
+            f("src/components/button.js", ""),      // Not in test/spec dir
+            f("test/components/button.js", ""),     // test not under src
+            f("src/test/button.ts", ""),            // Wrong extension
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_set_with_special_filenames() {
+    Case {
+        expr: r#"@name in [".gitignore", ".env", "Makefile", "Dockerfile"]"#,
+        expected: &[".gitignore", ".env", "Makefile", "Dockerfile"],
+        files: vec![
+            f(".gitignore", ""),
+            f(".env", ""),
+            f("Makefile", ""),
+            f("Dockerfile", ""),
+            f("README.md", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_combining_all_new_operators() {
+    // Use glob, in, contains, and != all in one expression
+    Case {
+        expr: r#"@name glob "*.config.*" && @ext in [js, json, yaml, yml] && @contents contains "version" && @size != 0"#,
+        expected: &["app.config.js", "db.config.json"],
+        files: vec![
+            f("app.config.js", "module.exports = { version: '1.0.0' }"),
+            f("db.config.json", r#"{ "version": "2.0" }"#),
+            f("test.config.yaml", "name: test"),  // No "version"
+            f("empty.config.yml", ""),            // Size is 0
+            f("config.txt", "version: 1.0"),      // Wrong extension
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_glob_edge_cases() {
+    Case {
+        expr: r#"@name glob "*.[ch]""#,  // C source and header files
+        expected: &["main.c", "utils.c", "main.h", "utils.h"],
+        files: vec![
+            f("main.c", ""),
+            f("utils.c", ""),
+            f("main.h", ""),
+            f("utils.h", ""),
+            f("test.cpp", ""),  // Not .c or .h
+        ],
+    }
+    .run()
+    .await
+}
+
+// ===== File Edge Cases Tests =====
+
+#[tokio::test]
+async fn test_files_without_extensions() {
+    // Since we can't match empty extensions directly, 
+    // test by excluding files with known extensions
+    Case {
+        expr: r#"@name in [README, Makefile, LICENSE] && !@name contains ".""#,
+        expected: &["README", "Makefile", "LICENSE"],
+        files: vec![
+            f("README", "# Project"),
+            f("Makefile", "all:\n\tbuild"),
+            f("LICENSE", "MIT"),
+            f("main.rs", "fn main() {}"),
+            f(".gitignore", "target/"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_files_with_multiple_dots() {
+    Case {
+        expr: r#"@ext == gz"#,
+        expected: &["archive.tar.gz", "backup.sql.gz"],
+        files: vec![
+            f("archive.tar.gz", ""),
+            f("backup.sql.gz", ""),
+            f("data.tar", ""),
+            f("compressed.gz.txt", ""),  // .txt is the extension
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_hidden_files() {
+    Case {
+        expr: r#"@name ~= "^\.""#,  // Names starting with dot
+        expected: &[".gitignore", ".env", ".bashrc", ".config.json"],
+        files: vec![
+            f(".gitignore", "node_modules/"),
+            f(".env", "API_KEY=secret"),
+            f(".bashrc", "export PATH"),
+            f(".config.json", "{}"),
+            f("visible.txt", "not hidden"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_unicode_filenames() {
+    Case {
+        expr: r#"@name ~= "[α-ω]""#,  // Greek letters
+        expected: &["αlpha.txt", "βeta.doc", "γamma.rs"],
+        files: vec![
+            f("αlpha.txt", "Greek alpha"),
+            f("βeta.doc", "Greek beta"),
+            f("γamma.rs", "Greek gamma"),
+            f("regular.txt", "No Greek"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_emoji_filenames() {
+    Case {
+        expr: r#"@name contains "📄""#,
+        expected: &["📄document.txt", "report📄.md"],
+        files: vec![
+            f("📄document.txt", "Document with emoji"),
+            f("report📄.md", "Report with emoji"),
+            f("regular.txt", "No emoji"),
+            f("🎵music.mp3", "Different emoji"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_directories_vs_files() {
+    Case {
+        expr: r#"@type == dir && @name ~= test"#,
+        expected: &["test", "tests", "src/test"],
+        files: vec![
+            f("test/dummy.txt", ""),      // Creates test directory
+            f("tests/unit.rs", ""),       // Creates tests directory
+            f("src/test/lib.rs", ""),     // Creates src/test directory
+            f("test.rs", "// Not a dir"), // File, not directory
+            f("testing.txt", ""),          // File, not directory
+        ],
+    }
+    .run()
+    .await
+}
+
+
+#[tokio::test]
+async fn test_case_sensitivity() {
+    Case {
+        expr: r#"@name == README.md"#,  // Exact case match
+        expected: &["README.md"],
+        files: vec![
+            f("README.md", "# Title"),
+            f("readme.md", "# title"),
+            f("Readme.md", "# Title"),
+            f("README.MD", "# TITLE"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_files_with_spaces_in_names() {
+    Case {
+        expr: r#"@name ~= " ""#,  // Contains space
+        expected: &["my file.txt", "another file.doc", "file with spaces.rs"],
+        files: vec![
+            f("my file.txt", ""),
+            f("another file.doc", ""),
+            f("file with spaces.rs", ""),
+            f("no_spaces.txt", ""),
+            f("also-no-spaces.doc", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_extension_edge_cases() {
+    Case {
+        expr: r#"@ext in [d, "2", "1"]"#,
+        expected: &[".gitignore.d", "file.2", "archive.1"],
+        files: vec![
+            f(".gitignore.d", ""),     // Extension is "d"
+            f("file.2", ""),           // Numeric extension "2"
+            f("archive.1", ""),        // Numeric extension "1" 
+            f("test.txt", ""),         // Regular extension
+            f("no_ext", ""),           // No extension
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_symlink_names() {
+    let tmp_dir = TempDir::new("detect-symlink-names").unwrap();
+    
+    // Create a target file
+    let target = tmp_dir.path().join("target.txt");
+    std::fs::write(&target, "target content").unwrap();
+    
+    // Create symlinks with various names
+    let link1 = tmp_dir.path().join("link_to_target.txt");
+    let link2 = tmp_dir.path().join("short");
+    
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&target, &link1).unwrap();
+        std::os::unix::fs::symlink(&target, &link2).unwrap();
+    }
+    
+    let mut found = Vec::new();
+    detect::parse_and_run_fs(
+        Logger::root(Discard, o!()),
+        tmp_dir.path(),
+        false,
+        r#"@name ~= link"#.to_owned(),
+        |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
+    )
+    .await
+    .unwrap();
+    
+    assert!(found.contains(&"link_to_target.txt".to_string()));
+    assert!(!found.contains(&"short".to_string()));
+    assert!(!found.contains(&"target.txt".to_string()));
+}
