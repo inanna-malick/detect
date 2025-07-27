@@ -212,6 +212,7 @@ impl StringMatcher {
 pub enum NumberMatcher {
     In(Bound),
     Equals(u64),
+    NotEquals(u64),
 }
 
 #[derive(Clone, Debug)]
@@ -219,6 +220,7 @@ pub enum TimeMatcher {
     Before(DateTime<Local>),
     After(DateTime<Local>),
     Equals(DateTime<Local>),
+    NotEquals(DateTime<Local>),
 }
 
 impl TimeMatcher {
@@ -233,7 +235,13 @@ impl TimeMatcher {
             TimeMatcher::After(dt) => file_datetime > *dt,
             TimeMatcher::Equals(dt) => {
                 // For equality, we'll consider same day
+                // FIXME: choose granularity, somewhow
                 file_datetime.date_naive() == dt.date_naive()
+            }
+            TimeMatcher::NotEquals(dt) => {
+                // FIXME: choose granularity, somewhow - maybe find lowest value (day/minute/etc that isn't all 0's)
+                // For equality, we'll consider same day
+                file_datetime.date_naive() != dt.date_naive()
             }
         }
     }
@@ -257,6 +265,7 @@ impl NumberMatcher {
         match self {
             NumberMatcher::In(b) => b.contains(&x),
             NumberMatcher::Equals(cmp) => x == *cmp,
+            NumberMatcher::NotEquals(cmp) => x != *cmp,
         }
     }
 }
@@ -290,7 +299,9 @@ pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
                 StringMatcher::In(vec![rhs.to_owned()])
             }
         }
-        x => anyhow::bail!("operator {:?} cannot be applied to string values", x),
+        Op::NumericComparison(_) => {
+            anyhow::bail!("Numeric comparison operators (>, <, >=, <=) cannot be used with string values")
+        }
     })
 }
 
@@ -318,7 +329,15 @@ pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<StreamingCompiled
                 source: regex,
             }
         }
-        x => anyhow::bail!("operator {:?} cannot be applied to contents", x),
+        Op::NotEqual => {
+            anyhow::bail!("!= operator is not supported for @contents predicates")
+        }
+        Op::NumericComparison(_) => {
+            anyhow::bail!("Numeric comparison operators (>, <, >=, <=) cannot be used with @contents")
+        }
+        Op::In => {
+            anyhow::bail!("'in' operator is not supported for @contents predicates")
+        }
     })
 }
 
@@ -333,7 +352,21 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
             NumericalOp::LessOrEqual => Bound::Right(..parsed_rhs),
             NumericalOp::Less => Bound::Right(..parsed_rhs.saturating_add(1)),
         })),
-        x => anyhow::bail!("operator {:?} cannot be applied to numerical values", x),
+        Op::NotEqual => Ok(NumberMatcher::NotEquals(parsed_rhs)),
+        Op::In => {
+            // For now, 'in' with numeric values only supports single values
+            // Could be extended to support JSON arrays of numbers
+            Ok(NumberMatcher::Equals(parsed_rhs))
+        }
+        Op::Matches => {
+            anyhow::bail!("Regex operator ~= cannot be used with numeric values")
+        }
+        Op::Contains => {
+            anyhow::bail!("'contains' operator cannot be used with numeric values")
+        }
+        Op::Glob => {
+            anyhow::bail!("'glob' operator cannot be used with numeric values")
+        }
     }
 }
 
@@ -342,11 +375,25 @@ pub fn parse_temporal(op: &Op, rhs: &str) -> anyhow::Result<TimeMatcher> {
     
     match op {
         Op::Equality => Ok(TimeMatcher::Equals(parsed_time)),
+        Op::NotEqual => Ok(TimeMatcher::Equals(parsed_time)),
         Op::NumericComparison(op) => Ok(match op {
             NumericalOp::Greater | NumericalOp::GreaterOrEqual => TimeMatcher::After(parsed_time),
             NumericalOp::Less | NumericalOp::LessOrEqual => TimeMatcher::Before(parsed_time),
         }),
-        x => anyhow::bail!("operator {:?} cannot be applied to temporal values", x),
+        Op::In => {
+            // For now, 'in' with temporal values only supports single values
+            // Could be extended to support sets of times
+            Ok(TimeMatcher::Equals(parsed_time))
+        }
+        Op::Matches => {
+            anyhow::bail!("Regex operator ~= cannot be used with temporal values")
+        }
+        Op::Contains => {
+            anyhow::bail!("'contains' operator cannot be used with temporal values")
+        }
+        Op::Glob => {
+            anyhow::bail!("'glob' operator cannot be used with temporal values")
+        }
     }
 }
 
@@ -465,10 +512,22 @@ pub enum NamePredicate {
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
         match self {
-            NamePredicate::Filename(x) => path
-                .file_name()
-                .and_then(|os_str| os_str.to_str())
-                .is_some_and(|s| x.is_match(s)),
+            NamePredicate::Filename(x) => {
+                // Check against full filename
+                let full_match = path
+                    .file_name()
+                    .and_then(|os_str| os_str.to_str())
+                    .is_some_and(|s| x.is_match(s));
+                
+                // Also check against filename without extension (stem)
+                let stem_match = path
+                    .file_stem()
+                    .and_then(|os_str| os_str.to_str())
+                    .is_some_and(|s| x.is_match(s));
+                
+                // Return true if either matches
+                full_match || stem_match
+            },
             NamePredicate::Path(x) => path.as_os_str().to_str().is_some_and(|s| x.is_match(s)),
             NamePredicate::Extension(x) => path
                 .extension()

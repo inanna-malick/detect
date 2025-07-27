@@ -206,27 +206,6 @@ async fn test_temporal_equality_operator() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "operator NotEqual cannot be applied to temporal values")]
-async fn test_temporal_not_equal_operator_unsupported() {
-    // The != operator is not supported for temporal values
-    // This test verifies that it properly fails
-    let tmp_dir = TempDir::new("detect-temporal-neq").unwrap();
-    let file = tmp_dir.path().join("test.txt");
-    std::fs::write(&file, "content").unwrap();
-    
-    // This should panic with the expected error message
-    detect::parse_and_run_fs(
-        Logger::root(Discard, o!()),
-        tmp_dir.path(),
-        false,
-        "@modified != \"today\"".to_owned(),
-        |_| {},
-    )
-    .await
-    .unwrap();
-}
-
-#[tokio::test]
 async fn test_temporal_midnight_boundary() {
     let tmp_dir = TempDir::new("detect-temporal-midnight").unwrap();
     let before_midnight = tmp_dir.path().join("before.txt");
