@@ -120,6 +120,6 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             Ok(())
         }
-        Err(err) => panic!("{:?}", err),
+        Err(err) => Err(err),
     }
 }

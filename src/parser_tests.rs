@@ -560,4 +560,27 @@ mod tests {
         assert!(!pred.is_match(Path::new("app.js")));
         assert!(!pred.is_match(Path::new("test.ts")));
     }
+
+    #[test]
+    fn test_star_pattern_special_case() {
+        // Test that * gets converted to .* for regex matching
+        let expr = parse_expr(r#"@name ~= "*""#).unwrap();
+        
+        // The expression should parse successfully
+        if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
+            // Create a path to test against
+            use std::path::Path;
+            let test_path = Path::new("any_file_name.txt");
+            
+            // Should match any filename
+            assert!(name_pred.is_match(test_path));
+        } else {
+            panic!("Expected name predicate");
+        }
+        
+        // Also verify that plain * in regex context doesn't work without our special case
+        use regex::Regex;
+        assert!(Regex::new("*").is_err(), "* should not be a valid regex by itself");
+        assert!(Regex::new(".*").is_ok(), ".* should be a valid regex");
+    }
 }

@@ -283,7 +283,11 @@ pub enum Op {
 
 pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
     Ok(match op {
-        Op::Matches => StringMatcher::Regex(Regex::new(rhs)?),
+        Op::Matches => {
+            // Special case for '*' which users commonly expect to work
+            let pattern = if rhs == "*" { ".*" } else { rhs };
+            StringMatcher::Regex(Regex::new(pattern)?)
+        },
         Op::Equality => StringMatcher::Equals(rhs.to_owned()),
         Op::NotEqual => StringMatcher::NotEquals(rhs.to_owned()),
         Op::Contains => StringMatcher::Contains(rhs.to_owned()),
