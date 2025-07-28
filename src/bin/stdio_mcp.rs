@@ -133,7 +133,7 @@ fn handle_list_tools() -> Result<Value> {
     Ok(json!({
         "tools": [{
             "name": "detect",
-            "description": "Search for files using detect expression language. See the grammar property for the full PEST grammar syntax.",
+            "description": "Search for files using detect expression language.\n\nSelectors (all start with '@'):\n- @name, @filename - filename matching\n- @path, @filepath - full path matching\n- @ext, @extension - file extension matching\n- @size, @filesize - file size in bytes\n- @type, @filetype - entity type (file, dir, socket, etc.)\n- @contents, @file - file contents matching\n- @modified, @mtime - modification time\n- @created, @ctime - creation time\n- @accessed, @atime - access time\n\nOperators:\n- == (or =) - exact match\n- != - not equal\n- ~= (or ~ or =~) - regex match\n- > < >= <= - numeric/temporal comparison\n- contains - substring match\n- glob - glob pattern match\n- in [...] - set membership\n\nExamples:\n- '@name ~= \"*.rs\"' - Rust files\n- '@size > 1000' - files larger than 1KB\n- '@ext in [js, ts, jsx, tsx]' - JavaScript/TypeScript files\n- '@contents ~= \"TODO|FIXME\"' - files with TODOs\n- '@modified > \"-7.days\"' - modified in last week\n- '@type == dir' - directories only\n- '(@ext == rs || @ext == toml) && @size < 10000' - small Rust project files",
             "inputSchema": {
                 "type": "object",
                 "properties": {
