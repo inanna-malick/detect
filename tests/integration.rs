@@ -741,9 +741,9 @@ async fn test_files_with_spaces_in_names() {
 async fn test_extension_edge_cases() {
     Case {
         expr: r#"@ext in [d, "2", "1"]"#,
-        expected: &["gitignore.d", "file.2", "archive.1"],
+        expected: &[".gitignore.d", "file.2", "archive.1"],
         files: vec![
-            f("gitignore.d", ""),     // Extension is "d"
+            f(".gitignore.d", ""),     // Extension is "d"
             f("file.2", ""),           // Numeric extension "2"
             f("archive.1", ""),        // Numeric extension "1" 
             f("test.txt", ""),         // Regular extension

@@ -89,7 +89,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 ) -> Result<(), anyhow::Error> {
     match parse_expr(&expr) {
         Ok(expr) => {
-            let walker = WalkBuilder::new(root).git_ignore(respect_gitignore).build();
+            let walker = WalkBuilder::new(root).hidden(false).git_ignore(respect_gitignore).build();
 
             let expr = expr.map_predicate_ref(|p| match p {
                 Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
