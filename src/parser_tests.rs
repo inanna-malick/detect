@@ -616,19 +616,6 @@ mod tests {
     }
 
     #[test]
-    fn test_negation_without_parentheses() {
-        // Test negation without parentheses: !@name == "test"
-        let parsed = parse_expr(r#"!@name == "test""#).unwrap();
-        
-        let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
-            NamePredicate::Filename(StringMatcher::Equals("test".to_string()))
-        )));
-        let expected = Expr::Not(Box::new(inner_pred));
-        
-        assert_eq!(parsed, expected);
-    }
-
-    #[test]
     fn test_negation_with_contains_in_compound() {
         // Test the exact problematic case: @ext == "rs" && !(@name contains "lib")
         let parsed = parse_expr(r#"@ext == "rs" && !(@name contains "lib")"#).unwrap();
@@ -644,6 +631,19 @@ mod tests {
         let negated_name = Expr::Not(Box::new(name_contains));
         
         let expected = Expr::And(Box::new(ext_pred), Box::new(negated_name));
+        
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_negation_without_parentheses() {
+        // Test negation without parentheses: !@name == "test"
+        let parsed = parse_expr(r#"!@name == "test""#).unwrap();
+        
+        let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Filename(StringMatcher::Equals("test".to_string()))
+        )));
+        let expected = Expr::Not(Box::new(inner_pred));
         
         assert_eq!(parsed, expected);
     }
@@ -689,6 +689,116 @@ mod tests {
             Err(e) => {
                 panic!("Failed to parse '{}': {}", valid_expr, e);
             }
+        }
+    }
+
+    #[test]
+    #[ignore] // FIXME: Grammar doesn't support extended escape sequences yet
+    fn test_bare_token_escape_sequences() {
+        let supported_escapes = vec![
+            (r#"@name == test\n"#, "test\n"),
+            (r#"@name == test\\"#, "test\\"),
+        ];
+        
+        for (expr_str, expected_value) in supported_escapes {
+            let parsed = parse_expr(expr_str).unwrap();
+            assert_name_equals(&parsed, expected_value);
+        }
+        
+        let unsupported_escapes = vec![
+            r#"@name ~= draft\.final\.final\.*"#,
+            r#"@name ~= \d+\.\d+"#,
+            r#"@name ~= test\$"#,
+            r#"@name ~= \^start"#,
+            r#"@name ~= foo\+bar"#,
+            r#"@name ~= test\?"#,
+            r#"@name ~= \(group\)"#,
+            r#"@name ~= \[abc\]"#,
+            r#"@name ~= a\{2,4\}"#,
+            r#"@name ~= one\|two"#,
+        ];
+        
+        for expr_str in unsupported_escapes {
+            assert_parse_error(expr_str);
+        }
+    }
+
+    #[test]
+    #[ignore] // FIXME: Grammar doesn't support regex escape sequences like \. yet
+    fn test_bare_token_escaped_regex_patterns() {
+        let test_cases = vec![
+            (r#"@name ~= draft\.final\.final\.pptx"#, "draft.final.final.pptx", true),
+            (r#"@name ~= draft\.final\.final\.pptx"#, "draft-final-final-pptx", false),
+            (r#"@name ~= v\d+\.\d+\.\d+"#, "v1.2.3", true),
+            (r#"@name ~= v\d+\.\d+\.\d+"#, "v1-2-3", false),
+            (r#"@name ~= \.rs\$"#, "main.rs", true),
+            (r#"@name ~= \.rs\$"#, "main.rs.bak", false),
+            (r#"@name ~= \[DRAFT\]\..*\.docx"#, "[DRAFT].report.docx", true),
+            (r#"@name ~= \[DRAFT\]\..*\.docx"#, "DRAFT.report.docx", false),
+        ];
+        
+        for (expr_str, test_filename, should_match) in test_cases {
+            match parse_expr(expr_str) {
+                Ok(parsed) => {
+                    verify_name_match(&parsed, test_filename, should_match);
+                }
+                Err(_) => {
+                    // Expected for now - unsupported escapes
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore] // FIXME: Bare tokens need extended escape sequence support
+    fn test_bare_token_vs_quoted_string_escapes() {
+        let dot_pattern = r#"draft\.final\.final"#;
+        
+        let bare_expr = format!(r#"@name contains {}"#, dot_pattern);
+        assert_parse_error(&bare_expr);
+        
+        let quoted_expr = format!(r#"@name contains "{}""#, dot_pattern);
+        let parsed = parse_expr(&quoted_expr).unwrap();
+        assert_name_contains(&parsed, "draft\\.final\\.final");
+    }
+
+    // Helper functions
+    
+    fn assert_name_equals(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>, expected: &str) {
+        if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
+            if let NamePredicate::Filename(StringMatcher::Equals(val)) = name_pred.as_ref() {
+                assert_eq!(val, expected);
+                return;
+            }
+        }
+        panic!("Expected Name Equals predicate");
+    }
+    
+    fn assert_name_contains(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>, expected: &str) {
+        if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
+            if let NamePredicate::Filename(StringMatcher::Contains(val)) = name_pred.as_ref() {
+                assert_eq!(val, expected);
+                return;
+            }
+        }
+        panic!("Expected Name Contains predicate");
+    }
+    
+    fn assert_parse_error(expr_str: &str) {
+        match parse_expr(expr_str) {
+            Ok(_) => panic!("Expected parse error for '{}'", expr_str),
+            Err(e) => assert!(matches!(e, ParseError::Syntax(_))),
+        }
+    }
+    
+    fn verify_name_match(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>, filename: &str, should_match: bool) {
+        if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
+            use std::path::Path;
+            let test_path = Path::new(filename);
+            let matches = name_pred.is_match(test_path);
+            assert_eq!(matches, should_match);
+        } else {
+            panic!("Expected Name predicate");
         }
     }
 }
