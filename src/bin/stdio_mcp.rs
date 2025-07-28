@@ -11,6 +11,14 @@ const GRAMMAR: &str = include_str!("../expr/expr.pest");
 struct DetectParams {
     expression: String,
     directory: String,
+    #[serde(default)]
+    include_gitignored: bool,
+    #[serde(default = "default_max_results")]
+    max_results: usize,
+}
+
+fn default_max_results() -> usize {
+    20
 }
 
 fn main() -> Result<()> {
@@ -136,6 +144,17 @@ fn handle_list_tools() -> Result<Value> {
                     "directory": {
                         "type": "string",
                         "description": "The directory to search in (absolute path)"
+                    },
+                    "include_gitignored": {
+                        "type": "boolean",
+                        "description": "Include files that are gitignored (default: false)",
+                        "default": false
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 20, use 0 for unlimited)",
+                        "default": 20,
+                        "minimum": 0
                     }
                 },
                 "required": ["expression", "directory"]
@@ -182,7 +201,9 @@ fn handle_call_tool(params: Value) -> Result<Value> {
 
     // Collect matching files
     let mut matches = Vec::new();
+    let mut total_count = 0;
     let root = Path::new(&detect_params.directory);
+    let max_results = detect_params.max_results;
     
     // Use tokio runtime to run the async function
     let runtime = tokio::runtime::Runtime::new()?;
@@ -190,18 +211,35 @@ fn handle_call_tool(params: Value) -> Result<Value> {
         detect::parse_and_run_fs(
             logger,
             root,
-            true, // respect_gitignore
+            !detect_params.include_gitignored, // respect_gitignore (note the negation)
             detect_params.expression.clone(),
             |path| {
-                matches.push(path.display().to_string());
+                total_count += 1;
+                
+                // Only collect up to max_results (unless limit is 0 which means unlimited)
+                if max_results == 0 || matches.len() < max_results {
+                    // Convert to relative path if possible
+                    let display_path = match path.strip_prefix(root) {
+                        Ok(relative) => relative.display().to_string(),
+                        Err(_) => path.display().to_string(),
+                    };
+                    matches.push(display_path);
+                }
             },
         ).await
     });
 
     // Handle any parsing or execution errors
     result?;
-
-    let files_text = matches.join("\n");
+    
+    let was_limited = max_results > 0 && total_count > max_results;
+    let files_text = if was_limited {
+        format!("{}
+\n[Showing {} of {} total matches]", matches.join("\n"), max_results, total_count)
+    } else {
+        format!("{}
+\n[{} matches found]", matches.join("\n"), total_count)
+    };
 
     Ok(json!({
         "content": [{
@@ -209,9 +247,11 @@ fn handle_call_tool(params: Value) -> Result<Value> {
             "text": files_text
         }],
         "metadata": {
-            "files_found": matches.len(),
+            "files_found": total_count,
             "directory": detect_params.directory,
-            "expression": detect_params.expression
+            "expression": detect_params.expression,
+            "was_limited": was_limited,
+            "max_results": max_results
         }
     }))
 }
