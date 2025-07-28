@@ -2,6 +2,7 @@
 mod tests {
     use crate::parser::parse_expr;
     use crate::expr::Expr;
+    use crate::parse_error::ParseError;
     use crate::predicate::{
         Predicate, NamePredicate, MetadataPredicate, StringMatcher, NumberMatcher,
         StreamingCompiledContentPredicate, Bound
@@ -582,5 +583,112 @@ mod tests {
         use regex::Regex;
         assert!(Regex::new("*").is_err(), "* should not be a valid regex by itself");
         assert!(Regex::new(".*").is_ok(), ".* should be a valid regex");
+    }
+
+    #[test]
+    fn test_negation_operator_parsing() {
+        // Test that negation operator produces correct AST
+        let parsed = parse_expr(r#"!(@name contains "test")"#).unwrap();
+        
+        let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Filename(StringMatcher::Contains("test".to_string()))
+        )));
+        let expected = Expr::Not(Box::new(inner_pred));
+        
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_complex_negation_parsing() {
+        // Test the exact expression from the beta tester's bug report
+        let parsed = parse_expr(r#"@ext == "rs" && !(@name contains "test")"#).unwrap();
+        
+        let left = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Extension(StringMatcher::Equals("rs".to_string()))
+        )));
+        let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Filename(StringMatcher::Contains("test".to_string()))
+        )));
+        let right = Expr::Not(Box::new(inner_pred));
+        let expected = Expr::And(Box::new(left), Box::new(right));
+        
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_negation_without_parentheses() {
+        // Test negation without parentheses: !@name == "test"
+        let parsed = parse_expr(r#"!@name == "test""#).unwrap();
+        
+        let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Filename(StringMatcher::Equals("test".to_string()))
+        )));
+        let expected = Expr::Not(Box::new(inner_pred));
+        
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_negation_with_contains_in_compound() {
+        // Test the exact problematic case: @ext == "rs" && !(@name contains "lib")
+        let parsed = parse_expr(r#"@ext == "rs" && !(@name contains "lib")"#).unwrap();
+        
+        // Build expected AST
+        let ext_pred = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Extension(StringMatcher::Equals("rs".to_string()))
+        )));
+        
+        let name_contains = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Filename(StringMatcher::Contains("lib".to_string()))
+        )));
+        let negated_name = Expr::Not(Box::new(name_contains));
+        
+        let expected = Expr::And(Box::new(ext_pred), Box::new(negated_name));
+        
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_escaped_quotes_in_strings() {
+        // Test that parsing strings with escaped quotes currently fails
+        // This is expected until the grammar is updated to support escape sequences
+        let test_cases = vec![
+            // Basic escaped double quote
+            r#"@contents contains "\"error\"" "#,
+            // Multiple escaped quotes
+            r#"@contents contains "say \"hello\" to me" "#,
+        ];
+        
+        for expr_str in test_cases {
+            match parse_expr(expr_str) {
+                Ok(_) => {
+                    panic!("Expected parse error for '{}', but it parsed successfully", expr_str);
+                }
+                Err(e) => {
+                    // Expected - the grammar doesn't support escape sequences yet
+                    assert!(matches!(e, ParseError::Syntax(_)), 
+                           "Expected syntax error for '{}', got: {:?}", expr_str, e);
+                }
+            }
+        }
+        
+        // Test that single quotes in double quoted strings work
+        // (because they don't need escaping)
+        let valid_expr = r#"@contents contains "it's" "#;
+        match parse_expr(valid_expr) {
+            Ok(parsed) => {
+                if let Expr::Predicate(Predicate::Content(content_pred)) = parsed {
+                    let expected_regex = regex::escape("it's");
+                    let expected_pred = StreamingCompiledContentPredicate::new(expected_regex).unwrap();
+                    assert_eq!(content_pred, expected_pred, 
+                               "Parsed content doesn't match for expression: {}", valid_expr);
+                } else {
+                    panic!("Expected content predicate for: {}", valid_expr);
+                }
+            }
+            Err(e) => {
+                panic!("Failed to parse '{}': {}", valid_expr, e);
+            }
+        }
     }
 }

@@ -494,6 +494,76 @@ async fn test_mixed_quotes_in_values() {
 }
 
 #[tokio::test]
+async fn test_negation_with_contains() {
+    // Test for the negation bug reported by beta tester
+    Case {
+        expr: r#"@ext == "rs" && !(@name contains "test")"#,
+        expected: &["main.rs", "lib.rs", "mod.rs"],
+        files: vec![
+            f("main.rs", "fn main() {}"),
+            f("lib.rs", "pub mod foo;"),
+            f("mod.rs", "// module"),
+            f("test.rs", "// test file"),
+            f("test_utils.rs", "// test utilities"),
+            f("integration_test.rs", "// integration tests"),
+            f("doc.txt", "documentation"),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_negation_variants() {
+    // Test different negation patterns to isolate the bug
+    
+    // Simple negation - should work
+    Case {
+        expr: r#"!(@name contains "test")"#,
+        // FIXME: why? re: Include root dir
+        expected: &["", "main.rs", "lib.rs", "doc.txt"], 
+        files: vec![
+            f("main.rs", ""),
+            f("test.rs", ""),
+            f("lib.rs", ""),
+            f("test_lib.rs", ""),
+            f("doc.txt", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Negation with equals - should work
+    Case {
+        expr: r#"@ext == "rs" && !(@name == "test.rs")"#,
+        expected: &["main.rs", "lib.rs"],
+        files: vec![
+            f("main.rs", ""),
+            f("test.rs", ""),
+            f("lib.rs", ""),
+            f("doc.txt", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    // The problematic case - negation with contains in compound expr
+    Case {
+        expr: r#"@ext == "rs" && !(@name contains "lib")"#,
+        expected: &["main.rs", "test.rs"],
+        files: vec![
+            f("main.rs", ""),
+            f("test.rs", ""),
+            f("lib.rs", ""),
+            f("mylib.rs", ""),
+            f("doc.txt", ""),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"@contents ~= "\$\d+\.\d{2}""#,  // Matches dollar amounts like $19.99

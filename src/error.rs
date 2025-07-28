@@ -5,8 +5,9 @@ use std::fmt;
 pub enum DetectError {
     /// Parse error with the input expression
     ParseError {
-        input: String,
         message: String,
+        hint: Option<String>,
+        location: Option<(usize, usize)>,
     },
     /// Any other error (gradual migration path)
     Other(anyhow::Error),
@@ -15,8 +16,15 @@ pub enum DetectError {
 impl fmt::Display for DetectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DetectError::ParseError { input, message } => {
-                write!(f, "Failed to parse expression '{}': {}", input, message)
+            DetectError::ParseError { message, hint, location } => {
+                write!(f, "{}", message)?;
+                if let Some((line, col)) = location {
+                    write!(f, " at line {}, column {}", line, col)?;
+                }
+                if let Some(hint) = hint {
+                    write!(f, "\n\n{}", hint)?;
+                }
+                Ok(())
             }
             DetectError::Other(e) => write!(f, "{}", e),
         }
@@ -41,3 +49,15 @@ impl From<anyhow::Error> for DetectError {
 // Note: We don't implement From<DetectError> for anyhow::Error because
 // anyhow already has a blanket impl for all Error types.
 // Use anyhow::Error::new(detect_error) or detect_error.into() as needed.
+
+use crate::parse_error::ParseError;
+
+impl From<ParseError> for DetectError {
+    fn from(err: ParseError) -> Self {
+        DetectError::ParseError {
+            message: err.to_string(),
+            hint: err.hint(),
+            location: err.location(),
+        }
+    }
+}

@@ -234,11 +234,23 @@ fn handle_call_tool(params: Value) -> Result<Value> {
         Ok(()) => {},
         Err(e) => {
             match e {
-                detect::error::DetectError::ParseError { input, message } => {
-                    // Add helpful hints for parse errors
-                    let hints = detect::error_hints::get_parse_error_hints();
-                    return Err(anyhow::anyhow!("Failed to parse expression '{}': {}\n\n{}", 
-                        input, message, hints));
+                detect::error::DetectError::ParseError { message, hint, location } => {
+                    // Build error message with location if available
+                    let mut error_msg = message.clone();
+                    if let Some((line, col)) = location {
+                        error_msg.push_str(&format!(" at line {}, column {}", line, col));
+                    }
+                    
+                    // Add hint if available
+                    if let Some(hint) = hint {
+                        error_msg.push_str(&format!("\n\n{}", hint));
+                    } else {
+                        // Fall back to generic hints
+                        let hints = detect::error_hints::get_parse_error_hints();
+                        error_msg.push_str(&format!("\n\n{}", hints));
+                    }
+                    
+                    return Err(anyhow::anyhow!("{}", error_msg));
                 }
                 detect::error::DetectError::Other(err) => {
                     return Err(err);

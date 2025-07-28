@@ -9,6 +9,7 @@ use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 
 use crate::expr::short_circuit::ShortCircuit;
 use crate::util::Done;
+use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
 use chrono::{DateTime, Local, NaiveDate, Duration};
 
 fn glob_to_regex(glob: &str) -> String {
@@ -47,12 +48,15 @@ fn glob_to_regex(glob: &str) -> String {
     regex
 }
 
-fn parse_time_value(s: &str) -> anyhow::Result<DateTime<Local>> {
+fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     // Handle relative time formats
     if s.starts_with('-') {
         let parts: Vec<&str> = s[1..].split('.').collect();
         if parts.len() == 2 {
-            let number: i64 = parts[0].parse()?;
+            let number: i64 = parts[0].parse().map_err(|e| TemporalError {
+                input: s.to_string(),
+                kind: TemporalErrorKind::ParseInt(e),
+            })?;
             let unit = parts[1];
             
             let duration = match unit {
@@ -61,7 +65,10 @@ fn parse_time_value(s: &str) -> anyhow::Result<DateTime<Local>> {
                 "hours" | "hour" | "hrs" | "hr" | "h" => Duration::hours(number),
                 "days" | "day" | "d" => Duration::days(number),
                 "weeks" | "week" | "w" => Duration::weeks(number),
-                _ => anyhow::bail!("Unknown time unit: {}", unit),
+                _ => return Err(TemporalError {
+                    input: s.to_string(),
+                    kind: TemporalErrorKind::UnknownUnit(unit.to_string()),
+                }.into()),
             };
             
             return Ok(Local::now() - duration);
@@ -83,16 +90,24 @@ fn parse_time_value(s: &str) -> anyhow::Result<DateTime<Local>> {
     }
     
     // Try parsing as absolute date/datetime
-    if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        return Ok(date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap());
+    match NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        Ok(date) => return Ok(date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap()),
+        Err(_) => {
+            // Try other formats before failing
+        }
     }
     
     // Try parsing as ISO datetime
-    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return Ok(dt.with_timezone(&Local));
+    match DateTime::parse_from_rfc3339(s) {
+        Ok(dt) => Ok(dt.with_timezone(&Local)),
+        Err(e) => {
+            // If all parsing attempts fail, return the last error
+            Err(TemporalError {
+                input: s.to_string(),
+                kind: TemporalErrorKind::InvalidDate(e),
+            })
+        }
     }
-    
-    anyhow::bail!("Cannot parse time value: {}", s)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,8 +120,9 @@ pub struct RawPredicate {
 impl RawPredicate {
     pub fn parse(
         self,
-    ) -> anyhow::Result<
+    ) -> Result<
         Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+        PredicateParseError,
     > {
         Ok(match self.lhs {
             Selector::FileName => {
@@ -188,7 +204,7 @@ impl PartialEq for StringMatcher {
 impl Eq for StringMatcher {}
 
 impl StringMatcher {
-    pub fn regex(s: &str) -> anyhow::Result<Self> {
+    pub fn regex(s: &str) -> Result<Self, regex::Error> {
         Ok(Self::Regex(Regex::new(s)?))
     }
 
@@ -281,7 +297,7 @@ pub enum Op {
     Glob,     // 'glob' - glob pattern
 }
 
-pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
+pub fn parse_string(op: &Op, rhs: &str) -> Result<StringMatcher, PredicateParseError> {
     Ok(match op {
         Op::Matches => {
             // Special case for '*' which users commonly expect to work
@@ -304,48 +320,56 @@ pub fn parse_string(op: &Op, rhs: &str) -> anyhow::Result<StringMatcher> {
             }
         }
         Op::NumericComparison(_) => {
-            anyhow::bail!("Numeric comparison operators (>, <, >=, <=) cannot be used with string values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with string values",
+            })
         }
     })
 }
 
-pub fn parse_string_dfa(op: Op, rhs: String) -> anyhow::Result<StreamingCompiledContentPredicate> {
+pub fn parse_string_dfa(op: Op, rhs: String) -> Result<StreamingCompiledContentPredicate, PredicateParseError> {
     Ok(match op {
         Op::Matches => StreamingCompiledContentPredicate::new(rhs)?,
         Op::Equality => {
             let regex = format!("^{}$", regex::escape(&rhs));
-            StreamingCompiledContentPredicate {
-                inner: DFA::new(&regex)?,
-                source: regex,
+            match DFA::new(&regex) {
+                Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
+                Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
         }
         Op::Contains => {
             let regex = regex::escape(&rhs);
-            StreamingCompiledContentPredicate {
-                inner: DFA::new(&regex)?,
-                source: regex,
+            match DFA::new(&regex) {
+                Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
+                Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
         }
         Op::Glob => {
             let regex = glob_to_regex(&rhs);
-            StreamingCompiledContentPredicate {
-                inner: DFA::new(&regex)?,
-                source: regex,
+            match DFA::new(&regex) {
+                Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
+                Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
         }
         Op::NotEqual => {
-            anyhow::bail!("!= operator is not supported for @contents predicates")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "!= operator is not supported for @contents predicates",
+            })
         }
         Op::NumericComparison(_) => {
-            anyhow::bail!("Numeric comparison operators (>, <, >=, <=) cannot be used with @contents")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with @contents",
+            })
         }
         Op::In => {
-            anyhow::bail!("'in' operator is not supported for @contents predicates")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "'in' operator is not supported for @contents predicates",
+            })
         }
     })
 }
 
-pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
+pub fn parse_numerical(op: &Op, rhs: &str) -> Result<NumberMatcher, PredicateParseError> {
     let parsed_rhs: u64 = rhs.parse()?;
 
     match op {
@@ -363,18 +387,24 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> anyhow::Result<NumberMatcher> {
             Ok(NumberMatcher::Equals(parsed_rhs))
         }
         Op::Matches => {
-            anyhow::bail!("Regex operator ~= cannot be used with numeric values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "Regex operator ~= cannot be used with numeric values",
+            })
         }
         Op::Contains => {
-            anyhow::bail!("'contains' operator cannot be used with numeric values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "'contains' operator cannot be used with numeric values",
+            })
         }
         Op::Glob => {
-            anyhow::bail!("'glob' operator cannot be used with numeric values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "'glob' operator cannot be used with numeric values",
+            })
         }
     }
 }
 
-pub fn parse_temporal(op: &Op, rhs: &str) -> anyhow::Result<TimeMatcher> {
+pub fn parse_temporal(op: &Op, rhs: &str) -> Result<TimeMatcher, PredicateParseError> {
     let parsed_time = parse_time_value(rhs)?;
     
     match op {
@@ -390,13 +420,19 @@ pub fn parse_temporal(op: &Op, rhs: &str) -> anyhow::Result<TimeMatcher> {
             Ok(TimeMatcher::Equals(parsed_time))
         }
         Op::Matches => {
-            anyhow::bail!("Regex operator ~= cannot be used with temporal values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "Regex operator ~= cannot be used with temporal values",
+            })
         }
         Op::Contains => {
-            anyhow::bail!("'contains' operator cannot be used with temporal values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "'contains' operator cannot be used with temporal values",
+            })
         }
         Op::Glob => {
-            anyhow::bail!("'glob' operator cannot be used with temporal values")
+            return Err(PredicateParseError::IncompatibleOperation {
+                reason: "'glob' operator cannot be used with temporal values",
+            })
         }
     }
 }
@@ -661,11 +697,11 @@ pub struct StreamingCompiledContentPredicate {
 }
 
 impl StreamingCompiledContentPredicate {
-    pub fn new(source: String) -> anyhow::Result<Self> {
-        Ok(Self {
-            inner: DFA::new(&source)?,
-            source,
-        })
+    pub fn new(source: String) -> Result<Self, PredicateParseError> {
+        match DFA::new(&source) {
+            Ok(inner) => Ok(Self { inner, source }),
+            Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
+        }
     }
 
     pub(crate) fn as_ref(&self) -> StreamingCompiledContentPredicateRef<'_> {

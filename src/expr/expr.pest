@@ -1,9 +1,11 @@
 WHITESPACE   =  _{ " " | "\t" | NEWLINE }
 
 
-bare_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" }
+bare_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" | escaped }
 inner_char = @{ !("\"" | "'") ~ ANY }
 
+escaped = { "\\" ~ escapable }
+escapable = { "n" | "\\" | "\""}
 
 program         =   { SOI ~ expr ~ EOI }
   expr          =   { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }

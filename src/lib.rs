@@ -5,6 +5,7 @@ pub mod predicate;
 mod util;
 pub mod error_hints;
 pub mod error;
+pub mod parse_error;
 
 #[cfg(test)]
 mod parser_tests;
@@ -125,10 +126,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
             Ok(())
         }
         Err(err) => {
-            Err(DetectError::ParseError {
-                input: expr,
-                message: err.to_string(),
-            })
+            Err(err.into())
         }
     }
 }
