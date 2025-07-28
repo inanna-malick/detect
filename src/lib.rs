@@ -3,6 +3,8 @@ pub mod expr;
 pub mod parser;
 pub mod predicate;
 mod util;
+pub mod error_hints;
+pub mod error;
 
 #[cfg(test)]
 mod parser_tests;
@@ -16,6 +18,7 @@ use ignore::WalkBuilder;
 use parser::parse_expr;
 use predicate::{Predicate, StreamingCompiledContentPredicate};
 use slog::{debug, error, info, warn, Logger};
+use error::DetectError;
 
 pub fn run_git<F: FnMut(&str)>(
     logger: Logger,
@@ -86,12 +89,12 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     respect_gitignore: bool,
     expr: String,
     mut on_match: F,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DetectError> {
     match parse_expr(&expr) {
-        Ok(expr) => {
+        Ok(parsed_expr) => {
             let walker = WalkBuilder::new(root).hidden(false).git_ignore(respect_gitignore).build();
 
-            let expr = expr.map_predicate_ref(|p| match p {
+            let expr = parsed_expr.map_predicate_ref(|p| match p {
                 Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
                 Predicate::Metadata(m) => Predicate::Metadata(Arc::clone(m)),
                 Predicate::Content(c) => Predicate::Content(c.as_ref()),
@@ -100,14 +103,15 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
             info!(logger, "parsed expression"; "expr" => %expr);
 
             for entry in walker.into_iter() {
-                let entry = entry?;
+                let entry = entry.map_err(|e| DetectError::from(anyhow::Error::from(e)))?;
                 let path = entry.path();
 
                 let start = Instant::now();
 
                 let is_match = eval::fs::eval(&logger, &expr, path)
                     .await
-                    .context(format!("failed to eval for ${path:?}"))?;
+                    .context(format!("failed to eval for ${path:?}"))
+                    .map_err(DetectError::from)?;
 
                 let duration = start.elapsed();
 
@@ -120,6 +124,11 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             Ok(())
         }
-        Err(err) => Err(err),
+        Err(err) => {
+            Err(DetectError::ParseError {
+                input: expr,
+                message: err.to_string(),
+            })
+        }
     }
 }

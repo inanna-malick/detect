@@ -230,7 +230,22 @@ fn handle_call_tool(params: Value) -> Result<Value> {
     });
 
     // Handle any parsing or execution errors
-    result?;
+    match result {
+        Ok(()) => {},
+        Err(e) => {
+            match e {
+                detect::error::DetectError::ParseError { input, message } => {
+                    // Add helpful hints for parse errors
+                    let hints = detect::error_hints::get_parse_error_hints();
+                    return Err(anyhow::anyhow!("Failed to parse expression '{}': {}\n\n{}", 
+                        input, message, hints));
+                }
+                detect::error::DetectError::Other(err) => {
+                    return Err(err);
+                }
+            }
+        }
+    }
     
     let was_limited = max_results > 0 && total_count > max_results;
     let files_text = if was_limited {
