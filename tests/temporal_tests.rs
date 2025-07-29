@@ -26,7 +26,7 @@ async fn test_modified_time_relative() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified > \"-1.seconds\"".to_owned(),
+        "modified > \"-1.seconds\"".to_owned(),
         |p| recent_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -54,7 +54,7 @@ async fn test_modified_time_days() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified > \"-7.days\"".to_owned(),
+        "modified > \"-7.days\"".to_owned(),
         |p| recent_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -83,7 +83,7 @@ async fn test_temporal_keywords() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified >= \"today\"".to_owned(),
+        "modified >= \"today\"".to_owned(),
         |p| today_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -112,7 +112,7 @@ async fn test_absolute_date() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified > \"2021-01-01\"".to_owned(),
+        "modified > \"2021-01-01\"".to_owned(),
         |p| new_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -142,7 +142,7 @@ async fn test_created_time_selector() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@created > \"-1.hour\"".to_owned(),
+        "created > \"-1.hour\"".to_owned(),
         |p| files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -166,7 +166,7 @@ async fn test_accessed_time_selector() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@accessed > \"-1.minute\"".to_owned(),
+        "accessed > \"-1.minute\"".to_owned(),
         |p| files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -195,7 +195,7 @@ async fn test_temporal_equality_operator() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified == \"today\"".to_owned(),
+        "modified == \"today\"".to_owned(),
         |p| today_matches.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -236,7 +236,7 @@ async fn test_temporal_midnight_boundary() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified >= \"today\"".to_owned(),
+        "modified >= \"today\"".to_owned(),
         |p| today_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -268,11 +268,11 @@ async fn test_temporal_all_time_units() {
     
     // Test each unit type
     let test_cases = vec![
-        ("@modified > \"-30.seconds\"", vec!["10secs.txt"]),
-        ("@modified > \"-10.minutes\"", vec!["10secs.txt", "5mins.txt"]),
-        ("@modified > \"-3.hours\"", vec!["10secs.txt", "5mins.txt", "2hours.txt"]),
-        ("@modified > \"-5.days\"", vec!["10secs.txt", "5mins.txt", "2hours.txt", "3days.txt"]),
-        ("@modified > \"-2.weeks\"", vec!["10secs.txt", "5mins.txt", "2hours.txt", "3days.txt", "1week.txt"]),
+        ("modified > \"-30.seconds\"", vec!["10secs.txt"]),
+        ("modified > \"-10.minutes\"", vec!["10secs.txt", "5mins.txt"]),
+        ("modified > \"-3.hours\"", vec!["10secs.txt", "5mins.txt", "2hours.txt"]),
+        ("modified > \"-5.days\"", vec!["10secs.txt", "5mins.txt", "2hours.txt", "3days.txt"]),
+        ("modified > \"-2.weeks\"", vec!["10secs.txt", "5mins.txt", "2hours.txt", "3days.txt", "1week.txt"]),
     ];
     
     for (expr, expected) in test_cases {
@@ -320,7 +320,7 @@ async fn test_temporal_combined_with_other_predicates() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@ext == rs && @modified > \"-1.day\"".to_owned(),
+        "ext == rs && modified > \"-1.day\"".to_owned(),
         |p| recent_rust.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -347,7 +347,7 @@ async fn test_temporal_multiple_selectors() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "@modified > \"-1.hour\" && @accessed > \"-1.hour\"".to_owned(),
+        "modified > \"-1.hour\" && accessed > \"-1.hour\"".to_owned(),
         |p| matches.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await

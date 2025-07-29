@@ -18,7 +18,7 @@ program         =   { SOI ~ expr ~ EOI }
 
 
 predicate =  { selector ~ op ~ rhs }
-  selector = { "@" ~ (name | path | ext | size | type | contents | modified | created | accessed) }
+  selector = { name | path | ext | size | type | contents | modified | created | accessed }
     name     = { "filename"  | "name" }
     path     = { "filepath"  | "path" }
     ext      = { "extension" | "ext"  }

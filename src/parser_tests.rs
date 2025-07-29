@@ -13,7 +13,7 @@ mod tests {
 
     #[test]
     fn parse_name_equality() {
-        let parsed = parse_expr("@name == foo").unwrap();
+        let parsed = parse_expr("name == foo").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("foo".to_string()))
         )));
@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn parse_name_not_equal() {
-        let parsed = parse_expr("@name != bar").unwrap();
+        let parsed = parse_expr("name != bar").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::NotEquals("bar".to_string()))
         )));
@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn parse_name_regex() {
-        let parsed = parse_expr("@name ~= test.*").unwrap();
+        let parsed = parse_expr("name ~= test.*").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::regex("test.*").unwrap())
         )));
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn parse_name_contains() {
-        let parsed = parse_expr(r#"@name contains "test""#).unwrap();
+        let parsed = parse_expr(r#"name contains "test""#).unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Contains("test".to_string()))
         )));
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn parse_name_in_set() {
-        let parsed = parse_expr("@name in [foo, bar, baz]").unwrap();
+        let parsed = parse_expr("name in [foo, bar, baz]").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::In(vec![
                 "foo".to_string(),
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn parse_path_predicate() {
-        let parsed = parse_expr(r#"@path == "src/main.rs""#).unwrap();
+        let parsed = parse_expr(r#"path == "src/main.rs""#).unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Path(StringMatcher::Equals("src/main.rs".to_string()))
         )));
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn parse_extension_predicate() {
-        let parsed = parse_expr("@ext == rs").unwrap();
+        let parsed = parse_expr("ext == rs").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Extension(StringMatcher::Equals("rs".to_string()))
         )));
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn parse_extension_in_set() {
-        let parsed = parse_expr("@ext in [js, ts, jsx, tsx]").unwrap();
+        let parsed = parse_expr("ext in [js, ts, jsx, tsx]").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Extension(StringMatcher::In(vec![
                 "js".to_string(),
@@ -96,11 +96,11 @@ mod tests {
     #[test]
     fn parse_size_comparisons() {
         let cases = vec![
-            ("@size == 100", NumberMatcher::Equals(100)),
-            ("@size > 100", NumberMatcher::In(Bound::Left(100..))),
-            ("@size >= 100", NumberMatcher::In(Bound::Left(99..))),
-            ("@size < 100", NumberMatcher::In(Bound::Right(..101))),
-            ("@size <= 100", NumberMatcher::In(Bound::Right(..100))),
+            ("size == 100", NumberMatcher::Equals(100)),
+            ("size > 100", NumberMatcher::In(Bound::Left(100..))),
+            ("size >= 100", NumberMatcher::In(Bound::Left(99..))),
+            ("size < 100", NumberMatcher::In(Bound::Right(..101))),
+            ("size <= 100", NumberMatcher::In(Bound::Right(..100))),
         ];
 
         for (expr_str, expected_matcher) in cases {
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn parse_type_predicate() {
-        let parsed = parse_expr("@type == dir").unwrap();
+        let parsed = parse_expr("type == dir").unwrap();
         let expected = Expr::Predicate(Predicate::Metadata(Arc::new(
             MetadataPredicate::Type(StringMatcher::Equals("dir".to_string()))
         )));
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn parse_content_regex() {
-        let parsed = parse_expr(r#"@contents ~= "TODO|FIXME""#).unwrap();
+        let parsed = parse_expr(r#"contents ~= "TODO|FIXME""#).unwrap();
         let expected = Expr::Predicate(Predicate::Content(
             StreamingCompiledContentPredicate::new("TODO|FIXME".to_string()).unwrap()
         ));
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn parse_content_contains() {
-        let parsed = parse_expr(r#"@file contains "fn main""#).unwrap();
+        let parsed = parse_expr(r#"file contains "fn main""#).unwrap();
         // contains gets compiled to an escaped regex
         let expected = Expr::Predicate(Predicate::Content(
             StreamingCompiledContentPredicate::new(regex::escape("fn main")).unwrap()
@@ -143,21 +143,21 @@ mod tests {
     #[test]
     fn parse_temporal_selectors() {
         // Just verify they parse to the correct variant
-        let modified = parse_expr(r#"@modified > "-7.days""#).unwrap();
+        let modified = parse_expr(r#"modified > "-7.days""#).unwrap();
         assert!(matches!(
             modified,
             Expr::Predicate(Predicate::Metadata(ref meta)) 
                 if matches!(**meta, MetadataPredicate::Modified(_))
         ));
 
-        let created = parse_expr(r#"@created >= "today""#).unwrap();
+        let created = parse_expr(r#"created >= "today""#).unwrap();
         assert!(matches!(
             created,
             Expr::Predicate(Predicate::Metadata(ref meta))
                 if matches!(**meta, MetadataPredicate::Created(_))
         ));
 
-        let accessed = parse_expr(r#"@accessed < "2024-01-01""#).unwrap();
+        let accessed = parse_expr(r#"accessed < "2024-01-01""#).unwrap();
         assert!(matches!(
             accessed,
             Expr::Predicate(Predicate::Metadata(ref meta))
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn parse_and_expression() {
-        let parsed = parse_expr("@name == foo && @ext == rs").unwrap();
+        let parsed = parse_expr("name == foo && ext == rs").unwrap();
         let left = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("foo".to_string()))
         )));
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn parse_or_expression() {
-        let parsed = parse_expr("@name == foo || @name == bar").unwrap();
+        let parsed = parse_expr("name == foo || name == bar").unwrap();
         let left = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("foo".to_string()))
         )));
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn parse_not_expression() {
-        let parsed = parse_expr("!@name == temp").unwrap();
+        let parsed = parse_expr("!name == temp").unwrap();
         let inner = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("temp".to_string()))
         )));
@@ -207,7 +207,7 @@ mod tests {
     fn parse_operator_precedence() {
         // @a == x || @b == y && @c == z
         // Should parse as: @a == x || (@b == y && @c == z)
-        let parsed = parse_expr("@name == a || @name == b && @name == c").unwrap();
+        let parsed = parse_expr("name == a || name == b && name == c").unwrap();
         
         let a = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("a".to_string()))
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn parse_parentheses_override() {
         // (@a == x || @b == y) && @c == z
-        let parsed = parse_expr("(@name == a || @name == b) && @name == c").unwrap();
+        let parsed = parse_expr("(name == a || name == b) && name == c").unwrap();
         
         let a = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("a".to_string()))
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn parse_complex_nested() {
         // !(@a == x || @b == y) && (@c == z || @d == w)
-        let parsed = parse_expr("!(@name == x || @ext == y) && (@size > 100 || @type == dir)").unwrap();
+        let parsed = parse_expr("!(name == x || ext == y) && (size > 100 || type == dir)").unwrap();
         
         // Build expected tree
         let x = Expr::Predicate(Predicate::Name(Arc::new(
@@ -277,8 +277,8 @@ mod tests {
 
     #[test]
     fn parse_quoted_values() {
-        let double_quoted = parse_expr(r#"@name == "my file.txt""#).unwrap();
-        let single_quoted = parse_expr(r"@name == 'my file.txt'").unwrap();
+        let double_quoted = parse_expr(r#"name == "my file.txt""#).unwrap();
+        let single_quoted = parse_expr(r"name == 'my file.txt'").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("my file.txt".to_string()))
         )));
@@ -289,17 +289,17 @@ mod tests {
     #[test]
     fn parse_set_literal_variations() {
         // Empty set - not supported by grammar
-        assert!(parse_expr("@ext in []").is_err());
+        assert!(parse_expr("ext in []").is_err());
 
         // Single item
-        let single = parse_expr("@ext in [js]").unwrap();
+        let single = parse_expr("ext in [js]").unwrap();
         let expected_single = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Extension(StringMatcher::In(vec!["js".to_string()]))
         )));
         assert_eq!(single, expected_single);
 
         // Mixed quoted and unquoted
-        let mixed = parse_expr(r#"@name in [foo, "bar baz", 'qux']"#).unwrap();
+        let mixed = parse_expr(r#"name in [foo, "bar baz", 'qux']"#).unwrap();
         let expected_mixed = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::In(vec![
                 "foo".to_string(),
@@ -314,15 +314,15 @@ mod tests {
     fn parse_selector_aliases() {
         // Test that aliases produce identical results
         let name_variants = vec![
-            ("@name == test", "@filename == test"),
-            ("@path == foo", "@filepath == foo"),
-            ("@ext == rs", "@extension == rs"),
-            ("@size > 100", "@filesize > 100"),
-            ("@type == dir", "@filetype == dir"),
-            ("@contents ~= foo", "@file ~= foo"),
-            ("@modified > today", "@mtime > today"),
-            ("@created > today", "@ctime > today"),
-            ("@accessed > today", "@atime > today"),
+            ("name == test", "filename == test"),
+            ("path == foo", "filepath == foo"),
+            ("ext == rs", "extension == rs"),
+            ("size > 100", "filesize > 100"),
+            ("type == dir", "filetype == dir"),
+            ("contents ~= foo", "file ~= foo"),
+            ("modified > today", "mtime > today"),
+            ("created > today", "ctime > today"),
+            ("accessed > today", "atime > today"),
         ];
 
         for (expr1_str, expr2_str) in name_variants {
@@ -335,14 +335,14 @@ mod tests {
     #[test]
     fn parse_operator_aliases() {
         // = vs ==
-        let eq1 = parse_expr("@name = foo").unwrap();
-        let eq2 = parse_expr("@name == foo").unwrap();
+        let eq1 = parse_expr("name = foo").unwrap();
+        let eq2 = parse_expr("name == foo").unwrap();
         assert_eq!(eq1, eq2);
 
         // ~ vs ~= vs =~
-        let regex1 = parse_expr("@name ~ pattern").unwrap();
-        let regex2 = parse_expr("@name ~= pattern").unwrap();
-        let regex3 = parse_expr("@name =~ pattern").unwrap();
+        let regex1 = parse_expr("name ~ pattern").unwrap();
+        let regex2 = parse_expr("name ~= pattern").unwrap();
+        let regex3 = parse_expr("name =~ pattern").unwrap();
         assert_eq!(regex1, regex2);
         assert_eq!(regex2, regex3);
     }
@@ -357,12 +357,12 @@ mod tests {
     #[test]
     fn error_incomplete_expressions() {
         let incomplete = vec![
-            "@name ==",
-            "@name",
+            "name ==",
+            "name",
             "@",
             "== foo",
-            "@name == foo &&",
-            "|| @name == foo",
+            "name == foo &&",
+            "|| name == foo",
         ];
         for expr in incomplete {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -372,11 +372,11 @@ mod tests {
     #[test]
     fn error_malformed_sets() {
         let malformed = vec![
-            "@ext in [js ts]",      // missing comma
-            "@ext in [js,]",        // trailing comma
-            "@ext in [,js]",        // leading comma
-            "@ext in js, ts]",      // missing opening bracket
-            "@ext in [js, ts",      // missing closing bracket
+            "ext in [js ts]",      // missing comma
+            "ext in [js,]",        // trailing comma
+            "ext in [,js]",        // leading comma
+            "ext in js, ts]",      // missing opening bracket
+            "ext in [js, ts",      // missing closing bracket
         ];
         for expr in malformed {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -386,9 +386,9 @@ mod tests {
     #[test]
     fn error_mismatched_quotes() {
         let mismatched = vec![
-            r#"@name == "unclosed"#,
-            r#"@name == 'unclosed"#,
-            r#"@name == "mixed'"#,
+            r#"name == "unclosed"#,
+            r#"name == 'unclosed"#,
+            r#"name == "mixed'"#,
         ];
         for expr in mismatched {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -398,19 +398,19 @@ mod tests {
     #[test]
     fn error_type_mismatches() {
         // Size with non-numeric value
-        assert!(parse_expr(r#"@size > "large""#).is_err());
+        assert!(parse_expr(r#"size > "large""#).is_err());
         
         // Invalid temporal format
-        assert!(parse_expr(r#"@modified > "not-a-date""#).is_err());
+        assert!(parse_expr(r#"modified > "not-a-date""#).is_err());
         
         // Invalid regex
-        assert!(parse_expr(r#"@name ~= "[unclosed""#).is_err());
+        assert!(parse_expr(r#"name ~= "[unclosed""#).is_err());
     }
 
     #[test]
     fn test_empty_string_extension() {
-        // Test parsing @ext == ""
-        let parsed = parse_expr(r#"@ext == """#).unwrap();
+        // Test parsing ext == ""
+        let parsed = parse_expr(r#"ext == """#).unwrap();
         
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Extension(StringMatcher::Equals("".to_string()))
@@ -422,7 +422,7 @@ mod tests {
     #[test]
     fn test_empty_string_in_set() {
         // Test parsing empty string in set literal
-        let parsed = parse_expr(r#"@ext in ["", txt, rs]"#).unwrap();
+        let parsed = parse_expr(r#"ext in ["", txt, rs]"#).unwrap();
         
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Extension(StringMatcher::In(vec![
@@ -459,7 +459,7 @@ mod tests {
     #[test]
     fn test_in_operator_parsing() {
         // Test parsing of 'in' operator with bare identifiers
-        let expr = parse_expr(r#"@ext in [js, ts]"#).unwrap();
+        let expr = parse_expr(r#"ext in [js, ts]"#).unwrap();
         
         // Check what we get
         if let Expr::Predicate(Predicate::Name(name_pred)) = &expr {
@@ -495,8 +495,8 @@ mod tests {
 
     #[test]
     fn test_name_in_operator_parsing() {
-        // Test parsing @name in [index, main] - the case used in failing integration test
-        let expr = parse_expr(r#"@name in [index, main]"#).unwrap();
+        // Test parsing name in [index, main] - the case used in failing integration test
+        let expr = parse_expr(r#"name in [index, main]"#).unwrap();
         
         let expected = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::In(vec![
@@ -511,7 +511,7 @@ mod tests {
     #[test]
     fn test_compound_in_expression_parsing() {
         // Test the exact expression from the failing integration test
-        let expr = parse_expr(r#"@ext in [js, ts] && @name in [index, main]"#).unwrap();
+        let expr = parse_expr(r#"ext in [js, ts] && name in [index, main]"#).unwrap();
         
         let expected = Expr::And(
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
@@ -535,7 +535,7 @@ mod tests {
     fn test_filename_in_matching() {
         use std::path::Path;
         
-        // Test @name matching with 'in' operator
+        // Test name matching with 'in' operator
         let pred = NamePredicate::Filename(StringMatcher::In(vec![
             "index".to_string(),
             "main".to_string(),
@@ -557,7 +557,7 @@ mod tests {
     #[test]
     fn test_star_pattern_special_case() {
         // Test that * gets converted to .* for regex matching
-        let expr = parse_expr(r#"@name ~= "*""#).unwrap();
+        let expr = parse_expr(r#"name ~= "*""#).unwrap();
         
         // The expression should parse successfully
         if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
@@ -580,7 +580,7 @@ mod tests {
     #[test]
     fn test_negation_operator_parsing() {
         // Test that negation operator produces correct AST
-        let parsed = parse_expr(r#"!(@name contains "test")"#).unwrap();
+        let parsed = parse_expr(r#"!(name contains "test")"#).unwrap();
         
         let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Contains("test".to_string()))
@@ -593,7 +593,7 @@ mod tests {
     #[test]
     fn test_complex_negation_parsing() {
         // Test the exact expression from the beta tester's bug report
-        let parsed = parse_expr(r#"@ext == "rs" && !(@name contains "test")"#).unwrap();
+        let parsed = parse_expr(r#"ext == "rs" && !(name contains "test")"#).unwrap();
         
         let left = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Extension(StringMatcher::Equals("rs".to_string()))
@@ -609,8 +609,8 @@ mod tests {
 
     #[test]
     fn test_negation_with_contains_in_compound() {
-        // Test the exact problematic case: @ext == "rs" && !(@name contains "lib")
-        let parsed = parse_expr(r#"@ext == "rs" && !(@name contains "lib")"#).unwrap();
+        // Test the exact problematic case: ext == "rs" && !(name contains "lib")
+        let parsed = parse_expr(r#"ext == "rs" && !(name contains "lib")"#).unwrap();
         
         // Build expected AST
         let ext_pred = Expr::Predicate(Predicate::Name(Arc::new(
@@ -629,8 +629,8 @@ mod tests {
 
     #[test]
     fn test_negation_without_parentheses() {
-        // Test negation without parentheses: !@name == "test"
-        let parsed = parse_expr(r#"!@name == "test""#).unwrap();
+        // Test negation without parentheses: !name == "test"
+        let parsed = parse_expr(r#"!name == "test""#).unwrap();
         
         let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(
             NamePredicate::Filename(StringMatcher::Equals("test".to_string()))
@@ -646,9 +646,9 @@ mod tests {
         // This is expected until the grammar is updated to support escape sequences
         let test_cases = vec![
             // Basic escaped double quote
-            r#"@contents contains "\"error\"" "#,
+            r#"contents contains "\"error\"" "#,
             // Multiple escaped quotes
-            r#"@contents contains "say \"hello\" to me" "#,
+            r#"contents contains "say \"hello\" to me" "#,
         ];
         
         for expr_str in test_cases {
@@ -666,7 +666,7 @@ mod tests {
         
         // Test that single quotes in double quoted strings work
         // (because they don't need escaping)
-        let valid_expr = r#"@contents contains "it's" "#;
+        let valid_expr = r#"contents contains "it's" "#;
         match parse_expr(valid_expr) {
             Ok(parsed) => {
                 if let Expr::Predicate(Predicate::Content(content_pred)) = parsed {
@@ -688,8 +688,8 @@ mod tests {
     #[ignore] // FIXME: Grammar doesn't support extended escape sequences yet
     fn test_bare_token_escape_sequences() {
         let supported_escapes = vec![
-            (r#"@name == test\n"#, "test\n"),
-            (r#"@name == test\\"#, "test\\"),
+            (r#"name == test\n"#, "test\n"),
+            (r#"name == test\\"#, "test\\"),
         ];
         
         for (expr_str, expected_value) in supported_escapes {
@@ -698,16 +698,16 @@ mod tests {
         }
         
         let unsupported_escapes = vec![
-            r#"@name ~= draft\.final\.final\.*"#,
-            r#"@name ~= \d+\.\d+"#,
-            r#"@name ~= test\$"#,
-            r#"@name ~= \^start"#,
-            r#"@name ~= foo\+bar"#,
-            r#"@name ~= test\?"#,
-            r#"@name ~= \(group\)"#,
-            r#"@name ~= \[abc\]"#,
-            r#"@name ~= a\{2,4\}"#,
-            r#"@name ~= one\|two"#,
+            r#"name ~= draft\.final\.final\.*"#,
+            r#"name ~= \d+\.\d+"#,
+            r#"name ~= test\$"#,
+            r#"name ~= \^start"#,
+            r#"name ~= foo\+bar"#,
+            r#"name ~= test\?"#,
+            r#"name ~= \(group\)"#,
+            r#"name ~= \[abc\]"#,
+            r#"name ~= a\{2,4\}"#,
+            r#"name ~= one\|two"#,
         ];
         
         for expr_str in unsupported_escapes {
@@ -719,14 +719,14 @@ mod tests {
     #[ignore] // FIXME: Grammar doesn't support regex escape sequences like \. yet
     fn test_bare_token_escaped_regex_patterns() {
         let test_cases = vec![
-            (r#"@name ~= draft\.final\.final\.pptx"#, "draft.final.final.pptx", true),
-            (r#"@name ~= draft\.final\.final\.pptx"#, "draft-final-final-pptx", false),
-            (r#"@name ~= v\d+\.\d+\.\d+"#, "v1.2.3", true),
-            (r#"@name ~= v\d+\.\d+\.\d+"#, "v1-2-3", false),
-            (r#"@name ~= \.rs\$"#, "main.rs", true),
-            (r#"@name ~= \.rs\$"#, "main.rs.bak", false),
-            (r#"@name ~= \[DRAFT\]\..*\.docx"#, "[DRAFT].report.docx", true),
-            (r#"@name ~= \[DRAFT\]\..*\.docx"#, "DRAFT.report.docx", false),
+            (r#"name ~= draft\.final\.final\.pptx"#, "draft.final.final.pptx", true),
+            (r#"name ~= draft\.final\.final\.pptx"#, "draft-final-final-pptx", false),
+            (r#"name ~= v\d+\.\d+\.\d+"#, "v1.2.3", true),
+            (r#"name ~= v\d+\.\d+\.\d+"#, "v1-2-3", false),
+            (r#"name ~= \.rs\$"#, "main.rs", true),
+            (r#"name ~= \.rs\$"#, "main.rs.bak", false),
+            (r#"name ~= \[DRAFT\]\..*\.docx"#, "[DRAFT].report.docx", true),
+            (r#"name ~= \[DRAFT\]\..*\.docx"#, "DRAFT.report.docx", false),
         ];
         
         for (expr_str, test_filename, should_match) in test_cases {
@@ -746,10 +746,10 @@ mod tests {
     fn test_bare_token_vs_quoted_string_escapes() {
         let dot_pattern = r#"draft\.final\.final"#;
         
-        let bare_expr = format!(r#"@name contains {}"#, dot_pattern);
+        let bare_expr = format!(r#"name contains {}"#, dot_pattern);
         assert_parse_error(&bare_expr);
         
-        let quoted_expr = format!(r#"@name contains "{}""#, dot_pattern);
+        let quoted_expr = format!(r#"name contains "{}""#, dot_pattern);
         let parsed = parse_expr(&quoted_expr).unwrap();
         assert_name_contains(&parsed, "draft\\.final\\.final");
     }

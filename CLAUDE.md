@@ -46,8 +46,8 @@ The codebase follows a modular architecture with clear separation of concerns:
    - Handles different predicate types (name, metadata, content)
 
 3. **Predicate System** (`src/predicate.rs`)
-   - Defines selectors (@name, @path, @size, etc.)
-   - Implements operators (==, ~=, >, <, in, contains, glob)
+   - Defines selectors (name, path, size, etc.)
+   - Implements operators (==, ~=, >, <, in, contains)
    - Supports streaming content evaluation for large files
 
 4. **Expression Types** (`src/expr.rs`)
@@ -70,11 +70,11 @@ The codebase follows a modular architecture with clear separation of concerns:
 The tool uses a custom expression language defined in `src/expr/expr.pest`:
 
 - **Boolean operators**: `&&`, `||`, `!`, `()`
-- **String operators**: `==`, `~=` (regex), `contains`, `glob`
+- **String operators**: `==`, `~=` (regex), `contains`
 - **Numeric operators**: `>`, `>=`, `<`, `<=`, `==`
 - **Set operators**: `in [item1, item2, ...]`
-- **Selectors**: All start with `@` (e.g., `@name`, `@size`, `@contents`)
-- **Temporal selectors**: `@modified`, `@created`, `@accessed`
+- **Selectors**: name, size, contents, etc.
+- **Temporal selectors**: modified, created, accessed
 
 ## Testing Strategy
 

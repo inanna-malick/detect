@@ -141,7 +141,7 @@ fn handle_list_tools() -> Result<Value> {
                 "properties": {
                     "expression": {
                         "type": "string",
-                        "description": "The detect expression to evaluate (e.g., 'name ~= \"*.rs\"')"
+                        "description": "The detect expression to evaluate (e.g., 'ext == rs && contents contains TODO')"
                     },
                     "directory": {
                         "type": "string",

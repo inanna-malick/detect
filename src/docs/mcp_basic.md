@@ -1,20 +1,32 @@
 Search filesystem entities by name, metadata AND contents in a single query.
 
+Every query follows: selector operator value
+Where selector is: name, ext, size, contents, modified, etc.
+Where operator is: ==, contains, >, in [...], etc.
+Where value is: text, number, date, regex pattern, etc.
+
+SIMPLEST QUERIES:
+name == README.md                                     - selector: name, operator: ==, value: README.md
+size > 1000000                                        - selector: size, operator: >, value: 1000000
+contents contains TODO                                - selector: contents, operator: contains, value: TODO
+ext in [js, ts]                                       - selector: ext, operator: in, value: [js, ts]
+modified > "-7.days"                                  - selector: modified, operator: >, value: "-7.days"
+
 COMMON DEVELOPER TASKS:
 Find security issues:
-@name contains config && @contents contains password     - Passwords in configs
-@ext in [js, py, rb] && @contents contains api_key      - API keys in code
-@ext == env && @contents contains SECRET                 - Secrets in env files
+ext == env && contents contains SECRET                 - Secrets in env files
+ext in [js, py, rb] && contents contains api_key      - API keys in code  
+name contains config && size < 50000 && contents contains password - Passwords in small configs
 
 Find code that needs attention:
-@contents contains TODO && @modified > "-30.days"        - Recent TODOs
-@contents contains FIXME && @size > 10000                - FIXMEs in large files
-@name contains test && @modified < "-90.days"            - Stale test files
+name contains test && modified < "-90.days"            - Stale test files
+modified > "-30.days" && contents contains TODO        - Recent TODOs
+size > 10000 && contents contains FIXME                - FIXMEs in large files
 
 Find specific file types:
-@ext == log && @size > 100000000                        - Large log files
-@name contains migration && @ext in [sql, py]            - Database migrations
-@ext in [yml, yaml] && @contents contains localhost      - Local config files
+ext == log && size > 100000000                        - Large log files
+name contains migration && ext in [sql, py]            - Database migrations
+ext in [yml, yaml] && contents contains localhost      - Local config files
 
 IMPOSSIBLE WITH GREP/GLOB:
 These queries cannot be done with standard tools:
@@ -25,11 +37,11 @@ These queries cannot be done with standard tools:
 • Files by size range with content search
 
 QUICK EXAMPLES:
-@name == "config.json"                               - Find exact file
-@ext in [js, ts, jsx]                               - Find JavaScript files
-@contents contains "TODO"                           - Search inside any file
-@size > 1000000                                     - Files over 1MB
-@modified > "-7.days"                               - Recently modified
+name == config.json                                - Find exact file
+ext in [js, ts, jsx]                               - Find JavaScript files
+contents contains TODO                            - Search inside any file
+size > 1000000                                     - Files over 1MB
+modified > "-7.days"                               - Recently modified
 
 CORE OPERATORS (just 4!):
 ==         exact match
@@ -38,12 +50,12 @@ in [...]   multiple options
 >          greater than
 
 SELECTORS:
-@name      filename/path
-@ext       file extension
-@size      file size (bytes)
-@contents  file contents
-@modified  modification time
-@type      file/dir/symlink
+name      filename/path
+ext       file extension
+size      file size (bytes)
+contents  file contents
+modified  modification time
+type      file/dir/symlink
 
 BOOLEAN LOGIC:
 &&  means AND
@@ -53,21 +65,26 @@ BOOLEAN LOGIC:
 
 PRACTICAL MULTI-LAYER EXAMPLES:
 Find large Python files with class definitions:
-@ext == py && @size > 50000 && @contents contains "class "
+ext == py && size > 50000 && contents contains class
 
 Find recent markdown files mentioning bugs:
-@ext == md && @modified > "-30.days" && @contents contains bug
+ext == md && modified > "-30.days" && contents contains bug
 
 Find test files that might have issues:
-@name contains test && @contents contains "TODO"
+name contains test && ext in [py, js, go] && contents contains TODO
 
 Find configuration files with secrets:
-(@name contains config || @name contains env) && @contents contains secret
+ext in [json, yaml, yml] && name contains config && contents contains secret
+
+SMART EXCLUSION PATTERNS:
+ext == js && !path contains node_modules && contents contains TODO
+ext == py && !path contains __pycache__ && contents contains import
+ext == rs && !path contains /target/ && contents contains unsafe
 
 TEMPORAL QUERIES:
-@modified > "-7.days"                                - Last week
-@modified > "-1.hour"                                - Last hour
-@modified > "-30.minutes"                            - Last 30 minutes
-@modified > "2024-01-01"                             - After specific date
+modified > "-7.days"                                - Last week
+modified > "-1.hour"                                - Last hour
+modified > "-30.minutes"                            - Last 30 minutes
+modified > "2024-01-01"                             - After specific date
 
 Need regex patterns or advanced operators? Use the detect_help tool.
