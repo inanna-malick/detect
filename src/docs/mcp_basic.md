@@ -43,19 +43,26 @@ contents contains TODO                            - Search inside any file
 size > 1000000                                     - Files over 1MB
 modified > "-7.days"                               - Recently modified
 
-CORE OPERATORS (just 4!):
-==         exact match
+CORE OPERATORS:
+==         exact match (alias: =)
 contains   substring search
 in [...]   multiple options
->          greater than
+>          greater than (also: <, >=, <=)
+~=         regex match (aliases: ~, =~)
+!=         not equal
 
 SELECTORS:
-name      filename/path
-ext       file extension
-size      file size (bytes)
-contents  file contents
-modified  modification time
-type      file/dir/symlink
+name      matches filename only (alias: filename)
+path      matches full path (alias: filepath)
+ext       file extension without dot (alias: extension)
+size      file size in bytes (alias: filesize)
+contents  search file contents (alias: file)
+modified  modification time (alias: mtime)
+type      file, dir, or symlink (alias: filetype)
+created   creation time (alias: ctime)
+accessed  access time (alias: atime)
+
+CASE SENSITIVITY: All string comparisons are case-sensitive
 
 BOOLEAN LOGIC:
 &&  means AND

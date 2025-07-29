@@ -12,7 +12,10 @@ Current error messages don't provide enough context or suggestions for users to 
 
 ## Partial Fix Applied
 - ✅ Updated error hints to remove @ prefix from examples (fixed in commit 2098aa2)
-- ❌ Still need to implement the broader improvements listed below
+- ✅ Added all selector aliases to error hints (filename, filepath, etc.)
+- ✅ Added all operator aliases to error hints (=, ~, =~)
+- ✅ Added case sensitivity note to error hints
+- ❌ Still need more contextual error messages as suggested below
 
 ## Examples of Poor Error Messages
 

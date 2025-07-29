@@ -62,21 +62,21 @@ ext == rs && (size > 1000 || name contains test)
 ## All Selectors
 
 ### Name/Path Selectors
-- `name`, `@filename` - Match against filename
-- `path`, `@filepath` - Match against full path
+- `name`, `filename` - Match against filename
+- `path`, `filepath` - Match against full path
 - `ext`, `extension` - File extension (without dot)
 
 ### Metadata Selectors
-- `size`, `@filesize` - Size in bytes
-- `type`, `@filetype` - Entity type (file, dir, symlink)
+- `size`, `filesize` - Size in bytes
+- `type`, `filetype` - Entity type (file, dir, symlink)
 
 ### Content Selectors
-- `contents`, `@file` - Search file contents
+- `contents`, `file` - Search file contents
 
 ### Temporal Selectors
-- `modified`, `@mtime` - Modification time
-- `created`, `@ctime` - Creation time
-- `accessed`, `@atime` - Access time
+- `modified`, `mtime` - Modification time
+- `created`, `ctime` - Creation time
+- `accessed`, `atime` - Access time
 
 ## Temporal Query Syntax
 
@@ -109,6 +109,24 @@ created < "2023-12-31"
 modified >= "today"
 modified < "yesterday"
 ```
+
+## Case Sensitivity
+
+**IMPORTANT**: All string comparisons in detect are case-sensitive. This affects:
+
+- Name/path matching: `name == "README.md"` won't match "readme.md"
+- Extension matching: `ext == "MD"` won't match ".md" files
+- Contains operator: `name contains "Test"` won't match "test"
+- Content searches: `contents contains "TODO"` won't match "todo"
+
+For case-insensitive matching with regex:
+```
+# Add (?i) flag at the start of regex pattern
+name ~= "(?i)readme"     # Matches README, readme, ReadMe, etc.
+contents ~= "(?i)todo"   # Matches TODO, todo, Todo, etc.
+```
+
+Platform note: While detect's comparisons are case-sensitive, the underlying filesystem may not be (e.g., macOS and Windows are typically case-insensitive).
 
 ## Complex Pattern Examples
 
