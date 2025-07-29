@@ -10,6 +10,10 @@ Error messages from the detect MCP tool are not helpful enough for users to unde
 ## Description
 Current error messages don't provide enough context or suggestions for users to correct their queries. This leads to frustration and repeated failed attempts.
 
+## Partial Fix Applied
+- ✅ Updated error hints to remove @ prefix from examples (fixed in commit 2098aa2)
+- ❌ Still need to implement the broader improvements listed below
+
 ## Examples of Poor Error Messages
 
 ### Current:
