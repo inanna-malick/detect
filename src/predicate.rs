@@ -12,41 +12,6 @@ use crate::util::Done;
 use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
 use chrono::{DateTime, Local, NaiveDate, Duration};
 
-fn glob_to_regex(glob: &str) -> String {
-    let mut regex = String::from("^");
-    let mut chars = glob.chars().peekable();
-    
-    while let Some(ch) = chars.next() {
-        match ch {
-            '*' => {
-                if chars.peek() == Some(&'*') {
-                    chars.next();
-                    regex.push_str(".*");
-                } else {
-                    regex.push_str("[^/]*");
-                }
-            }
-            '?' => regex.push('.'),
-            '[' => {
-                regex.push('[');
-                while let Some(ch) = chars.next() {
-                    regex.push(ch);
-                    if ch == ']' {
-                        break;
-                    }
-                }
-            }
-            '.' | '(' | ')' | '+' | '|' | '^' | '$' | '@' | '%' => {
-                regex.push('\\');
-                regex.push(ch);
-            }
-            _ => regex.push(ch),
-        }
-    }
-    
-    regex.push('$');
-    regex
-}
 
 fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     // Handle relative time formats
@@ -183,7 +148,6 @@ pub enum StringMatcher {
     Equals(String),
     NotEquals(String),
     Contains(String),
-    Glob(String),
     In(Vec<String>),
 }
 
@@ -194,7 +158,6 @@ impl PartialEq for StringMatcher {
             (Self::Equals(l0), Self::Equals(r0)) => l0 == r0,
             (Self::NotEquals(l0), Self::NotEquals(r0)) => l0 == r0,
             (Self::Contains(l0), Self::Contains(r0)) => l0 == r0,
-            (Self::Glob(l0), Self::Glob(r0)) => l0 == r0,
             (Self::In(l0), Self::In(r0)) => l0 == r0,
             _ => false,
         }
@@ -214,11 +177,6 @@ impl StringMatcher {
             StringMatcher::Equals(cmp) => cmp == s,
             StringMatcher::NotEquals(cmp) => cmp != s,
             StringMatcher::Contains(substr) => s.contains(substr),
-            StringMatcher::Glob(pattern) => {
-                // Convert glob pattern to regex
-                let regex_pattern = glob_to_regex(pattern);
-                Regex::new(&regex_pattern).map(|r| r.is_match(s)).unwrap_or(false)
-            }
             StringMatcher::In(values) => values.contains(&s.to_string()),
         }
     }
@@ -294,7 +252,6 @@ pub enum Op {
     NumericComparison(NumericalOp),
     In,       // 'in' - set membership
     Contains, // 'contains' - substring
-    Glob,     // 'glob' - glob pattern
 }
 
 pub fn parse_string(op: &Op, rhs: &str) -> Result<StringMatcher, PredicateParseError> {
@@ -307,7 +264,6 @@ pub fn parse_string(op: &Op, rhs: &str) -> Result<StringMatcher, PredicateParseE
         Op::Equality => StringMatcher::Equals(rhs.to_owned()),
         Op::NotEqual => StringMatcher::NotEquals(rhs.to_owned()),
         Op::Contains => StringMatcher::Contains(rhs.to_owned()),
-        Op::Glob => StringMatcher::Glob(rhs.to_owned()),
         Op::In => {
             // Check if rhs is a JSON-encoded array (from set literal)
             if rhs.starts_with('[') && rhs.ends_with(']') {
@@ -339,13 +295,6 @@ pub fn parse_string_dfa(op: Op, rhs: String) -> Result<StreamingCompiledContentP
         }
         Op::Contains => {
             let regex = regex::escape(&rhs);
-            match DFA::new(&regex) {
-                Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
-                Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
-            }
-        }
-        Op::Glob => {
-            let regex = glob_to_regex(&rhs);
             match DFA::new(&regex) {
                 Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
                 Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
@@ -396,11 +345,6 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> Result<NumberMatcher, PredicatePar
                 reason: "'contains' operator cannot be used with numeric values",
             })
         }
-        Op::Glob => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "'glob' operator cannot be used with numeric values",
-            })
-        }
     }
 }
 
@@ -427,11 +371,6 @@ pub fn parse_temporal(op: &Op, rhs: &str) -> Result<TimeMatcher, PredicateParseE
         Op::Contains => {
             return Err(PredicateParseError::IncompatibleOperation {
                 reason: "'contains' operator cannot be used with temporal values",
-            })
-        }
-        Op::Glob => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "'glob' operator cannot be used with temporal values",
             })
         }
     }

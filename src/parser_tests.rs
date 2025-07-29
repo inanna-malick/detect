@@ -47,14 +47,6 @@ mod tests {
         assert_eq!(parsed, expected);
     }
 
-    #[test]
-    fn parse_name_glob() {
-        let parsed = parse_expr(r#"@name glob "*.rs""#).unwrap();
-        let expected = Expr::Predicate(Predicate::Name(Arc::new(
-            NamePredicate::Filename(StringMatcher::Glob("*.rs".to_string()))
-        )));
-        assert_eq!(parsed, expected);
-    }
 
     #[test]
     fn parse_name_in_set() {

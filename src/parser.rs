@@ -91,7 +91,6 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> Result<Expr<RawPredic
                     }
                     Rule::in_ => predicate::Op::In,
                     Rule::contains => predicate::Op::Contains,
-                    Rule::glob => predicate::Op::Glob,
                     rule => return Err(ParseError::Structure {
                         kind: StructureErrorKind::UnexpectedRule { rule },
                         location: get_location(&span),

@@ -276,9 +276,9 @@ async fn test_contains_operator() {
 }
 
 #[tokio::test]
-async fn test_glob_operator() {
+async fn test_name_regex_patterns() {
     Case {
-        expr: r#"@name glob "test_*.rs""#,
+        expr: r#"@name ~= "test_.*\.rs$""#,
         expected: &["test_utils.rs", "test_integration.rs"],
         files: vec![
             f("test_utils.rs", ""),
@@ -292,9 +292,9 @@ async fn test_glob_operator() {
 }
 
 #[tokio::test]
-async fn test_glob_with_double_star() {
+async fn test_path_regex_patterns() {
     Case {
-        expr: r#"@path glob "**/test/*.rs""#,
+        expr: r#"@path ~= ".*/test/.*\.rs$""#,
         expected: &["src/test/utils.rs", "lib/test/helpers.rs", "test/main.rs"],
         files: vec![
             f("src/test/utils.rs", ""),
@@ -394,9 +394,9 @@ async fn test_in_operator_single_value() {
 // ===== Complex Grammar Interaction Tests =====
 
 #[tokio::test]
-async fn test_glob_with_brackets() {
+async fn test_name_character_classes() {
     Case {
-        expr: r#"@name glob "file[1-3].txt""#,
+        expr: r#"@name ~= "file[1-3]\.txt$""#,
         expected: &["file1.txt", "file2.txt", "file3.txt"],
         files: vec![
             f("file1.txt", ""),
@@ -411,9 +411,9 @@ async fn test_glob_with_brackets() {
 }
 
 #[tokio::test]
-async fn test_glob_with_question_mark() {
+async fn test_name_single_char_patterns() {
     Case {
-        expr: r#"@name glob "file?.txt""#,
+        expr: r#"@name ~= "file.\.txt$""#,
         expected: &["file1.txt", "file2.txt", "fileA.txt"],
         files: vec![
             f("file1.txt", ""),
@@ -464,7 +464,7 @@ async fn test_multiple_in_operators() {
 #[tokio::test]
 async fn test_complex_nested_expression() {
     Case {
-        expr: r#"(@ext in [rs, toml] || @name glob "*.md") && (@size < 1000 || @contents contains "important")"#,
+        expr: r#"(@ext in [rs, toml] || @ext == md) && (@size < 1000 || @contents contains "important")"#,
         expected: &["small.rs", "README.md", "config.toml", "large.rs"],
         files: vec![
             f("small.rs", "fn main() {}"),  // Small .rs file
@@ -579,9 +579,9 @@ async fn test_escape_sequences_in_regex() {
 }
 
 #[tokio::test]
-async fn test_glob_recursive_with_extension() {
+async fn test_path_with_extension_pattern() {
     Case {
-        expr: r#"@path glob "**/*.test.js""#,
+        expr: r#"@path ~= ".*\.test\.js$""#,
         expected: &[
             "unit.test.js",
             "src/component.test.js",
@@ -636,9 +636,9 @@ async fn test_set_with_special_filenames() {
 
 #[tokio::test]
 async fn test_combining_all_new_operators() {
-    // Use glob, in, contains, and != all in one expression
+    // Use regex patterns, in, contains, and != all in one expression
     Case {
-        expr: r#"@name glob "*.config.*" && @ext in [js, json, yaml, yml] && @contents contains "version" && @size != 0"#,
+        expr: r#"@name contains ".config." && @ext in [js, json, yaml, yml] && @contents contains "version" && @size != 0"#,
         expected: &["app.config.js", "db.config.json"],
         files: vec![
             f("app.config.js", "module.exports = { version: '1.0.0' }"),
@@ -653,9 +653,9 @@ async fn test_combining_all_new_operators() {
 }
 
 #[tokio::test]
-async fn test_glob_edge_cases() {
+async fn test_c_extension_patterns() {
     Case {
-        expr: r#"@name glob "*.[ch]""#,  // C source and header files
+        expr: r#"@name ~= ".*\.[ch]$""#,  // C source and header files
         expected: &["main.c", "utils.c", "main.h", "utils.h"],
         files: vec![
             f("main.c", ""),

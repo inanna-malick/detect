@@ -6,6 +6,8 @@ use std::path::Path;
 use slog::{Drain, Logger};
 
 const GRAMMAR: &str = include_str!("../expr/expr.pest");
+const MCP_BASIC_DESC: &str = include_str!("../docs/mcp_basic.md");
+const MCP_ADVANCED_DESC: &str = include_str!("../docs/mcp_advanced.md");
 
 #[derive(Debug, Serialize, Deserialize)]
 struct DetectParams {
@@ -133,7 +135,7 @@ fn handle_list_tools() -> Result<Value> {
     Ok(json!({
         "tools": [{
             "name": "detect",
-            "description": "Search filesystem entities using a powerful expression language with boolean logic, regex matching, and temporal queries.\n\nCORE CONCEPTS:\n• Selectors start with @ and target different file attributes\n• Operators compare/match values with support for regex, globs, sets\n• Boolean logic (&&, ||, !) combines conditions\n• Parentheses control evaluation order\n\nESSENTIAL SELECTORS:\n@name, @path    - filename/path matching\n@ext            - file extension\n@size           - file size in bytes\n@contents       - file content search\n@modified       - modification time\n@type           - entity type (file, dir, etc.)\n\nCORE OPERATORS:\n==, !=          - exact match/not equal\n~=              - regex match\ncontains        - substring search\nglob            - shell-style wildcards\nin [a,b,c]      - set membership\n>, <, >=, <=    - numeric/time comparison\n\nQUICK START EXAMPLES:\n@name ~= \"\\.rs$\"                   - Find Rust files\n@size > 1000000                    - Files over 1MB\n@contents ~= \"TODO|FIXME\"          - Files needing attention\n@modified > \"-1.week\"              - Recently modified\n@ext in [js,ts,jsx,tsx]           - JavaScript family\n\nCOMBINED CONTENT + METADATA PATTERNS:\n@ext == py && @contents ~= \"class.*Test\"     - Python test classes\n@name ~= \"config\" && @contents ~= \"password|secret\"  - Config files with secrets\n@size < 10000 && @contents ~= \"struct.*pub\" && @ext == rs  - Small public Rust structs\n@modified > \"-7.days\" && @contents ~= \"impl.*trait\" && @path ~= \"/src/\"  - Recent trait implementations\n@name ~= \".*test.*\" && @contents ~= \"panic|unwrap\" && @ext in [rs,go]  - Test files with potential issues\n\nPOWER USER PATTERNS:\n(@ext == rs && @size < 10000) || @name ~= \"test_.*\"     - Small Rust files or tests\n@type == file && @contents ~= \"struct.*pub\" && !@path ~= \"/target/\"  - Public structs, skip build\n@modified > \"-30.days\" && @size > 0 && @ext in [rs,py,js] && @contents ~= \"TODO\"  - Recent TODOs in code\n\nTEMPORAL SYNTAX:\n\"-7.days\", \"-2.weeks\", \"-1.month\", \"-6.hours\" - Relative time\n\"2024-01-15\" - Absolute dates\n\nPATTERN MATCHING GUIDE:\n• Simple substring: @name contains \"test\"\n• Shell wildcards: @name glob \"*test*.rs\" \n• Regex patterns: @name ~= \"test_.*\\.rs$\"\n\nESCAPING & QUOTING:\n• Quotes only needed for strings with spaces: @name == \"my file.txt\"\n• Simple strings work unquoted: @type == file, @path ~= /target/\n• Case sensitivity varies by selector (filesystem-dependent for @name/@path)",
+            "description": MCP_BASIC_DESC,
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -160,6 +162,14 @@ fn handle_list_tools() -> Result<Value> {
                 "required": ["expression", "directory"]
             },
             "grammar": GRAMMAR
+        }, {
+            "name": "detect_help",
+            "description": "Get advanced detect documentation with regex patterns, all operators, and troubleshooting guide",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         }]
     }))
 }
@@ -181,10 +191,23 @@ fn handle_call_tool(params: Value) -> Result<Value> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     
-    if name != "detect" {
-        return Err(anyhow::anyhow!("Unknown tool: {}", name));
+    match name {
+        "detect" => handle_detect_tool(params),
+        "detect_help" => handle_detect_help(),
+        _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
+}
 
+fn handle_detect_help() -> Result<Value> {
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": MCP_ADVANCED_DESC
+        }]
+    }))
+}
+
+fn handle_detect_tool(params: Value) -> Result<Value> {
     let args = params.get("arguments")
         .cloned()
         .unwrap_or(json!({}));

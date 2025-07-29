@@ -28,7 +28,7 @@ predicate =  { selector ~ op ~ rhs }
     modified = { "modified" | "mtime" }
     created  = { "created"  | "ctime" }
     accessed = { "accessed" | "atime" }
-  op      = _{ match_ | ne | eq | gteq | lteq | gt | lt | like | in_ | contains | glob }
+  op      = _{ match_ | ne | eq | gteq | lteq | gt | lt | like | in_ | contains }
     eq       = { "==" | "=" }         // exact equals
     ne       = { "!=" }               // not equal
     like     = { "~=" | "~" }         // regex (backward compat)
@@ -39,7 +39,6 @@ predicate =  { selector ~ op ~ rhs }
     lt       = { "<" }
     in_      = { "in" }               // set membership
     contains = { "contains" }         // substring match
-    glob     = { "glob" }             // glob pattern
   rhs     = { set_literal | quoted_string | bare_token }
     set_literal = { "[" ~ ws* ~ set_items ~ ws* ~ "]" }
       set_items = { set_item ~ (ws* ~ "," ~ ws* ~ set_item)* }
