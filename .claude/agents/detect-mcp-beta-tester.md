@@ -18,7 +18,7 @@ Your primary responsibilities:
 
 2. **Validate Query Translation**: Ensure the MCP server correctly:
    - Translates MCP requests into detect expression language queries
-   - Handles all supported selectors (@name, @size, @contents, etc.)
+   - Handles all supported selectors (name, size, contents, etc.)
    - Processes boolean operators and complex expressions
    - Respects ignore patterns and configuration options
 

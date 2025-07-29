@@ -175,6 +175,7 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> Result<Expr<RawPredic
                                                 inner_str.as_str().to_string()
                                             }
                                             Rule::bare_token => inner_item.as_str().to_string(),
+                                            Rule::set_token => inner_item.as_str().to_string(),
                                             rule => return Err(ParseError::Structure {
                                                 kind: StructureErrorKind::UnexpectedRule { rule },
                                                 location: get_location(&span),

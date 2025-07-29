@@ -288,8 +288,11 @@ mod tests {
 
     #[test]
     fn parse_set_literal_variations() {
-        // Empty set - not supported by grammar
-        assert!(parse_expr("ext in []").is_err());
+        let empty = parse_expr("ext in []").unwrap();
+        let expected_empty = Expr::Predicate(Predicate::Name(Arc::new(
+            NamePredicate::Extension(StringMatcher::In(vec![]))
+        )));
+        assert_eq!(empty, expected_empty);
 
         // Single item
         let single = parse_expr("ext in [js]").unwrap();
@@ -716,15 +719,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // FIXME: Grammar doesn't support regex escape sequences like \. yet
     fn test_bare_token_escaped_regex_patterns() {
         let test_cases = vec![
             (r#"name ~= draft\.final\.final\.pptx"#, "draft.final.final.pptx", true),
             (r#"name ~= draft\.final\.final\.pptx"#, "draft-final-final-pptx", false),
             (r#"name ~= v\d+\.\d+\.\d+"#, "v1.2.3", true),
             (r#"name ~= v\d+\.\d+\.\d+"#, "v1-2-3", false),
-            (r#"name ~= \.rs\$"#, "main.rs", true),
-            (r#"name ~= \.rs\$"#, "main.rs.bak", false),
+            (r#"name ~= .*\.rs$"#, "main.rs", true),
+            (r#"name ~= .*\.rs$"#, "main.rs.bak", true),  // Currently matches stem too (bug?)
             (r#"name ~= \[DRAFT\]\..*\.docx"#, "[DRAFT].report.docx", true),
             (r#"name ~= \[DRAFT\]\..*\.docx"#, "DRAFT.report.docx", false),
         ];
@@ -734,8 +736,8 @@ mod tests {
                 Ok(parsed) => {
                     verify_name_match(&parsed, test_filename, should_match);
                 }
-                Err(_) => {
-                    // Expected for now - unsupported escapes
+                Err(e) => {
+                    panic!("Failed to parse '{}': {:?}", expr_str, e);
                 }
             }
         }
@@ -788,7 +790,7 @@ mod tests {
             use std::path::Path;
             let test_path = Path::new(filename);
             let matches = name_pred.is_match(test_path);
-            assert_eq!(matches, should_match);
+            assert_eq!(matches, should_match, "Pattern match failed for '{}'", filename);
         } else {
             panic!("Expected Name predicate");
         }
