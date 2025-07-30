@@ -1,11 +1,11 @@
+pub mod error;
+pub mod error_hints;
 mod eval;
 pub mod expr;
+pub mod parse_error;
 pub mod parser;
 pub mod predicate;
 mod util;
-pub mod error_hints;
-pub mod error;
-pub mod parse_error;
 
 #[cfg(test)]
 mod parser_tests;
@@ -13,13 +13,13 @@ mod parser_tests;
 use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
+use error::DetectError;
 use expr::{Expr, MetadataPredicate, NamePredicate};
 use git2::{Repository, RepositoryOpenFlags, TreeWalkResult};
 use ignore::WalkBuilder;
 use parser::parse_expr;
 use predicate::{Predicate, StreamingCompiledContentPredicate};
 use slog::{debug, error, info, warn, Logger};
-use error::DetectError;
 
 pub fn run_git<F: FnMut(&str)>(
     logger: Logger,
@@ -93,7 +93,10 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 ) -> Result<(), DetectError> {
     match parse_expr(&expr) {
         Ok(parsed_expr) => {
-            let walker = WalkBuilder::new(root).hidden(false).git_ignore(respect_gitignore).build();
+            let walker = WalkBuilder::new(root)
+                .hidden(false)
+                .git_ignore(respect_gitignore)
+                .build();
 
             let expr = parsed_expr.map_predicate_ref(|p| match p {
                 Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
@@ -125,8 +128,6 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             Ok(())
         }
-        Err(err) => {
-            Err(err.into())
-        }
+        Err(err) => Err(err.into()),
     }
 }

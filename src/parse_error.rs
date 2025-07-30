@@ -1,5 +1,5 @@
+use crate::predicate::{Op, RhsValue, Selector};
 use std::fmt;
-use crate::predicate::{Selector, Op};
 
 use crate::parser::pratt_parser::Rule;
 
@@ -7,46 +7,63 @@ use crate::parser::pratt_parser::Rule;
 pub enum ParseError {
     /// Pest grammar/syntax error - preserves location info
     Syntax(pest::error::Error<Rule>),
-    
+
     /// Structural errors during AST construction
     Structure {
         kind: StructureErrorKind,
         location: Option<(usize, usize)>,
     },
-    
+
     /// Errors from predicate parsing
     Predicate {
         selector: Selector,
         operator: Op,
-        value: String,
+        value: RhsValue,
         source: PredicateParseError,
     },
 }
 
 #[derive(Debug)]
 pub enum StructureErrorKind {
-    InvalidSelector { found: String },
-    MissingToken { expected: &'static str, context: &'static str },
-    UnexpectedRule { rule: Rule },
+    InvalidSelector {
+        found: String,
+    },
+    MissingToken {
+        expected: &'static str,
+        context: &'static str,
+    },
+    UnexpectedRule {
+        rule: Rule,
+    },
+    InvalidToken {
+        expected: &'static str,
+        found: String,
+    },
 }
 
 #[derive(Debug)]
 pub enum PredicateParseError {
     /// Regex compilation failed
     Regex(regex::Error),
-    
+
     /// Numeric parsing failed
     Numeric(std::num::ParseIntError),
-    
+
     /// Temporal parsing failed
     Temporal(TemporalError),
-    
+
     /// DFA compilation failed
     Dfa(String), // aho_corasick errors don't implement Error trait well
-    
+
     /// Operator not compatible with selector
     IncompatibleOperation { reason: &'static str },
-    
+
+    /// Value type not compatible with selector/operator
+    IncompatibleValue {
+        expected: &'static str,
+        found: String,
+    },
+
     /// JSON parsing for set literals
     SetParse(serde_json::Error),
 }
@@ -77,45 +94,50 @@ impl ParseError {
             _ => None,
         }
     }
-    
+
     /// Get contextual hint for fixing the error
     pub fn hint(&self) -> Option<String> {
         match self {
-            ParseError::Predicate { selector, operator, source, .. } => {
-                match source {
-                    PredicateParseError::Regex(_) => Some(
-                        "Regex syntax error. Common issues:\n\
+            ParseError::Predicate {
+                selector,
+                operator,
+                source,
+                ..
+            } => match source {
+                PredicateParseError::Regex(_) => Some(
+                    "Regex syntax error. Common issues:\n\
                          • Use .* instead of * for wildcard\n\
                          • Escape special characters: \\., \\(, \\[\n\
-                         • Check regex syntax at regex101.com".to_string()
-                    ),
-                    PredicateParseError::Temporal(_) => Some(format!(
-                        "Time format examples:\n\
+                         • Check regex syntax at regex101.com"
+                        .to_string(),
+                ),
+                PredicateParseError::Temporal(_) => Some(format!(
+                    "Time format examples:\n\
                          • Relative: -7.days, -1.hour, -30.minutes\n\
                          • Absolute: 2024-01-15, today, yesterday\n\
-                         • Selector {:?} with operator {:?} expects temporal values", 
-                        selector, operator
-                    )),
-                    PredicateParseError::IncompatibleOperation { reason } => {
-                        Some(format!("{}\nValid operators for {:?} depend on the value type", 
-                            reason, selector))
-                    },
-                    PredicateParseError::Numeric(_) => Some(
-                        "Expected a numeric value (positive integer)".to_string()
-                    ),
-                    _ => None,
+                         • Selector {:?} with operator {:?} expects temporal values",
+                    selector, operator
+                )),
+                PredicateParseError::IncompatibleOperation { reason } => Some(format!(
+                    "{}\nValid operators for {:?} depend on the value type",
+                    reason, selector
+                )),
+                PredicateParseError::Numeric(_) => {
+                    Some("Expected a numeric value (positive integer)".to_string())
                 }
+                _ => None,
             },
-            ParseError::Structure { kind: StructureErrorKind::InvalidSelector { found }, .. } => {
-                Some(format!(
-                    "Unknown selector '{}'. Valid selectors:\n\
+            ParseError::Structure {
+                kind: StructureErrorKind::InvalidSelector { found },
+                ..
+            } => Some(format!(
+                "Unknown selector '{}'. Valid selectors:\n\
                      • name (alias: filename), path (alias: filepath)\n\
                      • ext (alias: extension), size (alias: filesize)\n\
                      • type (alias: filetype), contents (alias: file)\n\
                      • modified (alias: mtime), created (alias: ctime), accessed (alias: atime)",
-                    found
-                ))
-            },
+                found
+            )),
             _ => None,
         }
     }
@@ -127,14 +149,26 @@ impl fmt::Display for ParseError {
             ParseError::Syntax(e) => {
                 // Pest already has good error formatting with location markers
                 write!(f, "{}", e)
-            },
+            }
             ParseError::Structure { kind, .. } => {
                 write!(f, "{}", kind)
-            },
-            ParseError::Predicate { selector, operator, value, source } => {
-                write!(f, "Invalid {} for @{:?} {:?} {}: {}", 
-                    source.value_description(), selector, operator, value, source)
-            },
+            }
+            ParseError::Predicate {
+                selector,
+                operator,
+                value,
+                source,
+            } => {
+                write!(
+                    f,
+                    "Invalid {} for @{:?} {:?} {:?}: {}",
+                    source.value_description(),
+                    selector,
+                    operator,
+                    value,
+                    source
+                )
+            }
         }
     }
 }
@@ -144,13 +178,16 @@ impl fmt::Display for StructureErrorKind {
         match self {
             StructureErrorKind::InvalidSelector { found } => {
                 write!(f, "Invalid selector: @{}", found)
-            },
+            }
             StructureErrorKind::MissingToken { expected, context } => {
                 write!(f, "Expected {} in {}", expected, context)
-            },
+            }
             StructureErrorKind::UnexpectedRule { rule } => {
                 write!(f, "Unexpected grammar rule: {:?}", rule)
-            },
+            }
+            StructureErrorKind::InvalidToken { expected, found } => {
+                write!(f, "Invalid token: expected {}, found '{}'", expected, found)
+            }
         }
     }
 }
@@ -163,6 +200,7 @@ impl PredicateParseError {
             PredicateParseError::Temporal(_) => "time value",
             PredicateParseError::Dfa(_) => "content pattern",
             PredicateParseError::IncompatibleOperation { .. } => "operation",
+            PredicateParseError::IncompatibleValue { .. } => "value type",
             PredicateParseError::SetParse(_) => "set literal",
         }
     }
@@ -176,6 +214,9 @@ impl fmt::Display for PredicateParseError {
             PredicateParseError::Temporal(e) => write!(f, "{}", e),
             PredicateParseError::Dfa(e) => write!(f, "DFA compilation failed: {}", e),
             PredicateParseError::IncompatibleOperation { reason } => write!(f, "{}", reason),
+            PredicateParseError::IncompatibleValue { expected, found } => {
+                write!(f, "Type mismatch: expected {}, found {}", expected, found)
+            }
             PredicateParseError::SetParse(e) => write!(f, "Invalid set literal: {}", e),
         }
     }

@@ -16,7 +16,11 @@ pub enum DetectError {
 impl fmt::Display for DetectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DetectError::ParseError { message, hint, location } => {
+            DetectError::ParseError {
+                message,
+                hint,
+                location,
+            } => {
                 write!(f, "{}", message)?;
                 if let Some((line, col)) = location {
                     write!(f, " at line {}, column {}", line, col)?;

@@ -77,13 +77,9 @@ pub async fn main() -> Result<(), anyhow::Error> {
     if let Some(ref_) = args.gitref {
         run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
     } else {
-        parse_and_run_fs(
-            logger,
-            &root_path,
-            !args.visit_gitignored,
-            args.expr,
-            |s| println!("{}", s.to_string_lossy()),
-        )
+        parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
+            println!("{}", s.to_string_lossy())
+        })
         .await?;
     }
 

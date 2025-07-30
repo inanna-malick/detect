@@ -8,10 +8,9 @@ use std::sync::Arc;
 use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
 
 use crate::expr::short_circuit::ShortCircuit;
-use crate::util::Done;
 use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
-use chrono::{DateTime, Local, NaiveDate, Duration};
-
+use crate::util::Done;
+use chrono::{DateTime, Duration, Local, NaiveDate};
 
 fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     // Handle relative time formats
@@ -23,45 +22,62 @@ fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
                 kind: TemporalErrorKind::ParseInt(e),
             })?;
             let unit = parts[1];
-            
+
             let duration = match unit {
                 "seconds" | "second" | "secs" | "sec" | "s" => Duration::seconds(number),
                 "minutes" | "minute" | "mins" | "min" | "m" => Duration::minutes(number),
                 "hours" | "hour" | "hrs" | "hr" | "h" => Duration::hours(number),
                 "days" | "day" | "d" => Duration::days(number),
                 "weeks" | "week" | "w" => Duration::weeks(number),
-                _ => return Err(TemporalError {
-                    input: s.to_string(),
-                    kind: TemporalErrorKind::UnknownUnit(unit.to_string()),
-                }.into()),
+                _ => {
+                    return Err(TemporalError {
+                        input: s.to_string(),
+                        kind: TemporalErrorKind::UnknownUnit(unit.to_string()),
+                    }
+                    .into())
+                }
             };
-            
+
             return Ok(Local::now() - duration);
         }
     }
-    
+
     // Handle special keywords
     match s {
         "now" => return Ok(Local::now()),
         "today" => {
             let today = Local::now().date_naive();
-            return Ok(today.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap());
+            return Ok(today
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(Local)
+                .unwrap());
         }
         "yesterday" => {
             let yesterday = Local::now().date_naive() - Duration::days(1);
-            return Ok(yesterday.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap());
+            return Ok(yesterday
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(Local)
+                .unwrap());
         }
         _ => {}
     }
-    
+
     // Try parsing as absolute date/datetime
     match NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        Ok(date) => return Ok(date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap()),
+        Ok(date) => {
+            return Ok(date
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(Local)
+                .unwrap())
+        }
         Err(_) => {
             // Try other formats before failing
         }
     }
-    
+
     // Try parsing as ISO datetime
     match DateTime::parse_from_rfc3339(s) {
         Ok(dt) => Ok(dt.with_timezone(&Local)),
@@ -75,11 +91,40 @@ fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
+pub enum RhsValue {
+    // String values for name, path, ext, type selectors
+    String(String),
+
+    // Plain numeric value (bytes)
+    Number(u64),
+
+    // Size with unit (converted to bytes)
+    Size(u64),
+
+    // Set of values (from [item1, item2] syntax)
+    Set(Vec<String>),
+
+    // Temporal values
+    RelativeTime { value: i64, unit: TimeUnit },
+    AbsoluteTime(String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TimeUnit {
+    Seconds,
+    Minutes,
+    Hours,
+    Days,
+    Weeks,
+    Months,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct RawPredicate {
     pub lhs: Selector,
     pub op: Op,
-    pub rhs: String,
+    pub rhs: RhsValue,
 }
 
 impl RawPredicate {
@@ -200,10 +245,10 @@ pub enum TimeMatcher {
 impl TimeMatcher {
     pub fn is_match(&self, timestamp: i64) -> bool {
         use std::time::UNIX_EPOCH;
-        
+
         let file_time = UNIX_EPOCH + std::time::Duration::from_secs(timestamp as u64);
         let file_datetime: DateTime<Local> = file_time.into();
-        
+
         match self {
             TimeMatcher::Before(dt) => file_datetime < *dt,
             TimeMatcher::After(dt) => file_datetime > *dt,
@@ -254,49 +299,72 @@ pub enum Op {
     Contains, // 'contains' - substring
 }
 
-pub fn parse_string(op: &Op, rhs: &str) -> Result<StringMatcher, PredicateParseError> {
-    Ok(match op {
-        Op::Matches => {
-            // Special case for '*' which users commonly expect to work
-            let pattern = if rhs == "*" { ".*" } else { rhs };
-            StringMatcher::Regex(Regex::new(pattern)?)
-        },
-        Op::Equality => StringMatcher::Equals(rhs.to_owned()),
-        Op::NotEqual => StringMatcher::NotEquals(rhs.to_owned()),
-        Op::Contains => StringMatcher::Contains(rhs.to_owned()),
-        Op::In => {
-            // Check if rhs is a JSON-encoded array (from set literal)
-            if rhs.starts_with('[') && rhs.ends_with(']') {
-                match serde_json::from_str::<Vec<String>>(rhs) {
-                    Ok(values) => StringMatcher::In(values),
-                    Err(_) => StringMatcher::In(vec![rhs.to_owned()]),
+pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateParseError> {
+    match rhs {
+        RhsValue::String(s) => {
+            Ok(match op {
+                Op::Matches => {
+                    // Special case for '*' which users commonly expect to work
+                    let pattern = if s == "*" { ".*" } else { s };
+                    StringMatcher::Regex(Regex::new(pattern)?)
+                },
+                Op::Equality => StringMatcher::Equals(s.clone()),
+                Op::NotEqual => StringMatcher::NotEquals(s.clone()),
+                Op::Contains => StringMatcher::Contains(s.clone()),
+                Op::In => StringMatcher::In(vec![s.clone()]),
+                Op::NumericComparison(_) => {
+                    return Err(PredicateParseError::IncompatibleOperation {
+                        reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with string values",
+                    })
                 }
-            } else {
-                StringMatcher::In(vec![rhs.to_owned()])
-            }
-        }
-        Op::NumericComparison(_) => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with string values",
             })
         }
-    })
+        RhsValue::Set(items) => match op {
+            Op::In => Ok(StringMatcher::In(items.clone())),
+            _ => Err(PredicateParseError::IncompatibleOperation {
+                reason: "Set values can only be used with 'in' operator",
+            }),
+        },
+        _ => Err(PredicateParseError::IncompatibleValue {
+            expected: "string or set",
+            found: format!("{:?}", rhs),
+        }),
+    }
 }
 
-pub fn parse_string_dfa(op: Op, rhs: String) -> Result<StreamingCompiledContentPredicate, PredicateParseError> {
+pub fn parse_string_dfa(
+    op: Op,
+    rhs: RhsValue,
+) -> Result<StreamingCompiledContentPredicate, PredicateParseError> {
+    let s = match rhs {
+        RhsValue::String(s) => s,
+        _ => {
+            return Err(PredicateParseError::IncompatibleValue {
+                expected: "string",
+                found: format!("{:?}", rhs),
+            })
+        }
+    };
+
     Ok(match op {
-        Op::Matches => StreamingCompiledContentPredicate::new(rhs)?,
+        Op::Matches => StreamingCompiledContentPredicate::new(s)?,
         Op::Equality => {
-            let regex = format!("^{}$", regex::escape(&rhs));
+            let regex = format!("^{}$", regex::escape(&s));
             match DFA::new(&regex) {
-                Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
+                Ok(inner) => StreamingCompiledContentPredicate {
+                    inner,
+                    source: regex,
+                },
                 Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
         }
         Op::Contains => {
-            let regex = regex::escape(&rhs);
+            let regex = regex::escape(&s);
             match DFA::new(&regex) {
-                Ok(inner) => StreamingCompiledContentPredicate { inner, source: regex },
+                Ok(inner) => StreamingCompiledContentPredicate {
+                    inner,
+                    source: regex,
+                },
                 Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
         }
@@ -318,8 +386,17 @@ pub fn parse_string_dfa(op: Op, rhs: String) -> Result<StreamingCompiledContentP
     })
 }
 
-pub fn parse_numerical(op: &Op, rhs: &str) -> Result<NumberMatcher, PredicateParseError> {
-    let parsed_rhs: u64 = rhs.parse()?;
+pub fn parse_numerical(op: &Op, rhs: &RhsValue) -> Result<NumberMatcher, PredicateParseError> {
+    let parsed_rhs: u64 = match rhs {
+        RhsValue::Number(n) => *n,
+        RhsValue::Size(bytes) => *bytes,
+        _ => {
+            return Err(PredicateParseError::IncompatibleValue {
+                expected: "number or size value",
+                found: format!("{:?}", rhs),
+            })
+        }
+    };
 
     match op {
         Op::Equality => Ok(NumberMatcher::Equals(parsed_rhs)),
@@ -332,7 +409,7 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> Result<NumberMatcher, PredicatePar
         Op::NotEqual => Ok(NumberMatcher::NotEquals(parsed_rhs)),
         Op::In => {
             // For now, 'in' with numeric values only supports single values
-            // Could be extended to support JSON arrays of numbers
+            // Could be extended to support sets of numbers
             Ok(NumberMatcher::Equals(parsed_rhs))
         }
         Op::Matches => {
@@ -348,9 +425,19 @@ pub fn parse_numerical(op: &Op, rhs: &str) -> Result<NumberMatcher, PredicatePar
     }
 }
 
-pub fn parse_temporal(op: &Op, rhs: &str) -> Result<TimeMatcher, PredicateParseError> {
-    let parsed_time = parse_time_value(rhs)?;
-    
+pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateParseError> {
+    let s = match rhs {
+        RhsValue::String(s) => s,
+        // TODO: Handle RhsValue::RelativeTime and RhsValue::AbsoluteTime
+        _ => {
+            return Err(PredicateParseError::IncompatibleValue {
+                expected: "time value",
+                found: format!("{:?}", rhs),
+            })
+        }
+    };
+    let parsed_time = parse_time_value(s)?;
+
     match op {
         Op::Equality => Ok(TimeMatcher::Equals(parsed_time)),
         Op::NotEqual => Ok(TimeMatcher::Equals(parsed_time)),
@@ -497,16 +584,16 @@ impl NamePredicate {
                     .file_name()
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s));
-                
+
                 // Also check against filename without extension (stem)
                 let stem_match = path
                     .file_stem()
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s));
-                
+
                 // Return true if either matches
                 full_match || stem_match
-            },
+            }
             NamePredicate::Path(x) => path.as_os_str().to_str().is_some_and(|s| x.is_match(s)),
             NamePredicate::Extension(x) => path
                 .extension()
@@ -608,7 +695,9 @@ impl MetadataPredicate {
             MetadataPredicate::Type(matcher) => {
                 matcher.is_match("dir") || matcher.is_match("directory")
             }
-            MetadataPredicate::Modified(_) | MetadataPredicate::Created(_) | MetadataPredicate::Accessed(_) => {
+            MetadataPredicate::Modified(_)
+            | MetadataPredicate::Created(_)
+            | MetadataPredicate::Accessed(_) => {
                 // Git trees don't have timestamps
                 false
             }
@@ -619,7 +708,9 @@ impl MetadataPredicate {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
             MetadataPredicate::Type(matcher) => matcher.is_match("file"),
-            MetadataPredicate::Modified(_) | MetadataPredicate::Created(_) | MetadataPredicate::Accessed(_) => {
+            MetadataPredicate::Modified(_)
+            | MetadataPredicate::Created(_)
+            | MetadataPredicate::Accessed(_) => {
                 // Git blobs don't have timestamps
                 false
             }

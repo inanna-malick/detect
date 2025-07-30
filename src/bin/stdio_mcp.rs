@@ -1,9 +1,9 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use slog::{Drain, Logger};
 use std::io::{self, BufRead, Write};
 use std::path::Path;
-use slog::{Drain, Logger};
 
 const GRAMMAR: &str = include_str!("../expr/expr.pest");
 const MCP_BASIC_DESC: &str = include_str!("../docs/mcp_basic.md");
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         };
 
         let response = handle_request(request);
-        
+
         // Don't send a response for notifications
         if !response.is_null() {
             let response_str = serde_json::to_string(&response)?;
@@ -187,10 +187,11 @@ fn handle_list_prompts() -> Result<Value> {
 }
 
 fn handle_call_tool(params: Value) -> Result<Value> {
-    let name = params.get("name")
+    let name = params
+        .get("name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
-    
+
     match name {
         "detect" => handle_detect_tool(params),
         "detect_help" => handle_detect_help(),
@@ -208,14 +209,15 @@ fn handle_detect_help() -> Result<Value> {
 }
 
 fn handle_detect_tool(params: Value) -> Result<Value> {
-    let args = params.get("arguments")
-        .cloned()
-        .unwrap_or(json!({}));
-    
+    let args = params.get("arguments").cloned().unwrap_or(json!({}));
+
     let detect_params: DetectParams = serde_json::from_value(args)?;
-    
-    log::info!("Running detect with expression: {} in directory: {}", 
-               detect_params.expression, detect_params.directory);
+
+    log::info!(
+        "Running detect with expression: {} in directory: {}",
+        detect_params.expression,
+        detect_params.directory
+    );
 
     // Create a logger for the detect library
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stderr());
@@ -227,7 +229,7 @@ fn handle_detect_tool(params: Value) -> Result<Value> {
     let mut total_count = 0;
     let root = Path::new(&detect_params.directory);
     let max_results = detect_params.max_results;
-    
+
     // Use tokio runtime to run the async function
     let runtime = tokio::runtime::Runtime::new()?;
     let result = runtime.block_on(async {
@@ -238,7 +240,7 @@ fn handle_detect_tool(params: Value) -> Result<Value> {
             detect_params.expression.clone(),
             |path| {
                 total_count += 1;
-                
+
                 // Only collect up to max_results (unless limit is 0 which means unlimited)
                 if max_results == 0 || matches.len() < max_results {
                     // Convert to relative path if possible
@@ -249,21 +251,26 @@ fn handle_detect_tool(params: Value) -> Result<Value> {
                     matches.push(display_path);
                 }
             },
-        ).await
+        )
+        .await
     });
 
     // Handle any parsing or execution errors
     match result {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => {
             match e {
-                detect::error::DetectError::ParseError { message, hint, location } => {
+                detect::error::DetectError::ParseError {
+                    message,
+                    hint,
+                    location,
+                } => {
                     // Build error message with location if available
                     let mut error_msg = message.clone();
                     if let Some((line, col)) = location {
                         error_msg.push_str(&format!(" at line {}, column {}", line, col));
                     }
-                    
+
                     // Add hint if available
                     if let Some(hint) = hint {
                         error_msg.push_str(&format!("\n\n{}", hint));
@@ -272,7 +279,7 @@ fn handle_detect_tool(params: Value) -> Result<Value> {
                         let hints = detect::error_hints::get_parse_error_hints();
                         error_msg.push_str(&format!("\n\n{}", hints));
                     }
-                    
+
                     return Err(anyhow::anyhow!("{}", error_msg));
                 }
                 detect::error::DetectError::Other(err) => {
@@ -281,14 +288,23 @@ fn handle_detect_tool(params: Value) -> Result<Value> {
             }
         }
     }
-    
+
     let was_limited = max_results > 0 && total_count > max_results;
     let files_text = if was_limited {
-        format!("{}
-\n[Showing {} of {} total matches]", matches.join("\n"), max_results, total_count)
+        format!(
+            "{}
+\n[Showing {} of {} total matches]",
+            matches.join("\n"),
+            max_results,
+            total_count
+        )
     } else {
-        format!("{}
-\n[{} matches found]", matches.join("\n"), total_count)
+        format!(
+            "{}
+\n[{} matches found]",
+            matches.join("\n"),
+            total_count
+        )
     };
 
     Ok(json!({
