@@ -39,6 +39,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_regex_with_special_chars() {
+        // Test regex with curly braces, parentheses, etc.
+        let cases = vec![
+            r"name ~= ^[0-9]{10,13}.*\.ts$",
+            r"name ~= (foo|bar)",
+            r"name ~= test\?.*",
+            r"contents ~= TODO.*\{.*\}",
+        ];
+        
+        for expr in cases {
+            let result = parse_expr(expr);
+            assert!(result.is_ok(), "Failed to parse: {}", expr);
+        }
+    }
+
+    #[test]
     fn parse_name_contains() {
         let parsed = parse_expr(r#"name contains "test""#).unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Filename(
