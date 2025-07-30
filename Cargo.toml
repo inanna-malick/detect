@@ -40,4 +40,5 @@ log = "0.4"
 chrono = "0.4"
 
 [dev-dependencies]
+proptest = "1.7.0"
 tempdir = "0.3.7"

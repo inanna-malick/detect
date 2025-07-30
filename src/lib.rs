@@ -10,6 +10,9 @@ mod util;
 #[cfg(test)]
 mod parser_tests;
 
+#[cfg(test)]
+mod proptest_generators;
+
 use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;

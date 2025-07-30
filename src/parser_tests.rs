@@ -65,15 +65,69 @@ mod tests {
 
     #[test]
     fn parse_name_in_set() {
-        let parsed = parse_expr("name in [foo, bar, baz]").unwrap();
-        let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Filename(
-            StringMatcher::In(vec![
-                "foo".to_string(),
-                "bar".to_string(),
-                "baz".to_string(),
-            ]),
-        ))));
-        assert_eq!(parsed, expected);
+        // Test case that appears to be failing
+        let result = parse_expr("name in [foo, bar, baz]");
+        
+        // Let's see what the actual error is
+        match result {
+            Ok(parsed) => {
+                let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Filename(
+                    StringMatcher::In(vec![
+                        "foo".to_string(),
+                        "bar".to_string(),
+                        "baz".to_string(),
+                    ]),
+                ))));
+                assert_eq!(parsed, expected);
+            }
+            Err(e) => {
+                panic!("Failed to parse 'name in [foo, bar, baz]': {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn debug_set_parsing() {
+        // Test different variations to understand the parsing issue
+        
+        // Try without spaces
+        let result1 = parse_expr("name in [foo,bar,baz]");
+        println!("Without spaces: {:?}", result1.is_ok());
+        
+        // Try with quoted strings
+        let result2 = parse_expr(r#"name in ["foo", "bar", "baz"]"#);
+        println!("With quotes: {:?}", result2.is_ok());
+        
+        // Try mixed
+        let result3 = parse_expr(r#"name in [foo, "bar", baz]"#);
+        println!("Mixed: {:?}", result3.is_ok());
+        
+        // Try the original that's failing
+        let result4 = parse_expr("name in [foo, bar, baz]");
+        match &result4 {
+            Ok(_) => println!("Original with spaces: OK"),
+            Err(e) => println!("Original with spaces: Error - {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_set_parsing_bug() {
+        // This is a parser bug: bare_char includes comma but set_char doesn't
+        // This causes confusion when parsing sets with spaces after commas
+        
+        // These should all parse the same way, but they don't due to the bug
+        let working = parse_expr("name in [foo,bar,baz]");
+        assert!(working.is_ok(), "Should parse without spaces");
+        
+        let also_working = parse_expr(r#"name in ["foo","bar","baz"]"#);
+        assert!(also_working.is_ok(), "Should parse with quotes and no spaces");
+        
+        let also_working2 = parse_expr(r#"name in ["foo", "bar", "baz"]"#);
+        assert!(also_working2.is_ok(), "Should parse with quotes and spaces");
+        
+        // This fails due to parser bug
+        let failing = parse_expr("name in [foo, bar, baz]");
+        assert!(failing.is_ok(), "Should parse with spaces - but doesn't due to parser bug");
     }
 
     #[test]

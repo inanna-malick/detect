@@ -1,0 +1,17 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 4fd52bb2c969e7f53601511a67b2fe7d2011ff07329a30b7db29e7c380174bf1 # shrinks to pred = Name(Filename(Regex(Regex(".*"))))
+cc 6e3089d77d7f319c7fe7c3b0c44e700977c9bcc2ec07f299e1662464238598be # shrinks to expr = Predicate(Name(Filename(Regex(Regex(".*")))))
+cc f2e92cc2e223ea86e22d0deb6cf3096d172e50fdda770a4e62dbe55726e00dab # shrinks to pred = Content(CompiledContentPredicate { inner: "_", source: ".*" })
+cc 9f4a3a188d5ae8a20d2b97870df8f02ca26aa16e9e9b7b3417fae36c1c065916 # shrinks to pred = Metadata(Filesize(In(Full(0..1))))
+cc e0f3356bb3d263a4ef811e9ab76f5a91686ad26b66b2fb9425fb93fa53da45e1 # shrinks to pred = Metadata(Type(In(["", "A"])))
+cc 9263fe436c5ddcdf6cf5a3b1f2f31235033605b12550cb1e93a79d154cf80fab # shrinks to pred = Name(Path(Equals("0g")))
+cc aa4c07c99ab150244583b94d079e647d0cf9c768c9746b06ff48dbce29e1ea18 # shrinks to expr = Not(Predicate(Name(Path(NotEquals("0")))))
+cc b0ace033ea0e3210b26323cb282a51dcb9b755bb690f4bccf3d924c1bab4a8ac # shrinks to expr = Or(Predicate(Name(Extension(Regex(Regex(""))))), Predicate(Name(Filename(Regex(Regex(".*"))))))
+cc abcadca4162156f7797fb6db872f864957bdcd7e6ba26576e4645c66c484f70e # shrinks to expr = Predicate(Content(CompiledContentPredicate { inner: "_", source: "\\(" }))
+cc ead164c7d85f36d40e5824f4a20ae27f7461668e08b94387765aa13632f71e25 # shrinks to pred = Metadata(Type(NotEquals("0t")))
+cc a1bd2840ab11498b037792e56b7c641e88d394b9abf17101bdbd529afce079f4 # shrinks to expr = Predicate(Name(Filename(Contains("0t#"))))

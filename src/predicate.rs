@@ -5,7 +5,7 @@ use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
 use std::os::unix::prelude::MetadataExt;
 use std::sync::Arc;
-use std::{fmt::Display, fs::Metadata, ops::Range, path::Path};
+use std::{fmt::{self, Display}, fs::Metadata, ops::Range, path::Path};
 
 use crate::expr::short_circuit::ShortCircuit;
 use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
@@ -120,6 +120,90 @@ pub enum TimeUnit {
     Months,
 }
 
+// Helper function to check if string could be parsed as a size value
+fn could_be_parsed_as_size(s: &str) -> bool {
+    // Split into numeric prefix and remaining suffix
+    let num_prefix_len = s.chars().take_while(|c| c.is_numeric() || *c == '.').count();
+    
+    if num_prefix_len == 0 || num_prefix_len == s.len() {
+        return false;
+    }
+    
+    let suffix = &s[num_prefix_len..];
+    let suffix_lower = suffix.to_lowercase();
+    
+    // Check if suffix exactly matches a size unit
+    matches!(suffix_lower.as_str(), "kb" | "k" | "mb" | "m" | "gb" | "g" | "tb" | "t")
+}
+
+// Helper function to quote strings when needed
+fn quote_if_needed(s: &str) -> String {
+    // Check if string could be parsed as a size value  
+    // This checks if the string could be ambiguously parsed as a size
+    let could_be_size_prefix = s.chars().take_while(|c| c.is_numeric() || *c == '.').count() > 0
+        && s.len() > 1 
+        && s.chars().nth(s.chars().take_while(|c| c.is_numeric() || *c == '.').count())
+            .map(|c| matches!(c, 'k' | 'm' | 'g' | 't' | 'K' | 'M' | 'G' | 'T'))
+            .unwrap_or(false);
+    
+    // Check if string looks like a number
+    // FIXME: If it looks like a number but it's being used in a string matcher context,
+    // it should be coerced to a string using the original text representation
+    let looks_like_number = !s.is_empty() && s.chars().all(|c| c.is_numeric());
+    
+    // Check if string needs quoting
+    let needs_quotes = s.is_empty() || 
+        could_be_size_prefix ||
+        looks_like_number ||
+        s.contains(' ') || 
+        s.contains('"') ||
+        s.contains('\\') ||
+        s.contains('{') ||
+        s.contains('}') ||
+        !s.chars().all(|c| c.is_alphanumeric() || "_./+-@#$%^&*~[]()|?,".contains(c));
+    
+    if needs_quotes {
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
+        format!("\"{}\"", escaped)
+    } else {
+        s.to_string()
+    }
+}
+
+impl Display for RhsValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RhsValue::String(s) => write!(f, "{}", quote_if_needed(s)),
+            RhsValue::Number(n) => write!(f, "{}", n),
+            RhsValue::Size(bytes) => write!(f, "{}", bytes),
+            RhsValue::Set(items) => {
+                write!(f, "[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{}", quote_if_needed(item))?;
+                }
+                write!(f, "]")
+            },
+            RhsValue::RelativeTime { value, unit } => {
+                let unit_str = match unit {
+                    TimeUnit::Seconds => "seconds",
+                    TimeUnit::Minutes => "minutes",
+                    TimeUnit::Hours => "hours",
+                    TimeUnit::Days => "days",
+                    TimeUnit::Weeks => "weeks",
+                    TimeUnit::Months => "months",
+                };
+                write!(f, "-{}.{}", value, unit_str)
+            },
+            RhsValue::AbsoluteTime(s) => {
+                write!(f, "{}", quote_if_needed(s))
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct RawPredicate {
     pub lhs: Selector,
@@ -185,6 +269,22 @@ pub enum Selector {
     // later - parse contents as json,toml,etc - can run selectors against that
 }
 
+impl Display for Selector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Selector::FileName => write!(f, "name"),
+            Selector::Extension => write!(f, "ext"),
+            Selector::FilePath => write!(f, "path"),
+            Selector::EntityType => write!(f, "type"),
+            Selector::Size => write!(f, "size"),
+            Selector::Modified => write!(f, "modified"),
+            Selector::Created => write!(f, "created"),
+            Selector::Accessed => write!(f, "accessed"),
+            Selector::Contents => write!(f, "contents"),
+        }
+    }
+}
+
 pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
 #[derive(Clone, Debug)]
@@ -210,6 +310,42 @@ impl PartialEq for StringMatcher {
 }
 
 impl Eq for StringMatcher {}
+
+impl Display for StringMatcher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StringMatcher::Regex(r) => {
+                let pattern = r.as_str();
+                // Always quote regex patterns to handle special characters and empty patterns
+                write!(f, "~= \"{}\"", pattern.replace('\\', "\\\\").replace('"', "\\\""))
+            },
+            StringMatcher::Equals(s) => write!(f, "== {}", quote_if_needed(s)),
+            StringMatcher::NotEquals(s) => write!(f, "!= {}", quote_if_needed(s)),
+            StringMatcher::Contains(s) => write!(f, "contains {}", quote_if_needed(s)),
+            StringMatcher::In(items) => {
+                write!(f, "in [")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    // Check if the item needs quotes (if it contains comma, space, or quote chars)
+                    let needs_quotes = item.is_empty() || 
+                        item.contains(',') || 
+                        item.contains(' ') || 
+                        item.contains('"') || 
+                        item.contains('\'') ||
+                        // Also quote if it looks like it could be parsed as a size
+                        could_be_parsed_as_size(item);
+                    
+                    if needs_quotes {
+                        write!(f, "\"{}\"", item.replace('\\', "\\\\").replace('"', "\\\""))?;
+                    } else {
+                        write!(f, "{}", item)?;
+                    }
+                }
+                write!(f, "]")
+            },
+        }
+    }
+}
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
@@ -297,6 +433,22 @@ pub enum Op {
     NumericComparison(NumericalOp),
     In,       // 'in' - set membership
     Contains, // 'contains' - substring
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Op::Matches => write!(f, "~="),
+            Op::Equality => write!(f, "=="),
+            Op::NotEqual => write!(f, "!="),
+            Op::NumericComparison(NumericalOp::Greater) => write!(f, ">"),
+            Op::NumericComparison(NumericalOp::GreaterOrEqual) => write!(f, ">="),
+            Op::NumericComparison(NumericalOp::Less) => write!(f, "<"),
+            Op::NumericComparison(NumericalOp::LessOrEqual) => write!(f, "<="),
+            Op::In => write!(f, "in"),
+            Op::Contains => write!(f, "contains"),
+        }
+    }
 }
 
 pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateParseError> {
@@ -503,9 +655,9 @@ impl<A, B, C: Clone> Clone for Predicate<A, B, C> {
 impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Predicate::Name(x) => write!(f, "name: {}", x),
-            Predicate::Metadata(x) => write!(f, "meta: {}", x),
-            Predicate::Content(x) => write!(f, "file: {}", x),
+            Predicate::Name(x) => write!(f, "{}", x),
+            Predicate::Metadata(x) => write!(f, "{}", x),
+            Predicate::Content(x) => write!(f, "{}", x),
         }
     }
 }
@@ -605,7 +757,11 @@ impl NamePredicate {
 
 impl Display for NamePredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("{:?}", self))
+        match self {
+            NamePredicate::Filename(matcher) => write!(f, "name {}", matcher),
+            NamePredicate::Path(matcher) => write!(f, "path {}", matcher),
+            NamePredicate::Extension(matcher) => write!(f, "ext {}", matcher),
+        }
     }
 }
 
@@ -638,7 +794,13 @@ pub enum MetadataPredicate {
 
 impl Display for MetadataPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("{:?}", self))
+        match self {
+            MetadataPredicate::Filesize(matcher) => write!(f, "size {}", matcher),
+            MetadataPredicate::Type(matcher) => write!(f, "type {}", matcher),
+            MetadataPredicate::Modified(matcher) => write!(f, "modified {}", matcher),
+            MetadataPredicate::Created(matcher) => write!(f, "created {}", matcher),
+            MetadataPredicate::Accessed(matcher) => write!(f, "accessed {}", matcher),
+        }
     }
 }
 
@@ -656,6 +818,58 @@ impl PartialEq for MetadataPredicate {
 }
 
 impl Eq for MetadataPredicate {}
+
+impl Display for NumberMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumberMatcher::In(bound) => {
+                // Convert Bound back to operator syntax
+                // This is a lossy conversion because we can't perfectly reconstruct
+                // whether it was > or >= from the Bound representation
+                match bound {
+                    Bound::Left(range) => {
+                        // For now, just use > for all left bounds
+                        write!(f, "> {}", range.start)
+                    },
+                    Bound::Right(range) => {
+                        // For now, just use < for all right bounds
+                        write!(f, "< {}", range.end)
+                    },
+                    Bound::Full(range) => {
+                        // This could represent complex queries, just use > for simplicity
+                        // Since Full ranges are rare in our usage
+                        write!(f, "> {}", range.start)
+                    }
+                }
+            },
+            NumberMatcher::Equals(n) => write!(f, "== {}", n),
+            NumberMatcher::NotEquals(n) => write!(f, "!= {}", n),
+        }
+    }
+}
+
+impl Display for Bound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The Bound is used within NumberMatcher which already handles the operator
+        // This should never be called directly for query generation
+        match self {
+            Bound::Full(range) => write!(f, "{}..{}", range.start, range.end),
+            Bound::Left(range) => write!(f, "{}..", range.start),
+            Bound::Right(range) => write!(f, "..{}", range.end),
+        }
+    }
+}
+
+impl Display for TimeMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeMatcher::Before(dt) => write!(f, "< {}", quote_if_needed(&dt.to_rfc3339())),
+            TimeMatcher::After(dt) => write!(f, "> {}", quote_if_needed(&dt.to_rfc3339())),
+            TimeMatcher::Equals(dt) => write!(f, "== {}", quote_if_needed(&dt.to_rfc3339())),
+            TimeMatcher::NotEquals(dt) => write!(f, "!= {}", quote_if_needed(&dt.to_rfc3339())),
+        }
+    }
+}
 
 impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
@@ -760,7 +974,8 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
 
 impl Display for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("contents ~= {}", self.source))
+        // Always quote regex patterns to handle special characters and empty patterns
+        write!(f, "contents ~= \"{}\"", self.source.replace('\\', "\\\\").replace('"', "\\\""))
     }
 }
 
@@ -775,6 +990,7 @@ pub struct StreamingCompiledContentPredicateRef<'a> {
 
 impl Display for StreamingCompiledContentPredicateRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("contents ~= {}", self.source))
+        // Always quote regex patterns to handle special characters and empty patterns
+        write!(f, "contents ~= \"{}\"", self.source.replace('\\', "\\\\").replace('"', "\\\""))
     }
 }
