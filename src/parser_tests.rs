@@ -205,8 +205,8 @@ mod tests {
 
     #[test]
     fn parse_operator_precedence() {
-        // @a == x || @b == y && @c == z
-        // Should parse as: @a == x || (@b == y && @c == z)
+        // name == x || name == y && name == z
+        // Should parse as: name == x || (name == y && name == z)
         let parsed = parse_expr("name == a || name == b && name == c").unwrap();
         
         let a = Expr::Predicate(Predicate::Name(Arc::new(
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn parse_parentheses_override() {
-        // (@a == x || @b == y) && @c == z
+        // (name == x || name == y) && name == z
         let parsed = parse_expr("(name == a || name == b) && name == c").unwrap();
         
         let a = Expr::Predicate(Predicate::Name(Arc::new(
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn parse_complex_nested() {
-        // !(@a == x || @b == y) && (@c == z || @d == w)
+        // !(name == x || ext == y) && (size > z || type == w)
         let parsed = parse_expr("!(name == x || ext == y) && (size > 100 || type == dir)").unwrap();
         
         // Build expected tree
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn error_invalid_selector() {
-        assert!(parse_expr("@invalid == foo").is_err());
+        assert!(parse_expr("invalid == foo").is_err());
     }
 
     #[test]

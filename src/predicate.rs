@@ -302,17 +302,17 @@ pub fn parse_string_dfa(op: Op, rhs: String) -> Result<StreamingCompiledContentP
         }
         Op::NotEqual => {
             return Err(PredicateParseError::IncompatibleOperation {
-                reason: "!= operator is not supported for @contents predicates",
+                reason: "!= operator is not supported for contents predicates",
             })
         }
         Op::NumericComparison(_) => {
             return Err(PredicateParseError::IncompatibleOperation {
-                reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with @contents",
+                reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with contents",
             })
         }
         Op::In => {
             return Err(PredicateParseError::IncompatibleOperation {
-                reason: "'in' operator is not supported for @contents predicates",
+                reason: "'in' operator is not supported for contents predicates",
             })
         }
     })
@@ -669,7 +669,7 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
 
 impl Display for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("@file ~= {}", self.source))
+        f.write_str(&format!("contents ~= {}", self.source))
     }
 }
 
@@ -684,6 +684,6 @@ pub struct StreamingCompiledContentPredicateRef<'a> {
 
 impl Display for StreamingCompiledContentPredicateRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("@file ~= {}", self.source))
+        f.write_str(&format!("contents ~= {}", self.source))
     }
 }

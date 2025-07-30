@@ -93,11 +93,11 @@ impl ParseError {
                         "Time format examples:\n\
                          • Relative: -7.days, -1.hour, -30.minutes\n\
                          • Absolute: 2024-01-15, today, yesterday\n\
-                         • Selector @{:?} with operator {:?} expects temporal values", 
+                         • Selector {:?} with operator {:?} expects temporal values", 
                         selector, operator
                     )),
                     PredicateParseError::IncompatibleOperation { reason } => {
-                        Some(format!("{}\nValid operators for @{:?} depend on the value type", 
+                        Some(format!("{}\nValid operators for {:?} depend on the value type", 
                             reason, selector))
                     },
                     PredicateParseError::Numeric(_) => Some(
@@ -108,9 +108,11 @@ impl ParseError {
             },
             ParseError::Structure { kind: StructureErrorKind::InvalidSelector { found }, .. } => {
                 Some(format!(
-                    "Unknown selector '@{}'. Valid selectors:\n\
-                     • @name, @path, @ext, @size, @type\n\
-                     • @contents, @modified, @created, @accessed",
+                    "Unknown selector '{}'. Valid selectors:\n\
+                     • name (alias: filename), path (alias: filepath)\n\
+                     • ext (alias: extension), size (alias: filesize)\n\
+                     • type (alias: filetype), contents (alias: file)\n\
+                     • modified (alias: mtime), created (alias: ctime), accessed (alias: atime)",
                     found
                 ))
             },
