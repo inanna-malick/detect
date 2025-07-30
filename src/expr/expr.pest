@@ -1,13 +1,13 @@
 WHITESPACE   =  _{ " " | "\t" | NEWLINE }
 
 
-bare_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" | "\\" | "[" | "]" | "{" | "}" | "(" | ")" | "|" | "?" | "," }
+bare_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" | "\\" | "[" | "]" | "{" | "}" | "|" | "?" | "," }
 size_unit = { kb | mb | gb | tb }
   kb = { ^"kb" | ^"k" }
   mb = { ^"mb" | ^"m" }
   gb = { ^"gb" | ^"g" }
   tb = { ^"tb" | ^"t" }
-set_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" | "\\" | "[" | "]" | "{" | "}" | "(" | ")" | "|" | "?" }
+set_char = { ASCII_ALPHANUMERIC | "." | "_" | "/" | "-" | "+" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "~" | "\\"  | "{" | "}" | "(" | ")" | "|" | "?" }
 inner_char = @{ !("\"" | "'") ~ ANY }
 
 escaped = { "\\" ~ escapable }
@@ -46,9 +46,9 @@ predicate =  { selector ~ op ~ rhs }
     in_      = { "in" }               // set membership
     contains = { "contains" }         // substring match
   rhs     = { set_literal | quoted_string | size_value | bare_token }
-    set_literal = { "[" ~ ws* ~ set_items? ~ ws* ~ "]" }
-      set_items = { set_item ~ (ws* ~ "," ~ ws* ~ set_item)* }
-      set_item = { quoted_string | set_token }
+    set_literal = { "[" ~ set_items? ~ "]" }
+      set_items = { set_item ~ ("," ~ set_item)* }
+      set_item = { set_token | quoted_string }
     quoted_string = ${ double_quoted | single_quoted }
       double_quoted = { "\"" ~ inner_double ~ "\"" }
       single_quoted = { "'" ~ inner_single ~ "'" }
@@ -57,4 +57,3 @@ predicate =  { selector ~ op ~ rhs }
     size_value = ${ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ size_unit }
     bare_token = @{ bare_char+ }
     set_token = @{ set_char+ }
-  ws = _{ " " | "\t" }

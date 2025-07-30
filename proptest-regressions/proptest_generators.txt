@@ -15,3 +15,7 @@ cc b0ace033ea0e3210b26323cb282a51dcb9b755bb690f4bccf3d924c1bab4a8ac # shrinks to
 cc abcadca4162156f7797fb6db872f864957bdcd7e6ba26576e4645c66c484f70e # shrinks to expr = Predicate(Content(CompiledContentPredicate { inner: "_", source: "\\(" }))
 cc ead164c7d85f36d40e5824f4a20ae27f7461668e08b94387765aa13632f71e25 # shrinks to pred = Metadata(Type(NotEquals("0t")))
 cc a1bd2840ab11498b037792e56b7c641e88d394b9abf17101bdbd529afce079f4 # shrinks to expr = Predicate(Name(Filename(Contains("0t#"))))
+cc 46c76361fddda5f42ef5d738d3148fa1dc7b2ee536457c7f0958aea8101e57ad # shrinks to pred = Name(Extension(In(["", ","])))
+cc d99a315168932c977c1ab2ce8214143f3afbacb1d4d7daba9ac336738e2f790c # shrinks to expr = Or(Predicate(Name(Filename(Regex(Regex(".*"))))), Not(Not(Predicate(Name(Extension(Contains("(")))))))
+cc 56e6ce1b46f947b020a08645a1519f53792ede80381a3c6fa524e32a28b9565a # shrinks to expr = And(Or(Predicate(Name(Filename(Regex(Regex(".*"))))), And(Predicate(Name(Filename(Regex(Regex(".*"))))), Predicate(Name(Extension(In([",", ""])))))), Or(Predicate(Name(Filename(Regex(Regex(".*"))))), And(Predicate(Metadata(Type(Equals("Qf_70/.Z~")))), Predicate(Name(Path(Contains("J4Z%^-y%}]O$d_(V@4.(")))))))
+cc 0d6fdbd41dfea5d55a68c0a1585f935959c90d897f304f7a24583b50ab70f97f # shrinks to pred = Name(Extension(In(["", ","])))

@@ -148,10 +148,10 @@ mod tests {
                 }
                 Err(e) => {
                     // If parsing failed, print debug info
-                    eprintln!("Failed to parse generated expression:");
-                    eprintln!("  Expression: {}", expr_str);
-                    eprintln!("  Error: {}", e);
-                    prop_assert!(false, "Failed to parse: {}", e);
+                    // eprintln!("Failed to parse generated expression:");
+                    // eprintln!("  Expression: {}", expr_str);
+                    // eprintln!("  Error: {}", e);
+                    prop_assert!(false, "Failed to parse {expr:?} -> `{expr_str}`: {}", e);
                 }
             }
         }
@@ -165,9 +165,9 @@ mod tests {
             match parse_expr(&pred_str) {
                 Ok(_) => prop_assert!(true),
                 Err(e) => {
-                    eprintln!("Failed to parse generated predicate:");
-                    eprintln!("  Predicate: {}", pred_str);
-                    eprintln!("  Error: {}", e);
+                    // eprintln!("Failed to parse generated predicate:");
+                    // eprintln!("  Predicate: {}", pred_str);
+                    // eprintln!("  Error: {}", e);
                     prop_assert!(false, "Failed to parse: {}", e);
                 }
             }

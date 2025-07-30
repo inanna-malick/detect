@@ -120,21 +120,6 @@ pub enum TimeUnit {
     Months,
 }
 
-// Helper function to check if string could be parsed as a size value
-fn could_be_parsed_as_size(s: &str) -> bool {
-    // Split into numeric prefix and remaining suffix
-    let num_prefix_len = s.chars().take_while(|c| c.is_numeric() || *c == '.').count();
-    
-    if num_prefix_len == 0 || num_prefix_len == s.len() {
-        return false;
-    }
-    
-    let suffix = &s[num_prefix_len..];
-    let suffix_lower = suffix.to_lowercase();
-    
-    // Check if suffix exactly matches a size unit
-    matches!(suffix_lower.as_str(), "kb" | "k" | "mb" | "m" | "gb" | "g" | "tb" | "t")
-}
 
 // Helper function to quote strings when needed
 fn quote_if_needed(s: &str) -> String {
@@ -157,10 +142,12 @@ fn quote_if_needed(s: &str) -> String {
         looks_like_number ||
         s.contains(' ') || 
         s.contains('"') ||
-        s.contains('\\') ||
-        s.contains('{') ||
-        s.contains('}') ||
-        !s.chars().all(|c| c.is_alphanumeric() || "_./+-@#$%^&*~[]()|?,".contains(c));
+        s.contains('\\') || // TODO/FIXME: is this needed?
+        s.contains('{') || // TODO/FIXME: is this needed?
+        s.contains('}') || // TODO/FIXME: is this needed?
+        s.contains(')') ||
+        s.contains('(') ||
+        !s.chars().all(|c| c.is_alphanumeric() || "_./+-@#$%^&*~()|?".contains(c));
     
     if needs_quotes {
         let escaped = s
@@ -326,20 +313,7 @@ impl Display for StringMatcher {
                 write!(f, "in [")?;
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 { write!(f, ", ")?; }
-                    // Check if the item needs quotes (if it contains comma, space, or quote chars)
-                    let needs_quotes = item.is_empty() || 
-                        item.contains(',') || 
-                        item.contains(' ') || 
-                        item.contains('"') || 
-                        item.contains('\'') ||
-                        // Also quote if it looks like it could be parsed as a size
-                        could_be_parsed_as_size(item);
-                    
-                    if needs_quotes {
-                        write!(f, "\"{}\"", item.replace('\\', "\\\\").replace('"', "\\\""))?;
-                    } else {
-                        write!(f, "{}", item)?;
-                    }
+                    write!(f, "{}", quote_if_needed(item))?;
                 }
                 write!(f, "]")
             },
