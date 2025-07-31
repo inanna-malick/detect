@@ -1036,4 +1036,30 @@ mod tests {
             panic!("Expected Name predicate");
         }
     }
+
+    #[test]
+    fn test_parentheses_parsing() {
+        // Test parentheses support in expressions
+        let test_cases = vec![
+            // Simple parentheses
+            ("(name contains test)", true),
+            // Parentheses with OR
+            ("(name contains spec || name contains test)", true),
+            // Complex expression from bug report
+            ("path contains multivendor-plugin && (name contains spec || name contains test)", true),
+            // Nested parentheses
+            ("((name contains a || name contains b) && ext == rs)", true),
+            // Multiple groups
+            ("(name contains foo) && (size > 1000 || ext == txt)", true),
+        ];
+
+        for (expr, should_succeed) in test_cases {
+            let result = parse_expr(expr);
+            if should_succeed && result.is_err() {
+                eprintln!("Failed to parse: {}", expr);
+                eprintln!("Error: {:?}", result);
+            }
+            assert_eq!(result.is_ok(), should_succeed, "Failed for: {}", expr);
+        }
+    }
 }

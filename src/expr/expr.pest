@@ -25,14 +25,14 @@ program         =   { SOI ~ expr ~ EOI }
 
 predicate =  { selector ~ op ~ rhs }
   selector = { name | path | ext | size | type | contents | modified | created | accessed }
-    name     = { "filename"  | "name" }
-    path     = { "filepath"  | "path" }
+    name     = { "filename" | "name" }
+    path     = { "filepath" | "path" }
     ext      = { "extension" | "ext"  }
-    size     = { "filesize"  | "size" }
-    type     = {"filetype"   | "type" }
-    contents = { "contents"  | "file" }
+    size     = { "filesize" | "size" }
+    type     = { "filetype" | "type" }
+    contents = { "contents" | "file" }
     modified = { "modified" | "mtime" }
-    created  = { "created"  | "ctime" }
+    created  = { "created" | "ctime" }
     accessed = { "accessed" | "atime" }
   op      = _{ match_ | ne | eq | gteq | lteq | gt | lt | like | in_ | contains }
     eq       = { "==" | "=" }         // exact equals
