@@ -206,11 +206,17 @@ impl RawPredicate {
         PredicateParseError,
     > {
         Ok(match self.lhs {
-            Selector::FileName => {
-                Predicate::name(NamePredicate::Filename(parse_string(&self.op, &self.rhs)?))
+            Selector::BaseName => {
+                Predicate::name(NamePredicate::BaseName(parse_string(&self.op, &self.rhs)?))
             }
-            Selector::FilePath => {
-                Predicate::name(NamePredicate::Path(parse_string(&self.op, &self.rhs)?))
+            Selector::FileName => {
+                Predicate::name(NamePredicate::FileName(parse_string(&self.op, &self.rhs)?))
+            }
+            Selector::DirPath => {
+                Predicate::name(NamePredicate::DirPath(parse_string(&self.op, &self.rhs)?))
+            }
+            Selector::FullPath => {
+                Predicate::name(NamePredicate::FullPath(parse_string(&self.op, &self.rhs)?))
             }
             Selector::Extension => {
                 Predicate::name(NamePredicate::Extension(parse_string(&self.op, &self.rhs)?))
@@ -238,9 +244,11 @@ impl RawPredicate {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Selector {
     // NAME:
-    FileName,
-    Extension,
-    FilePath,
+    BaseName,    // filename without extension (e.g. "report" from "report.txt")
+    FileName,    // complete filename with extension (e.g. "report.txt")
+    DirPath,     // directory path only (e.g. "src/services")
+    FullPath,    // complete path including filename (e.g. "src/services/report.txt")
+    Extension,   // file extension without dot (e.g. "txt")
     // METADATA
     EntityType,
     Size,
@@ -259,9 +267,11 @@ pub enum Selector {
 impl Display for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Selector::FileName => write!(f, "name"),
+            Selector::BaseName => write!(f, "basename"),
+            Selector::FileName => write!(f, "filename"),
+            Selector::DirPath => write!(f, "dirpath"),
+            Selector::FullPath => write!(f, "fullpath"),
             Selector::Extension => write!(f, "ext"),
-            Selector::FilePath => write!(f, "path"),
             Selector::EntityType => write!(f, "type"),
             Selector::Size => write!(f, "size"),
             Selector::Modified => write!(f, "modified"),
@@ -696,35 +706,44 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePredicate {
-    Filename(StringMatcher),
-    Path(StringMatcher),
-    Extension(StringMatcher),
+    BaseName(StringMatcher),    // filename without extension
+    FileName(StringMatcher),    // complete filename with extension
+    DirPath(StringMatcher),     // directory path only
+    FullPath(StringMatcher),    // complete path including filename
+    Extension(StringMatcher),   // file extension
 }
 
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
         match self {
-            NamePredicate::Filename(x) => {
-                // Check against full filename
-                let full_match = path
-                    .file_name()
+            NamePredicate::BaseName(x) => {
+                // Match against filename without extension (stem)
+                path.file_stem()
                     .and_then(|os_str| os_str.to_str())
-                    .is_some_and(|s| x.is_match(s));
-
-                // Also check against filename without extension (stem)
-                let stem_match = path
-                    .file_stem()
-                    .and_then(|os_str| os_str.to_str())
-                    .is_some_and(|s| x.is_match(s));
-
-                // Return true if either matches
-                full_match || stem_match
+                    .is_some_and(|s| x.is_match(s))
             }
-            NamePredicate::Path(x) => path.as_os_str().to_str().is_some_and(|s| x.is_match(s)),
-            NamePredicate::Extension(x) => path
-                .extension()
-                .and_then(|os_str| os_str.to_str())
-                .is_some_and(|s| x.is_match(s)),
+            NamePredicate::FileName(x) => {
+                // Match against complete filename with extension
+                path.file_name()
+                    .and_then(|os_str| os_str.to_str())
+                    .is_some_and(|s| x.is_match(s))
+            }
+            NamePredicate::DirPath(x) => {
+                // Match against directory path only (parent)
+                path.parent()
+                    .and_then(|p| p.as_os_str().to_str())
+                    .is_some_and(|s| x.is_match(s))
+            }
+            NamePredicate::FullPath(x) => {
+                // Match against complete path including filename
+                path.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+            }
+            NamePredicate::Extension(x) => {
+                // Match against extension without dot
+                path.extension()
+                    .and_then(|os_str| os_str.to_str())
+                    .is_some_and(|s| x.is_match(s))
+            }
         }
     }
 }
@@ -732,8 +751,10 @@ impl NamePredicate {
 impl Display for NamePredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NamePredicate::Filename(matcher) => write!(f, "name {}", matcher),
-            NamePredicate::Path(matcher) => write!(f, "path {}", matcher),
+            NamePredicate::BaseName(matcher) => write!(f, "basename {}", matcher),
+            NamePredicate::FileName(matcher) => write!(f, "filename {}", matcher),
+            NamePredicate::DirPath(matcher) => write!(f, "dirpath {}", matcher),
+            NamePredicate::FullPath(matcher) => write!(f, "fullpath {}", matcher),
             NamePredicate::Extension(matcher) => write!(f, "ext {}", matcher),
         }
     }

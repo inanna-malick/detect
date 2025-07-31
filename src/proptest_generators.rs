@@ -3,7 +3,8 @@ mod tests {
     use proptest::prelude::*;
     use crate::expr::Expr;
     use crate::predicate::{
-        Bound, MetadataPredicate, NamePredicate, NumberMatcher, NumericalOp, Op, Predicate, RhsValue, Selector, StreamingCompiledContentPredicate, StringMatcher, TimeMatcher, TimeUnit
+        Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate, 
+        StreamingCompiledContentPredicate, StringMatcher, TimeMatcher
     };
     use crate::parser::parse_expr;
     use chrono::{Local, Duration};
@@ -73,8 +74,10 @@ mod tests {
     // Strategy for NamePredicate
     fn arb_name_predicate() -> impl Strategy<Value = NamePredicate> {
         prop_oneof![
-            arb_string_matcher().prop_map(NamePredicate::Filename),
-            arb_string_matcher().prop_map(NamePredicate::Path),
+            arb_string_matcher().prop_map(NamePredicate::BaseName),
+            arb_string_matcher().prop_map(NamePredicate::FileName),
+            arb_string_matcher().prop_map(NamePredicate::DirPath),
+            arb_string_matcher().prop_map(NamePredicate::FullPath),
             arb_string_matcher().prop_map(NamePredicate::Extension),
         ]
     }
@@ -106,31 +109,145 @@ mod tests {
         ]
     }
 
-    // Strategy for Expr - using recursive strategy
-    fn arb_expr_inner(
-        depth: u32,
-    ) -> impl Strategy<Value = Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>> {
-        if depth == 0 {
-            // Only generate predicates at leaf nodes, not literals
-            arb_predicate().prop_map(Expr::Predicate).boxed()
-        } else {
-            prop_oneof![
-                // 40% chance of a predicate
-                4 => arb_predicate().prop_map(Expr::Predicate),
-                // 20% chance of Not
-                2 => arb_expr_inner(depth - 1).prop_map(|e| Expr::Not(Box::new(e))),
-                // 20% chance of And
-                2 => (arb_expr_inner(depth - 1), arb_expr_inner(depth - 1))
-                    .prop_map(|(a, b)| Expr::And(Box::new(a), Box::new(b))),
-                // 20% chance of Or
-                2 => (arb_expr_inner(depth - 1), arb_expr_inner(depth - 1))
-                    .prop_map(|(a, b)| Expr::Or(Box::new(a), Box::new(b))),
-            ].boxed()
+    // Strategy for Expr - using idiomatic prop_recursive
+    fn arb_expr() -> impl Strategy<Value = Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>> {
+        // Define the leaf (non-recursive) strategy
+        let leaf = arb_predicate().prop_map(Expr::Predicate);
+        
+        // Use prop_recursive to handle recursive generation safely
+        leaf.prop_recursive(
+            8,   // depth: up to 8 levels deep
+            256, // desired_size: target ~256 nodes maximum
+            10,  // expected_branch_size: tuning parameter
+            |inner| {
+                // Define recursive cases using the inner strategy
+                prop_oneof![
+                    // Unary operator - single recursive child
+                    2 => inner.clone()
+                        .prop_map(|e| Expr::Not(Box::new(e))),
+                    
+                    // Binary operators - two recursive children
+                    1 => (inner.clone(), inner.clone())
+                        .prop_map(|(a, b)| Expr::And(Box::new(a), Box::new(b))),
+                        
+                    1 => (inner.clone(), inner.clone())
+                        .prop_map(|(a, b)| Expr::Or(Box::new(a), Box::new(b))),
+                ]
+            }
+        )
+    }
+
+    #[test]
+    fn test_basic_display() {
+        let pred = NamePredicate::FileName(StringMatcher::Equals("test.txt".to_string()));
+        let expr: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> = 
+            Expr::Predicate(Predicate::name(pred));
+        let s = expr.to_string();
+        println!("Basic display: {}", s);
+        assert!(s.contains("filename"));
+    }
+    
+    #[test]
+    fn test_deep_nesting() {
+        let pred = NamePredicate::FileName(StringMatcher::Equals("test.txt".to_string()));
+        let base: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> = 
+            Expr::Predicate(Predicate::name(pred));
+        
+        // Create deeply nested expression
+        let mut expr = base;
+        for i in 0..5 {
+            expr = Expr::Not(Box::new(expr));
+            println!("Depth {}: {}", i + 1, expr.to_string());
+        }
+    }
+    
+    #[test]
+    fn test_generation() {
+        use proptest::test_runner::{Config, TestRunner};
+        
+        let mut runner = TestRunner::new(Config {
+            cases: 5,
+            max_shrink_iters: 0,
+            ..Config::default()
+        });
+        
+        println!("Testing generation...");
+        let result = runner.run(&arb_expr(), |expr| {
+            println!("Generated: {:?}", expr);
+            Ok(())
+        });
+        
+        match result {
+            Ok(_) => println!("Generation successful"),
+            Err(e) => panic!("Generation failed: {:?}", e),
+        }
+    }
+    
+    #[test]
+    fn test_simple_round_trip() {
+        // Test a simple expression round trip
+        let pred = NamePredicate::FileName(StringMatcher::Equals("test.txt".to_string()));
+        let expr: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> = 
+            Expr::Predicate(Predicate::name(pred));
+        
+        let expr_str = expr.to_string();
+        println!("Expression string: {}", expr_str);
+        
+        match parse_expr(&expr_str) {
+            Ok(parsed) => {
+                println!("Parsed successfully");
+                println!("Parsed expr: {:?}", parsed);
+            }
+            Err(e) => {
+                panic!("Failed to parse '{}': {:?}", expr_str, e);
+            }
         }
     }
 
-    fn arb_expr() -> impl Strategy<Value = Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>> {
-        arb_expr_inner(3)
+    #[test]
+    fn test_expr_generation_only() {
+        use proptest::test_runner::{Config, TestRunner};
+        
+        let mut runner = TestRunner::new(Config {
+            cases: 10,
+            max_shrink_iters: 0,
+            ..Config::default()
+        });
+        
+        println!("Testing expression generation at depth 3...");
+        let result = runner.run(&arb_expr(), |expr| {
+            // Just generate, don't convert to string yet
+            println!("Generated expression (depth analysis):");
+            analyze_depth(&expr, 0);
+            Ok(())
+        });
+        
+        match result {
+            Ok(_) => println!("Generation successful"),
+            Err(e) => panic!("Generation failed: {:?}", e),
+        }
+    }
+    
+    fn analyze_depth<T>(expr: &Expr<T>, depth: usize) {
+        let indent = "  ".repeat(depth);
+        match expr {
+            Expr::Not(e) => {
+                println!("{}Not", indent);
+                analyze_depth(e, depth + 1);
+            },
+            Expr::And(a, b) => {
+                println!("{}And", indent);
+                analyze_depth(a, depth + 1);
+                analyze_depth(b, depth + 1);
+            },
+            Expr::Or(a, b) => {
+                println!("{}Or", indent);
+                analyze_depth(a, depth + 1);
+                analyze_depth(b, depth + 1);
+            },
+            Expr::Predicate(_) => println!("{}Predicate", indent),
+            Expr::Literal(_) => println!("{}Literal", indent),
+        }
     }
 
     proptest! {

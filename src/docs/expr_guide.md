@@ -8,23 +8,23 @@ Find files by content AND metadata. Drop-in replacement for `find` that uses exp
 - `ext in [env, yml] && contents ~= (password|secret|api_key)`  
 - `size > 10kb && contents ~= (async|await) && !contents contains TODO`
 - `modified > "-7.days" && contents ~= (TODO|FIXME|HACK)`
-- `name ~= \.service\.ts$ && !contents contains test`
-- `!path contains node_modules && contents contains console.log`
-- `path contains src && ext == ts && contents ~= class.*extends`
+- `filename ~= \.service\.ts$ && !contents contains test`
+- `!dirpath contains node_modules && contents contains console.log`
+- `dirpath contains src && ext == ts && contents ~= class.*extends`
 - `contents ~= import.*from\s+['"]react && size > 50kb`
-- `ext == rs && contents ~= unsafe && !path contains /target/`
-- `name in [.env, .env.local] && contents ~= (AWS|STRIPE).*KEY`
+- `ext == rs && contents ~= unsafe && !dirpath contains /target/`
+- `filename in [.env, .env.local] && contents ~= (AWS|STRIPE).*KEY`
 
 ## find → detect
 
 - `find . -name "*.js" -size +1M` → `detect 'ext == js && size > 1mb'`
-- `find . -name "*test*" -mtime -7` → `detect 'name contains test && modified > "-7.days"'`
+- `find . -name "*test*" -mtime -7` → `detect 'filename contains test && modified > "-7.days"'`
 - `find . -type f -exec grep -l TODO {} \;` → `detect 'type == file && contents contains TODO'`
 
 ## Reference
 
 **Selectors**
-- name/path/ext: strings
+- basename/filename/dirpath/fullpath/ext: strings
 - size: bytes/kb/mb/gb/tb  
 - type: file/dir/symlink
 - contents: file text

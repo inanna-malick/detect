@@ -114,8 +114,10 @@ fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> Result<Expr<RawPredic
                         })?;
 
                 let lhs = match selector_inner.as_rule() {
-                    Rule::name => predicate::Selector::FileName,
-                    Rule::path => predicate::Selector::FilePath,
+                    Rule::basename => predicate::Selector::BaseName,
+                    Rule::filename => predicate::Selector::FileName,
+                    Rule::dirpath => predicate::Selector::DirPath,
+                    Rule::fullpath => predicate::Selector::FullPath,
                     Rule::ext => predicate::Selector::Extension,
                     Rule::size => predicate::Selector::Size,
                     Rule::r#type => predicate::Selector::EntityType,

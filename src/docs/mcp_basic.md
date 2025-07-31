@@ -26,8 +26,10 @@ Every query follows: selector operator value
 ## SELECTORS
 
 **Name/Path**
-- `name` or `filename` - filename only
-- `path` or `filepath` - full path
+- `basename` or `base` - filename without extension
+- `filename` or `file` - complete filename with extension
+- `dirpath` or `dir` - directory path only
+- `fullpath` or `full` - complete path including filename
 - `ext` or `extension` - extension without dot
 
 **Metadata**
@@ -46,7 +48,8 @@ Every query follows: selector operator value
 
 **Basic Queries**
 ```
-name == README.md
+filename == README.md
+basename == README
 ext == rs
 size > 1000000
 contents contains TODO
@@ -62,10 +65,11 @@ contents ~= (TODO|FIXME|HACK)
 contents ~= @(Injectable|Component)
 
 # Exclude paths
-!path contains node_modules
+!dirpath contains node_modules
+!fullpath contains test
 
 # Combined conditions
-ext == ts && size > 5000 && contents contains async && !path contains test
+ext == ts && size > 5000 && contents contains async && !dirpath contains test
 ```
 
 **Time Queries**
@@ -77,7 +81,7 @@ created > "2024-01-01"      # Absolute
 **Set Membership**
 ```
 ext in [js, ts, jsx]
-name in [index, main, app]
+basename in [index, main, app]
 ```
 
 ## POWER PATTERNS
@@ -101,16 +105,16 @@ contents ~= (BEGIN|END).*(PRIVATE|KEY)
 size > 10000 && contents ~= (async|await|Promise)
 
 # Stale tests
-name contains test && modified < "-90.days"
+filename contains test && modified < "-90.days"
 
 # Files without tests
-name ~= \.service\.ts$ && !contents contains test
+filename ~= \.service\.ts$ && !contents contains test
 ```
 
 **Smart Exclusions**
 ```
-ext == js && !path contains node_modules && contents contains TODO
-ext == py && !path contains __pycache__ && contents contains import
+ext == js && !dirpath contains node_modules && contents contains TODO
+ext == py && !dirpath contains __pycache__ && contents contains import
 ```
 
 ## NOTES

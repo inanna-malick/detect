@@ -65,7 +65,7 @@ async fn test_broken_symlink() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "name ~= .*".to_owned(),
+        "filename ~= .*".to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
@@ -165,7 +165,7 @@ async fn test_very_long_path() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "name == deep.txt".to_owned(),
+        "filename == deep.txt".to_owned(),
         |p| found.push(p.to_string_lossy().to_string()),
     )
     .await;
@@ -223,7 +223,7 @@ async fn test_special_characters_in_filenames() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        r#"name == "file with spaces.txt""#.to_owned(),
+        r#"filename == "file with spaces.txt""#.to_owned(),
         |p| found_specific.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
@@ -248,7 +248,7 @@ async fn test_empty_directory() {
         Logger::root(Discard, o!()),
         &empty_dir,
         false,
-        "name ~= .*".to_owned(),
+        "filename ~= .*".to_owned(),
         |p| found.push(p.to_string_lossy().to_string()),
     )
     .await;
@@ -281,7 +281,7 @@ async fn test_circular_symlinks() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "name ~= .*".to_owned(),
+        "filename ~= .*".to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;

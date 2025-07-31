@@ -27,11 +27,45 @@ pub enum Expr<Predicate> {
 impl<P: Display> Display for Expr<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Not(e) => f.write_str(&format!("!{}", e)),
-            Expr::And(a, b) => f.write_str(&format!("{} && {}", a, b)),
-            Expr::Or(a, b) => f.write_str(&format!("{} || {}", a, b)),
-            Expr::Predicate(p) => f.write_str(&p.to_string()),
-            Expr::Literal(x) => f.write_str(&x.to_string()),
+            Expr::Not(e) => {
+                write!(f, "!")?;
+                // Add parentheses for complex expressions
+                match e.as_ref() {
+                    Expr::And(_, _) | Expr::Or(_, _) => {
+                        write!(f, "(")?;
+                        e.fmt(f)?;
+                        write!(f, ")")
+                    },
+                    _ => e.fmt(f),
+                }
+            },
+            Expr::And(a, b) => {
+                // Add parentheses for Or expressions to preserve precedence
+                match a.as_ref() {
+                    Expr::Or(_, _) => {
+                        write!(f, "(")?;
+                        a.fmt(f)?;
+                        write!(f, ")")?;
+                    },
+                    _ => a.fmt(f)?,
+                }
+                write!(f, " && ")?;
+                match b.as_ref() {
+                    Expr::Or(_, _) => {
+                        write!(f, "(")?;
+                        b.fmt(f)?;
+                        write!(f, ")")
+                    },
+                    _ => b.fmt(f),
+                }
+            },
+            Expr::Or(a, b) => {
+                a.fmt(f)?;
+                write!(f, " || ")?;
+                b.fmt(f)
+            },
+            Expr::Predicate(p) => p.fmt(f),
+            Expr::Literal(x) => x.fmt(f),
         }
     }
 }

@@ -79,7 +79,7 @@ impl<'a> Case<'a> {
 #[tokio::test]
 async fn test_name_only() {
     Case {
-        expr: "name == foo",
+        expr: "filename == foo",
         // we get the dir z/foo but not the file z/foo/bar,
         // proving that it really is just operating on names - nice
         expected: &["foo", "z/foo", "bar/foo"],
@@ -97,7 +97,7 @@ async fn test_name_only() {
 #[tokio::test]
 async fn test_path_only() {
     Case {
-        expr: "path ~= bar",
+        expr: "fullpath ~= bar",
         // we get the dir z/foo but not the file z/foo/bar,
         // so it really is just operating on names - nice
         expected: &["bar", "bar/baz", "bar/foo"],
@@ -110,7 +110,7 @@ async fn test_path_only() {
 #[tokio::test]
 async fn test_not_name_only() {
     Case {
-        expr: "!name == foo",
+        expr: "!filename == foo",
         // TODO: figure out if I want to filter out empty paths here I guess? currently they're included
         expected: &["", "bar", "bar/baz"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
@@ -122,7 +122,7 @@ async fn test_not_name_only() {
 #[tokio::test]
 async fn test_name_and_contents() {
     Case {
-        expr: "name == foo && contents ~= foo",
+        expr: "filename == foo && contents ~= foo",
         expected: &["foo"],
         files: vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
     }
@@ -144,7 +144,7 @@ async fn test_extension() {
 #[tokio::test]
 async fn test_size() {
     Case {
-        expr: "name == foo && size  < 5",
+        expr: "filename == foo && size  < 5",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -155,7 +155,7 @@ async fn test_size() {
 #[tokio::test]
 async fn test_size_right() {
     Case {
-        expr: "name == foo && size < 5",
+        expr: "filename == foo && size < 5",
         expected: &["foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -166,7 +166,7 @@ async fn test_size_right() {
 #[tokio::test]
 async fn test_size_left() {
     Case {
-        expr: "name == foo && size > 5",
+        expr: "filename == foo && size > 5",
         expected: &["bar/foo"],
         files: vec![f("foo", "smol"), f("bar/foo", "more than five characters")],
     }
@@ -178,7 +178,7 @@ async fn test_size_left() {
 // async fn test_size_kb() {
 //     let big_str = "x".repeat(1025);
 //     Case {
-//         expr: "name == foo && size(1kb..2kb)",
+//         expr: "filename == foo && size(1kb..2kb)",
 //         expected: &["bar/foo"],
 //         files: vec![f("foo", "smol"), f("bar/foo", &big_str)],
 //     }
@@ -189,7 +189,7 @@ async fn test_size_left() {
 #[tokio::test]
 async fn test_quoted_strings() {
     Case {
-        expr: r#"name == "my file.txt""#,
+        expr: r#"filename == "my file.txt""#,
         expected: &["my file.txt"],
         files: vec![
             f("my file.txt", "content"),
@@ -204,7 +204,7 @@ async fn test_quoted_strings() {
 #[tokio::test]
 async fn test_quoted_strings_with_spaces() {
     Case {
-        expr: r#"name ~= "test file""#,
+        expr: r#"filename ~= "test file""#,
         expected: &["test file 1.txt", "test file 2.doc"],
         files: vec![
             f("test file 1.txt", "content"),
@@ -219,7 +219,7 @@ async fn test_quoted_strings_with_spaces() {
 #[tokio::test]
 async fn test_single_quotes() {
     Case {
-        expr: r"name == 'config.json'",
+        expr: r"filename == 'config.json'",
         expected: &["config.json"],
         files: vec![f("config.json", "{}"), f("config.yaml", "test: true")],
     }
@@ -231,7 +231,7 @@ async fn test_single_quotes() {
 async fn test_backward_compatibility() {
     // Ensure bare tokens still work
     Case {
-        expr: "name == README.md",
+        expr: "filename == README.md",
         expected: &["README.md"],
         files: vec![f("README.md", "# Hello"), f("readme.md", "# hello")],
     }
@@ -272,7 +272,7 @@ async fn test_contains_operator() {
 #[tokio::test]
 async fn test_name_regex_patterns() {
     Case {
-        expr: r#"name ~= "test_.*\.rs$""#,
+        expr: r#"filename ~= "test_.*\.rs$""#,
         expected: &["test_utils.rs", "test_integration.rs"],
         files: vec![
             f("test_utils.rs", ""),
@@ -288,7 +288,7 @@ async fn test_name_regex_patterns() {
 #[tokio::test]
 async fn test_path_regex_patterns() {
     Case {
-        expr: r#"path ~= ".*/test/.*\.rs$""#,
+        expr: r#"fullpath ~= ".*/test/.*\.rs$""#,
         expected: &["src/test/utils.rs", "lib/test/helpers.rs", "test/main.rs"],
         files: vec![
             f("src/test/utils.rs", ""),
@@ -305,7 +305,7 @@ async fn test_path_regex_patterns() {
 async fn test_match_operator() {
     // Test the explicit =~ regex operator with quoted regex
     Case {
-        expr: r#"name =~ "^test_.*\.rs$""#,
+        expr: r#"filename =~ "^test_.*\.rs$""#,
         expected: &["test_utils.rs", "test_integration.rs"],
         files: vec![
             f("test_utils.rs", ""),
@@ -322,7 +322,7 @@ async fn test_match_operator() {
 async fn test_match_operator_bare() {
     // Test the =~ operator with simple pattern
     Case {
-        expr: r#"name =~ test_.*"#,
+        expr: r#"filename =~ test_.*"#,
         expected: &["test_utils.rs", "test_integration.rs"],
         files: vec![
             f("test_utils.rs", ""),
@@ -356,7 +356,7 @@ async fn test_in_operator_with_set() {
 #[tokio::test]
 async fn test_in_operator_with_quoted_set() {
     Case {
-        expr: r#"name in ["my file.txt", "another file.doc", config.json]"#,
+        expr: r#"filename in ["my file.txt", "another file.doc", config.json]"#,
         expected: &["my file.txt", "another file.doc", "config.json"],
         files: vec![
             f("my file.txt", ""),
@@ -386,7 +386,7 @@ async fn test_in_operator_single_value() {
 #[tokio::test]
 async fn test_name_character_classes() {
     Case {
-        expr: r#"name ~= "file[1-3]\.txt$""#,
+        expr: r#"filename ~= "file[1-3]\.txt$""#,
         expected: &["file1.txt", "file2.txt", "file3.txt"],
         files: vec![
             f("file1.txt", ""),
@@ -403,7 +403,7 @@ async fn test_name_character_classes() {
 #[tokio::test]
 async fn test_name_single_char_patterns() {
     Case {
-        expr: r#"name ~= "file.\.txt$""#,
+        expr: r#"filename ~= "file.\.txt$""#,
         expected: &["file1.txt", "file2.txt", "fileA.txt"],
         files: vec![
             f("file1.txt", ""),
@@ -435,7 +435,7 @@ async fn test_contains_with_regex_special_chars() {
 #[tokio::test]
 async fn test_multiple_in_operators() {
     Case {
-        expr: r#"ext in [js, ts] && name in [index, main]"#,
+        expr: r#"ext in [js, ts] && basename in [index, main]"#,
         expected: &["index.js", "main.js", "index.ts", "main.ts"],
         files: vec![
             f("index.js", ""),
@@ -472,7 +472,7 @@ async fn test_complex_nested_expression() {
 #[tokio::test]
 async fn test_mixed_quotes_in_values() {
     Case {
-        expr: r#"name == "file with 'quotes'.txt""#,
+        expr: r#"filename == "file with 'quotes'.txt""#,
         expected: &["file with 'quotes'.txt"],
         files: vec![
             f("file with 'quotes'.txt", ""),
@@ -487,7 +487,7 @@ async fn test_mixed_quotes_in_values() {
 async fn test_negation_with_contains() {
     // Test for the negation bug reported by beta tester
     Case {
-        expr: r#"ext == "rs" && !(name contains "test")"#,
+        expr: r#"ext == "rs" && !(filename contains "test")"#,
         expected: &["main.rs", "lib.rs", "mod.rs"],
         files: vec![
             f("main.rs", "fn main() {}"),
@@ -509,7 +509,7 @@ async fn test_negation_variants() {
 
     // Simple negation - should work
     Case {
-        expr: r#"!(name contains "test")"#,
+        expr: r#"!(filename contains "test")"#,
         // FIXME: why? re: Include root dir
         expected: &["", "main.rs", "lib.rs", "doc.txt"],
         files: vec![
@@ -525,7 +525,7 @@ async fn test_negation_variants() {
 
     // Negation with equals - should work
     Case {
-        expr: r#"ext == "rs" && !(name == "test.rs")"#,
+        expr: r#"ext == "rs" && !(filename == "test.rs")"#,
         expected: &["main.rs", "lib.rs"],
         files: vec![
             f("main.rs", ""),
@@ -539,7 +539,7 @@ async fn test_negation_variants() {
 
     // The problematic case - negation with contains in compound expr
     Case {
-        expr: r#"ext == "rs" && !(name contains "lib")"#,
+        expr: r#"ext == "rs" && !(filename contains "lib")"#,
         expected: &["main.rs", "test.rs"],
         files: vec![
             f("main.rs", ""),
@@ -571,7 +571,7 @@ async fn test_escape_sequences_in_regex() {
 #[tokio::test]
 async fn test_path_with_extension_pattern() {
     Case {
-        expr: r#"path ~= ".*\.test\.js$""#,
+        expr: r#"fullpath ~= ".*\.test\.js$""#,
         expected: &[
             "unit.test.js",
             "src/component.test.js",
@@ -592,7 +592,7 @@ async fn test_path_with_extension_pattern() {
 #[tokio::test]
 async fn test_complex_path_patterns() {
     Case {
-        expr: r#"path ~= "src/.*/(test|spec)/.*\.js$""#,
+        expr: r#"fullpath ~= "src/.*/(test|spec)/.*\.js$""#,
         expected: &["src/components/test/button.js", "src/utils/spec/helper.js"],
         files: vec![
             f("src/components/test/button.js", ""),
@@ -609,7 +609,7 @@ async fn test_complex_path_patterns() {
 #[tokio::test]
 async fn test_set_with_special_filenames() {
     Case {
-        expr: r#"name in ["Makefile", "Dockerfile"]"#,
+        expr: r#"filename in ["Makefile", "Dockerfile"]"#,
         expected: &["Makefile", "Dockerfile"],
         files: vec![f("Makefile", ""), f("Dockerfile", ""), f("README.md", "")],
     }
@@ -621,7 +621,7 @@ async fn test_set_with_special_filenames() {
 async fn test_combining_all_new_operators() {
     // Use regex patterns, in, contains, and != all in one expression
     Case {
-        expr: r#"name contains ".config." && ext in [js, json, yaml, yml] && contents contains "version" && size != 0"#,
+        expr: r#"filename contains ".config." && ext in [js, json, yaml, yml] && contents contains "version" && size != 0"#,
         expected: &["app.config.js", "db.config.json"],
         files: vec![
             f("app.config.js", "module.exports = { version: '1.0.0' }"),
@@ -638,7 +638,7 @@ async fn test_combining_all_new_operators() {
 #[tokio::test]
 async fn test_c_extension_patterns() {
     Case {
-        expr: r#"name ~= ".*\.[ch]$""#, // C source and header files
+        expr: r#"filename ~= ".*\.[ch]$""#, // C source and header files
         expected: &["main.c", "utils.c", "main.h", "utils.h"],
         files: vec![
             f("main.c", ""),
@@ -659,7 +659,7 @@ async fn test_files_without_extensions() {
     // Since we can't match empty extensions directly,
     // test by excluding files with known extensions
     Case {
-        expr: r#"name in [README, Makefile, LICENSE] && !name contains ".""#,
+        expr: r#"filename in [README, Makefile, LICENSE] && !filename contains ".""#,
         expected: &["README", "Makefile", "LICENSE"],
         files: vec![
             f("README", "# Project"),
@@ -693,7 +693,7 @@ async fn test_files_with_multiple_dots() {
 // #[tokio::test]
 // async fn test_hidden_files() {
 //     Case {
-//         expr: r#"name ~= "^\.""#,  // Names starting with dot
+//         expr: r#"filename ~= "^\.""#,  // Names starting with dot
 //         expected: &[".gitignore", ".env", ".bashrc", ".config.json"],
 //         files: vec![
 //             f(".gitignore", "node_modules/"),
@@ -710,7 +710,7 @@ async fn test_files_with_multiple_dots() {
 #[tokio::test]
 async fn test_unicode_filenames() {
     Case {
-        expr: r#"name ~= "[α-ω]""#, // Greek letters
+        expr: r#"filename ~= "[α-ω]""#, // Greek letters
         expected: &["αlpha.txt", "βeta.doc", "γamma.rs"],
         files: vec![
             f("αlpha.txt", "Greek alpha"),
@@ -726,7 +726,7 @@ async fn test_unicode_filenames() {
 #[tokio::test]
 async fn test_emoji_filenames() {
     Case {
-        expr: r#"name contains "📄""#,
+        expr: r#"filename contains "📄""#,
         expected: &["📄document.txt", "report📄.md"],
         files: vec![
             f("📄document.txt", "Document with emoji"),
@@ -742,7 +742,7 @@ async fn test_emoji_filenames() {
 #[tokio::test]
 async fn test_directories_vs_files() {
     Case {
-        expr: r#"type == dir && name ~= test"#,
+        expr: r#"type == dir && filename ~= test"#,
         expected: &["test", "tests", "src/test"],
         files: vec![
             f("test/dummy.txt", ""),      // Creates test directory
@@ -759,7 +759,7 @@ async fn test_directories_vs_files() {
 #[tokio::test]
 async fn test_case_sensitivity() {
     Case {
-        expr: r#"name == README.md"#, // Exact case match
+        expr: r#"filename == README.md"#, // Exact case match
         expected: &["README.md"],
         files: vec![
             f("README.md", "# Title"),
@@ -775,7 +775,7 @@ async fn test_case_sensitivity() {
 #[tokio::test]
 async fn test_files_with_spaces_in_names() {
     Case {
-        expr: r#"name ~= " ""#, // Contains space
+        expr: r#"filename ~= " ""#, // Contains space
         expected: &["my file.txt", "another file.doc", "file with spaces.rs"],
         files: vec![
             f("my file.txt", ""),
@@ -829,7 +829,7 @@ async fn test_symlink_names() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        r#"name ~= link"#.to_owned(),
+        r#"filename ~= link"#.to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await

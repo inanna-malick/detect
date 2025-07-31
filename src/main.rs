@@ -1,7 +1,7 @@
 use std::{env::current_dir, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
-use detect::{parse_and_run_fs, parser::parse_expr, run_git};
+use detect::{parse_and_run_fs, run_git};
 use slog::{o, Drain, Level, Logger};
 
 const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");

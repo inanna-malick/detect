@@ -24,13 +24,15 @@ program         =   { SOI ~ expr ~ EOI }
 
 
 predicate =  { selector ~ op ~ rhs }
-  selector = { name | path | ext | size | type | contents | modified | created | accessed }
-    name     = { "filename" | "name" }
-    path     = { "filepath" | "path" }
-    ext      = { "extension" | "ext"  }
+  selector = { basename | dirpath | fullpath | size | type | filename | ext | contents | modified | created | accessed }
+    basename = { "basename" | "base" }
+    filename = { "filename" | "file" }
+    dirpath  = { "dirpath" | "dir" }
+    fullpath = { "fullpath" | "full" }
+    ext      = { "extension" | "ext" }
     size     = { "filesize" | "size" }
     type     = { "filetype" | "type" }
-    contents = { "contents" | "file" }
+    contents = { "contents" | "content" }
     modified = { "modified" | "mtime" }
     created  = { "created" | "ctime" }
     accessed = { "accessed" | "atime" }

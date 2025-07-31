@@ -20,7 +20,7 @@ A fast, powerful tool for finding files by name, content, and metadata using an 
 cargo install detect
 
 # Find files by name
-detect 'name == README.md'
+detect 'filename == README.md'
 
 # Search file contents  
 detect 'contents contains TODO'
@@ -63,7 +63,7 @@ modified > "-7.days" && (contents contains FIXME || contents contains TODO)
 - **Boolean**: `&&`, `||`, `!`, `()`
 
 ### Selectors
-- **Name/Path**: `name`, `path`, `ext`
+- **Name/Path**: `basename`, `filename`, `dirpath`, `fullpath`, `ext`
 - **Metadata**: `size`, `type`, `modified`, `created`
 - **Content**: `contents`
 
