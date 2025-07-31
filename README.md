@@ -57,15 +57,18 @@ size > 10000 && !contents contains TODO && !contents contains @doc
 modified > "-7.days" && (contents contains FIXME || contents contains TODO)
 ```
 
-### Operators
-- **Comparison**: `==`, `!=`, `>`, `<`, `>=`, `<=`
-- **String**: `contains`, `~=` (regex), `in [...]`
+### Operators  
+Any operator works with any selector of compatible type:
+- **String ops** (for name/path/contents): `==`, `!=`, `contains`, `~=`, `in [...]`
+- **Number ops** (for size): `==`, `!=`, `>`, `<`, `>=`, `<=`, `in [...]`
+- **Time ops** (for dates): `==`, `!=`, `>`, `<`, `>=`, `<=`, `in [...]`
 - **Boolean**: `&&`, `||`, `!`, `()`
 
 ### Selectors
-- **Name/Path**: `basename`, `filename`, `dirpath`, `fullpath`, `ext`
-- **Metadata**: `size`, `type`, `modified`, `created`
-- **Content**: `contents`
+- **String type**: `basename`, `filename`, `dirpath`, `fullpath`, `ext`, `contents`
+- **Number type**: `size`
+- **Time type**: `modified`, `created`, `accessed`
+- **Enum type**: `type` (file/dir/symlink)
 
 ## Documentation
 

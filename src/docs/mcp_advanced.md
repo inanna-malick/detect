@@ -2,6 +2,8 @@
 
 ## Complete Operator Set
 
+**Core principle**: Any operator works with any selector of compatible type.
+
 ### Equality Operators
 - `==` or `=` - Exact match
 - `!=` - Not equal
@@ -61,24 +63,24 @@ ext == rs && (size > 1000 || filename contains test)
 
 ## All Selectors
 
-### Name/Path Selectors
+### String Selectors
 - `basename`, `base` - Filename without extension
 - `filename`, `file` - Complete filename with extension
 - `dirpath`, `dir` - Directory path only
 - `fullpath`, `full` - Complete path including filename
 - `ext`, `extension` - File extension (without dot)
-
-### Metadata Selectors
-- `size`, `filesize` - Size in bytes
-- `type`, `filetype` - Entity type (file, dir, symlink)
-
-### Content Selectors
 - `contents`, `file` - Search file contents
 
-### Temporal Selectors
+### Number Selectors
+- `size`, `filesize` - Size in bytes
+
+### Time Selectors
 - `modified`, `mtime` - Modification time
 - `created`, `ctime` - Creation time
 - `accessed`, `atime` - Access time
+
+### Enum Selectors
+- `type`, `filetype` - Entity type (file, dir, symlink)
 
 ## Temporal Query Syntax
 

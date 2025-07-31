@@ -15,6 +15,8 @@ Find files by content AND metadata. Drop-in replacement for `find` that uses exp
 - `ext == rs && contents ~= unsafe && !dirpath contains /target/`
 - `filename in [.env, .env.local] && contents ~= (AWS|STRIPE).*KEY`
 
+Remember: any String operator works with any String selector - mix freely!
+
 ## find → detect
 
 - `find . -name "*.js" -size +1M` → `detect 'ext == js && size > 1mb'`
@@ -23,19 +25,30 @@ Find files by content AND metadata. Drop-in replacement for `find` that uses exp
 
 ## Reference
 
-**Selectors**
-- basename/filename/dirpath/fullpath/ext: strings
-- size: bytes/kb/mb/gb/tb  
-- type: file/dir/symlink
-- contents: file text
-- modified/created/accessed: relative/absolute time
+**Core Rule**: Any operator works with any selector of compatible type.
 
-**Operators**
-- ==/!= : exact
-- </<=/>/>= : compare
-- contains : substring
-- ~= : regex
-- in [...] : set membership
+**Selectors**
+- `String`: basename, filename, dirpath, fullpath, ext, contents
+- `Number`: size (bytes/kb/mb/gb/tb)
+- `Time`: modified, created, accessed  
+- `Enum`: type (file/dir/symlink)
+
+**Operators** 
+- `String → Bool`: ==, !=, contains, ~=, in [...], >, <
+- `Number → Bool`: ==, !=, >, <, >=, <=, in [...]
+- `Time → Bool`: ==, !=, >, <, >=, <=, in [...]
+- `Any → Bool`: in [...] works with all types
+
+**Examples of orthogonality**
+```bash
+# ANY String selector with ANY String operator
+contents ~= "TODO|FIXME"        # regex on contents ✓
+filename in [Makefile, LICENSE] # set membership on names ✓
+ext contains "s"                # substring on extension ✓
+
+# Type mismatches won't work
+size contains "100"             # Number ✗ String operator
+```
 
 **Boolean**
 - && || ! () : and/or/not/group
