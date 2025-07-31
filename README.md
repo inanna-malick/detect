@@ -1,99 +1,102 @@
-## detect: a command line tool for finding filesystem entities using expressions
+# detect
 
+A fast, powerful tool for finding files by name, content, and metadata using an expressive query language.
 
 ```shell
-➜  detect 'name ~= detect || ext ~= rs && contents ~= map_frame'
-./target/release/detect
-./target/release/deps/detect-6395eb2c29a3ed5e
-./target/debug/detect
-./target/debug/deps/detect-34cec1d5ea27ff11
-./target/debug/deps/detect-e91a01500af9a97b
-./target/debug/deps/detect-0b57d7084445c8b2
-./target/debug/deps/detect-32c3beb592fdbbe3
-./src/expr/frame.rs
+➜  detect 'ext == rs && contents ~= async'
+./src/main.rs
+./src/lib.rs
+./src/eval/fs.rs
+
+➜  detect 'size > 50000 && modified > "-7.days" && contents contains TODO'
+./target/debug/build/main.rs
+./docs/planning.md
 ```
 
-## boolean operators
-- `a && b`
-- `a || b`
-- `!a`
-- `(a)`
+## Quick Start
 
-
-## string operators
-- `==` (or `=`) - exact match (case-sensitive)
-- `!=` - not equal
-- `contains` - substring search (case-sensitive)
-- `~=` (or `~`, `=~`) - regex match
-- `in [...]` - set membership
-
-## numeric operators
-- `>`, `>=`, `<`, `<=` - comparisons
-- `==` (or `=`) - exact match
-
-# Selectors
-
-## file path selectors
-
-- name (or filename) - matches filename only
-- path (or filepath) - matches full file path  
-- ext (or extension) - file extension without dot
-
-## metadata selectors
-
-- size (or filesize) - file size in bytes
-- type (or filetype) - file, dir, or symlink
-
-## file contents predicates
-
-- contents (or file) - search file contents
-
-## temporal selectors
-
-- modified (or mtime) - modification time
-- created (or ctime) - creation time
-- accessed (atime) - access time
-
-# Usage Examples
-
-## Simple queries
 ```bash
-# Find specific file
+# Install
+cargo install detect
+
+# Find files by name
 detect 'name == README.md'
 
-# Find by extension
-detect 'ext == rs'
-
-# Find large files (size in bytes)
-detect 'size > 1000000'
-
-# Search file contents
+# Search file contents  
 detect 'contents contains TODO'
+
+# Complex queries
+detect 'ext == ts && contents ~= @Injectable && !path contains test'
 ```
 
-## Complex queries
+## Key Features
+
+- **Search by content AND metadata** in a single query
+- **Regex support** for powerful pattern matching
+- **Time-based queries** (e.g., files modified in last 7 days)
+- **Boolean logic** with AND, OR, NOT, and grouping
+- **Fast** - optimized for large codebases
+
+## Expression Language
+
+Every query follows: `selector operator value`
+
+### Common Patterns
+
 ```bash
-# Combine conditions
-detect 'ext == js && size > 1024'
+# Find TypeScript files with decorators
+ext == ts && contents ~= @(Component|Injectable|Directive)
 
-# Use sets
-detect 'ext in [js, ts, jsx]'
+# Security audit
+ext in [env, json, yml] && contents ~= (password|secret|api_key)
 
-# Temporal queries (quotes required)
-detect 'modified > "-7.days"'
+# Large files without documentation
+size > 10000 && !contents contains TODO && !contents contains @doc
 
-# Exclude patterns
-detect 'ext == rs && !path contains target'
+# Recent changes
+modified > "-7.days" && (contents contains FIXME || contents contains TODO)
 ```
 
-## Important Notes
+### Operators
+- **Comparison**: `==`, `!=`, `>`, `<`, `>=`, `<=`
+- **String**: `contains`, `~=` (regex), `in [...]`
+- **Boolean**: `&&`, `||`, `!`, `()`
 
-- **Case Sensitivity**: All string comparisons are case-sensitive
-  - `name == "README.md"` ≠ `name == "readme.md"`
-- **Quotes**: Required for:
-  - Values with spaces: `name == "my file.txt"`
-  - Temporal expressions: `modified > "-7.days"`
-  - Regex patterns with spaces: `contents ~= "class \\w+"`
-- **Regex**: Use `~=` for pattern matching:
-  - `name ~= "test.*\\.rs$"` (files starting with "test" ending in ".rs")
-- **File size**: Must be specified in bytes (no KB/MB units)
+### Selectors
+- **Name/Path**: `name`, `path`, `ext`
+- **Metadata**: `size`, `type`, `modified`, `created`
+- **Content**: `contents`
+
+## Documentation
+
+For comprehensive documentation, run:
+```bash
+detect --help
+```
+
+This shows:
+- All operators and selectors
+- Building complex queries
+- Performance tips
+- Common patterns
+- Unix pipeline integration
+
+## MCP Integration
+
+Detect includes an MCP (Model Context Protocol) server for integration with Claude Desktop and other MCP clients. See [MCP documentation](src/docs/mcp_basic.md) for details.
+
+## Why detect?
+
+Traditional tools require multiple commands:
+```bash
+# Old way
+find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
+```
+
+With detect:
+```bash
+# New way  
+detect 'ext == ts && size > 5000 && modified > "-7.days" && contents contains TODO'
+```
+
+More readable, more powerful, and often faster.

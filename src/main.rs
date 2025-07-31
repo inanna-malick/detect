@@ -4,35 +4,15 @@ use clap::{command, Parser};
 use detect::{parse_and_run_fs, parser::parse_expr, run_git};
 use slog::{o, Drain, Level, Logger};
 
-/// operators
-/// - `a && b` a and b
-/// - `a || b`: a or b
-/// - `!a`: not a
-/// - `(a)`: parens to clarify grouping
-///
-/// ## string operators
-/// - `==`
-/// - `~=` (regex match)
-/// ## numeric operators
-/// - `>`, `>=`, `<`, `<=`
-/// - `==`
-/// ## file path selectors
-/// - name
-/// - path
-/// - extension
-/// ## metadata selectors
-/// - size
-/// - type
-/// ## file contents predicates
-/// - contents
+const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");
+
 #[derive(Parser, Debug)]
 #[command(
     name = "detect",
     author,
     version,
-    about,
-    long_about,
-    verbatim_doc_comment
+    about = "Find filesystem entities using expressions",
+    long_about = EXPR_GUIDE
 )]
 struct Args {
     /// filtering expr
@@ -41,11 +21,13 @@ struct Args {
     /// target dir
     #[clap(index = 2)]
     path: Option<PathBuf>,
+    /// include gitignored files
     #[arg(short = 'i')]
     visit_gitignored: bool,
-    /// ref for git repo in current dir or parent of current dir
-    #[arg(short = 'g', long = "gitref")]
-    gitref: Option<String>,
+    // /// search within git ref (commit/branch/tag)
+    // #[arg(short = 'g', long = "gitref")]
+    // gitref: Option<String>,
+    /// log level (error/warn/info/debug)
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
 }
@@ -70,18 +52,16 @@ pub async fn main() -> Result<(), anyhow::Error> {
         None => current_dir()?,
     };
 
-    println!("path: {:?}", root_path);
+    // let expr = parse_expr(&args.expr)?;
 
-    let expr = parse_expr(&args.expr)?;
-
-    if let Some(ref_) = args.gitref {
-        run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
-    } else {
-        parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
-            println!("{}", s.to_string_lossy())
-        })
-        .await?;
-    }
+    // if let Some(ref_) = args.gitref {
+    //     run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
+    // } else {
+    parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
+        println!("{}", s.to_string_lossy())
+    })
+    .await?;
+    // }
 
     Ok(())
 }

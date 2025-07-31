@@ -1,97 +1,123 @@
 Search filesystem entities by name, metadata AND contents in a single query.
 
 Every query follows: selector operator value
-Where selector is: name, ext, size, contents, modified, etc.
-Where operator is: ==, contains, >, in [...], etc.
-Where value is: text, number, date, regex pattern, etc.
 
-SIMPLEST QUERIES:
-name == README.md                                     - selector: name, operator: ==, value: README.md
-size > 1000000                                        - selector: size, operator: >, value: 1000000
-contents contains TODO                                - selector: contents, operator: contains, value: TODO
-ext in [js, ts]                                       - selector: ext, operator: in, value: [js, ts]
-modified > "-7.days"                                  - selector: modified, operator: >, value: "-7.days"
+## OPERATORS
 
-COMMON DEVELOPER TASKS:
-Find security issues:
-ext == env && contents contains SECRET                 - Secrets in env files
-ext in [js, py, rb] && contents contains api_key      - API keys in code  
-name contains config && size < 50000 && contents contains password - Passwords in small configs
+**Equality & Comparison**
+- `==` or `=` - exact match
+- `!=` - not equal
+- `>` - greater than
+- `<` - less than
+- `>=` - greater or equal
+- `<=` - less or equal
 
-Find code that needs attention:
-name contains test && modified < "-90.days"            - Stale test files
-modified > "-30.days" && contents contains TODO        - Recent TODOs
-size > 10000 && contents contains FIXME                - FIXMEs in large files
+**String Matching**
+- `contains` - substring search
+- `~=` or `~` or `=~` - regex match
+- `in [v1, v2, ...]` - set membership
 
-Find specific file types:
-ext == log && size > 100000000                        - Large log files
-name contains migration && ext in [sql, py]            - Database migrations
-ext in [yml, yaml] && contents contains localhost      - Local config files
+**Boolean Logic**
+- `&&` - AND
+- `||` - OR
+- `!` - NOT
+- `()` - grouping
 
-IMPOSSIBLE WITH GREP/GLOB:
-These queries cannot be done with standard tools:
-• Files modified in the last week with specific content
-• Large files (>10MB) containing passwords
-• Config files created today
-• Test files that haven't been touched in 90 days
-• Files by size range with content search
+## SELECTORS
 
-QUICK EXAMPLES:
-name == config.json                                - Find exact file
-ext in [js, ts, jsx]                               - Find JavaScript files
-contents contains TODO                            - Search inside any file
-size > 1000000                                     - Files over 1MB
-modified > "-7.days"                               - Recently modified
+**Name/Path**
+- `name` or `filename` - filename only
+- `path` or `filepath` - full path
+- `ext` or `extension` - extension without dot
 
-CORE OPERATORS:
-==         exact match (alias: =)
-contains   substring search
-in [...]   multiple options
->          greater than (also: <, >=, <=)
-~=         regex match (aliases: ~, =~)
-!=         not equal
+**Metadata**
+- `size` or `filesize` - bytes
+- `type` or `filetype` - file/dir/symlink
 
-SELECTORS:
-name      matches filename only (alias: filename)
-path      matches full path (alias: filepath)
-ext       file extension without dot (alias: extension)
-size      file size in bytes (alias: filesize)
-contents  search file contents (alias: file)
-modified  modification time (alias: mtime)
-type      file, dir, or symlink (alias: filetype)
-created   creation time (alias: ctime)
-accessed  access time (alias: atime)
+**Content**
+- `contents` or `file` - file contents
 
-CASE SENSITIVITY: All string comparisons are case-sensitive
+**Time**
+- `modified` or `mtime` - modification time
+- `created` or `ctime` - creation time
+- `accessed` or `atime` - access time
 
-BOOLEAN LOGIC:
-&&  means AND
-||  means OR
-!   means NOT
-()  for grouping
+## EXAMPLES
 
-PRACTICAL MULTI-LAYER EXAMPLES:
-Find large Python files with class definitions:
-ext == py && size > 50000 && contents contains class
+**Basic Queries**
+```
+name == README.md
+ext == rs
+size > 1000000
+contents contains TODO
+modified > "-7.days"
+```
 
-Find recent markdown files mentioning bugs:
-ext == md && modified > "-30.days" && contents contains bug
+**Complex Patterns**
+```
+# Multiple patterns in contents
+contents ~= (TODO|FIXME|HACK)
 
-Find test files that might have issues:
-name contains test && ext in [py, js, go] && contents contains TODO
+# TypeScript decorators
+contents ~= @(Injectable|Component)
 
-Find configuration files with secrets:
-ext in [json, yaml, yml] && name contains config && contents contains secret
+# Exclude paths
+!path contains node_modules
 
-SMART EXCLUSION PATTERNS:
+# Combined conditions
+ext == ts && size > 5000 && contents contains async && !path contains test
+```
+
+**Time Queries**
+```
+modified > "-30.minutes"    # Relative
+created > "2024-01-01"      # Absolute
+```
+
+**Set Membership**
+```
+ext in [js, ts, jsx]
+name in [index, main, app]
+```
+
+## POWER PATTERNS
+
+**Content Regex**
+```
+contents ~= class\s+\w+Service       # Service classes
+contents ~= import.*from\s+['"]react # React imports
+contents ~= @\w+                     # Any decorator
+```
+
+**Security Scans**
+```
+ext in [env, json, yml] && contents ~= (password|secret|api_key)
+contents ~= (BEGIN|END).*(PRIVATE|KEY)
+```
+
+**Code Quality**
+```
+# Large complex files
+size > 10000 && contents ~= (async|await|Promise)
+
+# Stale tests
+name contains test && modified < "-90.days"
+
+# Files without tests
+name ~= \.service\.ts$ && !contents contains test
+```
+
+**Smart Exclusions**
+```
 ext == js && !path contains node_modules && contents contains TODO
 ext == py && !path contains __pycache__ && contents contains import
-ext == rs && !path contains /target/ && contents contains unsafe
+```
 
-TEMPORAL QUERIES:
-modified > "-7.days"                                - Last week
-modified > "-1.hour"                                - Last hour
-modified > "-30.minutes"                            - Last 30 minutes
-modified > "2024-01-01"                             - After specific date
+## NOTES
 
-Need regex patterns or advanced operators? Use the detect_help tool.
+- All string comparisons are case-sensitive
+- Regex uses Rust syntax (escape dots: `\.`)
+- Size is in bytes
+- Quotes required for: times, regex with spaces, values with special chars
+
+Need more? Use the detect_help tool.
