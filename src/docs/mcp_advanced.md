@@ -59,6 +59,7 @@ Use parentheses to override precedence:
 ```
 !(filename contains test && ext == rs)
 ext == rs && (size > 1000 || filename contains test)
+(contents contains TODO || contents contains FIXME) && (size > 10000 || modified > "-1.day")
 ```
 
 ## All Selectors

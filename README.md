@@ -55,6 +55,9 @@ size > 10000 && !contents contains TODO && !contents contains @doc
 
 # Recent changes
 modified > "-7.days" && (contents contains FIXME || contents contains TODO)
+
+# Complex grouping with parentheses
+(ext == js || ext == ts) && (contents contains "import" || contents contains "require") && size > 1000
 ```
 
 ### Operators  

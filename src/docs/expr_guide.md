@@ -14,6 +14,8 @@ Find files by content AND metadata. Drop-in replacement for `find` that uses exp
 - `contents ~= import.*from\s+['"]react && size > 50kb`
 - `ext == rs && contents ~= unsafe && !dirpath contains /target/`
 - `filename in [.env, .env.local] && contents ~= (AWS|STRIPE).*KEY`
+- `(contents contains TODO || contents contains FIXME) && modified > "-7.days"`
+- `(ext == js || ext == ts) && (size > 50kb || contents contains "export default")`
 
 Remember: any String operator works with any String selector - mix freely!
 
@@ -52,6 +54,7 @@ size contains "100"             # Number ✗ String operator
 
 **Boolean**
 - && || ! () : and/or/not/group
+- `(contents contains TODO || contents contains FIXME) && (size > 1000 || modified > "-1.day")`
 
 **Time formats**
 - Relative: `"-N.unit"` (seconds/minutes/hours/days/weeks/months)
