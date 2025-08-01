@@ -86,7 +86,6 @@ pub fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u6
     Ok((value * multiplier) as u64)
 }
 
-
 fn parse_typed_predicates(
     pairs: Pairs<Rule>,
     pratt: &PrattParser<Rule>,

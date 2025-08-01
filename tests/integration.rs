@@ -56,7 +56,7 @@ impl<'a> Case<'a> {
             self.expr.to_owned(),
             |p| {
                 let s = p
-                    .strip_prefix(&format!("{}/", tmp_dir.path().to_str().unwrap()))
+                    .strip_prefix(format!("{}/", tmp_dir.path().to_str().unwrap()))
                     .unwrap()
                     .as_os_str()
                     .to_string_lossy()

@@ -167,7 +167,7 @@ mod tests {
         let mut expr = base;
         for i in 0..5 {
             expr = Expr::Not(Box::new(expr));
-            println!("Depth {}: {}", i + 1, expr.to_string());
+            println!("Depth {}: {}", i + 1, expr);
         }
     }
 
