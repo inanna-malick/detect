@@ -12,7 +12,7 @@ use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
 use crate::util::Done;
 use chrono::{DateTime, Duration, Local, NaiveDate};
 
-fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
+pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     // Handle relative time formats
     if s.starts_with('-') {
         let parts: Vec<&str> = s[1..].split('.').collect();

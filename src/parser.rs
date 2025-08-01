@@ -4,12 +4,15 @@ use pest::{
     Parser, Span,
 };
 
+use std::ops::{RangeFrom, RangeTo};
 use crate::{
     expr::Expr,
     parse_error::{ParseError, StructureErrorKind},
-    predicate::{self, Predicate, RawPredicate, RhsValue, StreamingCompiledContentPredicate},
+    predicate::{self, Predicate, StreamingCompiledContentPredicate, StringMatcher, NumberMatcher, TimeMatcher, Bound},
     MetadataPredicate, NamePredicate,
 };
+use regex::Regex;
+
 
 pub mod pratt_parser {
     use pest_derive::Parser;
@@ -26,7 +29,7 @@ fn get_location(span: &Span) -> Option<(usize, usize)> {
     Some((line, col))
 }
 
-fn parse_size_value(pair: pest::iterators::Pair<Rule>) -> Result<RhsValue, ParseError> {
+fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u64, ParseError> {
     let span = pair.as_span();
     let text = pair.as_str();
 
@@ -82,232 +85,544 @@ fn parse_size_value(pair: pest::iterators::Pair<Rule>) -> Result<RhsValue, Parse
         }
     };
 
-    Ok(RhsValue::Size((value * multiplier) as u64))
+    Ok((value * multiplier) as u64)
 }
 
-fn parse(pairs: Pairs<Rule>, pratt: &PrattParser<Rule>) -> Result<Expr<RawPredicate>, ParseError> {
-    pratt
-        .map_primary(|primary| match primary.as_rule() {
-            Rule::predicate => {
-                let span = primary.as_span();
-                let mut inner = primary.into_inner();
+fn extract_string_value(pair: pest::iterators::Pair<Rule>) -> Result<String, ParseError> {
+    let span = pair.as_span();
+    match pair.as_rule() {
+        Rule::string_value => {
+            // Unwrap the string_value to get the inner quoted_string or bare_string
+            let inner = pair.into_inner().next().ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "string content",
+                    context: "string_value",
+                },
+                location: get_location(&span),
+            })?;
+            extract_string_value(inner)
+        }
+        Rule::quoted_string => {
+            let quoted = pair.into_inner().next().ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "quoted content",
+                    context: "quoted string",
+                },
+                location: get_location(&span),
+            })?;
+            let inner_str = quoted.into_inner().next().ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "string content",
+                    context: "quoted string",
+                },
+                location: get_location(&span),
+            })?;
+            Ok(inner_str.as_str().to_string())
+        }
+        Rule::bare_string => Ok(pair.as_str().to_string()),
+        rule => Err(ParseError::Structure {
+            kind: StructureErrorKind::UnexpectedRule { rule },
+            location: get_location(&span),
+        }),
+    }
+}
 
-                // Parse selector
-                let selector_pair = inner.next().ok_or_else(|| ParseError::Structure {
-                    kind: StructureErrorKind::MissingToken {
-                        expected: "selector",
-                        context: "predicate",
-                    },
-                    location: get_location(&span),
-                })?;
+fn parse_string_predicate(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ParseError,
+> {
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
 
-                let selector_inner =
-                    selector_pair
-                        .into_inner()
-                        .next()
-                        .ok_or_else(|| ParseError::Structure {
-                            kind: StructureErrorKind::MissingToken {
-                                expected: "selector name",
-                                context: "selector",
-                            },
-                            location: get_location(&span),
+    // Parse string selector
+    let selector_pair = inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "string selector",
+            context: "string_predicate",
+        },
+        location: get_location(&span),
+    })?;
+
+    let selector = selector_pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::Structure {
+            kind: StructureErrorKind::MissingToken {
+                expected: "selector name",
+                context: "string_selector",
+            },
+            location: get_location(&span),
+        })?;
+
+    // Parse operator and value
+    let op_value_pair = inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "operator and value",
+            context: "string_predicate",
+        },
+        location: get_location(&span),
+    })?;
+
+    let op_value_rule = op_value_pair.as_rule();
+    let mut op_value_inner = op_value_pair.into_inner();
+    let _op_pair = op_value_inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "operator",
+            context: "string operator",
+        },
+        location: get_location(&span),
+    })?;
+
+    let value_pair = op_value_inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "value",
+            context: "string operator",
+        },
+        location: get_location(&span),
+    })?;
+
+    // Create the appropriate string matcher based on operator
+    let string_matcher = match op_value_rule {
+        Rule::string_eq => {
+            let value = extract_string_value(value_pair)?;
+            StringMatcher::Equals(value)
+        }
+        Rule::string_ne => {
+            let value = extract_string_value(value_pair)?;
+            StringMatcher::NotEquals(value)
+        }
+        Rule::string_contains => {
+            let value = extract_string_value(value_pair)?;
+            StringMatcher::Contains(value)
+        }
+        Rule::string_regex => {
+            let value = extract_string_value(value_pair)?;
+            // Special case for '*' which users commonly expect to work
+            let pattern = if value == "*" { ".*" } else { &value };
+            StringMatcher::Regex(Regex::new(pattern).map_err(|_e| ParseError::Structure {
+                kind: StructureErrorKind::InvalidToken {
+                    expected: "valid regex pattern",
+                    found: value.clone(),
+                },
+                location: get_location(&span),
+            })?)
+        }
+        Rule::string_in => {
+            // Parse set literal
+            let mut items = Vec::new();
+            if let Some(set_items) = value_pair.into_inner().next() {
+                for item in set_items.into_inner() {
+                    if item.as_rule() == Rule::set_item {
+                        let inner_item = item.into_inner().next().ok_or_else(|| {
+                            ParseError::Structure {
+                                kind: StructureErrorKind::MissingToken {
+                                    expected: "set item value",
+                                    context: "set item",
+                                },
+                                location: get_location(&span),
+                            }
                         })?;
-
-                let lhs = match selector_inner.as_rule() {
-                    Rule::basename => predicate::Selector::BaseName,
-                    Rule::filename => predicate::Selector::FileName,
-                    Rule::dirpath => predicate::Selector::DirPath,
-                    Rule::fullpath => predicate::Selector::FullPath,
-                    Rule::ext => predicate::Selector::Extension,
-                    Rule::size => predicate::Selector::Size,
-                    Rule::r#type => predicate::Selector::EntityType,
-                    Rule::contents => predicate::Selector::Contents,
-                    Rule::modified => predicate::Selector::Modified,
-                    Rule::created => predicate::Selector::Created,
-                    Rule::accessed => predicate::Selector::Accessed,
-                    rule => {
-                        return Err(ParseError::Structure {
-                            kind: StructureErrorKind::InvalidSelector {
-                                found: format!("{:?}", rule),
-                            },
-                            location: get_location(&span),
-                        })
-                    }
-                };
-
-                // Parse operator
-                let op_pair = inner.next().ok_or_else(|| ParseError::Structure {
-                    kind: StructureErrorKind::MissingToken {
-                        expected: "operator",
-                        context: "predicate",
-                    },
-                    location: get_location(&span),
-                })?;
-
-                let op = match op_pair.as_rule() {
-                    Rule::eq => predicate::Op::Equality,
-                    Rule::ne => predicate::Op::NotEqual,
-                    Rule::like | Rule::match_ => predicate::Op::Matches,
-                    Rule::gt => predicate::Op::NumericComparison(predicate::NumericalOp::Greater),
-                    Rule::gteq => {
-                        predicate::Op::NumericComparison(predicate::NumericalOp::GreaterOrEqual)
-                    }
-                    Rule::lt => predicate::Op::NumericComparison(predicate::NumericalOp::Less),
-                    Rule::lteq => {
-                        predicate::Op::NumericComparison(predicate::NumericalOp::LessOrEqual)
-                    }
-                    Rule::in_ => predicate::Op::In,
-                    Rule::contains => predicate::Op::Contains,
-                    rule => {
-                        return Err(ParseError::Structure {
-                            kind: StructureErrorKind::UnexpectedRule { rule },
-                            location: get_location(&span),
-                        })
-                    }
-                };
-
-                // Parse RHS
-                let rhs_pair = inner.next().ok_or_else(|| ParseError::Structure {
-                    kind: StructureErrorKind::MissingToken {
-                        expected: "value",
-                        context: "predicate",
-                    },
-                    location: get_location(&span),
-                })?;
-
-                let rhs = match rhs_pair.as_rule() {
-                    Rule::rhs => {
-                        let inner_rhs =
-                            rhs_pair
-                                .into_inner()
-                                .next()
-                                .ok_or_else(|| ParseError::Structure {
-                                    kind: StructureErrorKind::MissingToken {
-                                        expected: "value expression",
-                                        context: "rhs",
-                                    },
-                                    location: get_location(&span),
-                                })?;
-
-                        match inner_rhs.as_rule() {
-                            Rule::quoted_string => {
-                                // Extract the inner string without quotes
-                                let quoted = inner_rhs.into_inner().next().ok_or_else(|| {
-                                    ParseError::Structure {
-                                        kind: StructureErrorKind::MissingToken {
-                                            expected: "quoted content",
-                                            context: "quoted string",
-                                        },
-                                        location: get_location(&span),
-                                    }
-                                })?;
-                                let inner_str = quoted.into_inner().next().ok_or_else(|| {
-                                    ParseError::Structure {
-                                        kind: StructureErrorKind::MissingToken {
-                                            expected: "string content",
-                                            context: "quoted string",
-                                        },
-                                        location: get_location(&span),
-                                    }
-                                })?;
-                                RhsValue::String(inner_str.as_str().to_string())
-                            }
-                            Rule::bare_token => {
-                                let token = inner_rhs.as_str();
-                                // Try to parse as number first
-                                if let Ok(num) = token.parse::<u64>() {
-                                    RhsValue::Number(num)
-                                } else {
-                                    // Otherwise treat as string
-                                    RhsValue::String(token.to_string())
-                                }
-                            }
-                            Rule::size_value => {
-                                // Parse size value with unit
-                                parse_size_value(inner_rhs)?
-                            }
-                            Rule::set_literal => {
-                                // Handle set literals, including empty sets
-                                let mut items = Vec::new();
-
-                                // set_items is now optional for empty sets
-                                if let Some(set_items) = inner_rhs.into_inner().next() {
-                                    for item in set_items.into_inner() {
-                                        if item.as_rule() == Rule::set_item {
-                                            let inner_item =
-                                                item.into_inner().next().ok_or_else(|| {
-                                                    ParseError::Structure {
-                                                        kind: StructureErrorKind::MissingToken {
-                                                            expected: "set item value",
-                                                            context: "set item",
-                                                        },
-                                                        location: get_location(&span),
-                                                    }
-                                                })?;
-                                            let value = match inner_item.as_rule() {
-                                                Rule::quoted_string => {
-                                                    let quoted = inner_item
-                                                        .into_inner()
-                                                        .next()
-                                                        .ok_or_else(|| ParseError::Structure {
-                                                            kind:
-                                                                StructureErrorKind::MissingToken {
-                                                                    expected: "quoted content",
-                                                                    context:
-                                                                        "set item quoted string",
-                                                                },
-                                                            location: get_location(&span),
-                                                        })?;
-                                                    let inner_str = quoted
-                                                        .into_inner()
-                                                        .next()
-                                                        .ok_or_else(|| ParseError::Structure {
-                                                            kind:
-                                                                StructureErrorKind::MissingToken {
-                                                                    expected: "string content",
-                                                                    context:
-                                                                        "set item quoted string",
-                                                                },
-                                                            location: get_location(&span),
-                                                        })?;
-                                                    inner_str.as_str().to_string()
-                                                }
-                                                Rule::bare_token => inner_item.as_str().to_string(),
-                                                Rule::set_token => inner_item.as_str().to_string(),
-                                                rule => {
-                                                    return Err(ParseError::Structure {
-                                                        kind: StructureErrorKind::UnexpectedRule {
-                                                            rule,
-                                                        },
-                                                        location: get_location(&span),
-                                                    })
-                                                }
-                                            };
-                                            items.push(value);
-                                        }
-                                    }
-                                }
-                                RhsValue::Set(items)
-                            }
+                        let value = match inner_item.as_rule() {
+                            Rule::quoted_string => extract_string_value(inner_item)?,
+                            Rule::set_token => inner_item.as_str().to_string(),
                             rule => {
                                 return Err(ParseError::Structure {
                                     kind: StructureErrorKind::UnexpectedRule { rule },
                                     location: get_location(&span),
                                 })
                             }
-                        }
+                        };
+                        items.push(value);
                     }
-                    rule => {
-                        return Err(ParseError::Structure {
-                            kind: StructureErrorKind::UnexpectedRule { rule },
-                            location: get_location(&span),
-                        })
-                    }
-                };
-
-                Ok(Expr::Predicate(RawPredicate { lhs, op, rhs }))
+                }
             }
-            Rule::expr => parse(primary.into_inner(), pratt),
+            StringMatcher::In(items)
+        }
+        rule => {
+            return Err(ParseError::Structure {
+                kind: StructureErrorKind::UnexpectedRule { rule },
+                location: get_location(&span),
+            })
+        }
+    };
+
+    // Create the appropriate predicate based on selector
+    match selector.as_rule() {
+        Rule::basename => Ok(Expr::Predicate(Predicate::name(
+            NamePredicate::BaseName(string_matcher),
+        ))),
+        Rule::filename => Ok(Expr::Predicate(Predicate::name(
+            NamePredicate::FileName(string_matcher),
+        ))),
+        Rule::dirpath => Ok(Expr::Predicate(Predicate::name(
+            NamePredicate::DirPath(string_matcher),
+        ))),
+        Rule::fullpath => Ok(Expr::Predicate(Predicate::name(
+            NamePredicate::FullPath(string_matcher),
+        ))),
+        Rule::ext => Ok(Expr::Predicate(Predicate::name(
+            NamePredicate::Extension(string_matcher),
+        ))),
+        Rule::r#type => Ok(Expr::Predicate(Predicate::meta(
+            MetadataPredicate::Type(string_matcher),
+        ))),
+        Rule::contents => {
+            // For contents, we need to create a StreamingCompiledContentPredicate
+            match string_matcher {
+                StringMatcher::Regex(regex) => {
+                    let content_pred = StreamingCompiledContentPredicate::new(regex.as_str().to_string())
+                        .map_err(|_| ParseError::Structure {
+                            kind: StructureErrorKind::InvalidToken {
+                                expected: "valid regex pattern for DFA",
+                                found: regex.as_str().to_string(),
+                            },
+                            location: get_location(&span),
+                        })?;
+                    Ok(Expr::Predicate(Predicate::contents(content_pred)))
+                }
+                StringMatcher::Equals(s) => {
+                    let regex = format!("^{}$", regex::escape(&s));
+                    let content_pred = StreamingCompiledContentPredicate::new(regex)
+                        .map_err(|_| ParseError::Structure {
+                            kind: StructureErrorKind::InvalidToken {
+                                expected: "valid regex pattern for DFA",
+                                found: s.clone(),
+                            },
+                            location: get_location(&span),
+                        })?;
+                    Ok(Expr::Predicate(Predicate::contents(content_pred)))
+                }
+                StringMatcher::Contains(s) => {
+                    let regex = regex::escape(&s);
+                    let content_pred = StreamingCompiledContentPredicate::new(regex)
+                        .map_err(|_| ParseError::Structure {
+                            kind: StructureErrorKind::InvalidToken {
+                                expected: "valid regex pattern for DFA",
+                                found: s.clone(),
+                            },
+                            location: get_location(&span),
+                        })?;
+                    Ok(Expr::Predicate(Predicate::contents(content_pred)))
+                }
+                _ => Err(ParseError::Structure {
+                    kind: StructureErrorKind::InvalidToken {
+                        expected: "regex, equals, or contains operator for contents",
+                        found: format!("{:?}", string_matcher),
+                    },
+                    location: get_location(&span),
+                }),
+            }
+        }
+        rule => Err(ParseError::Structure {
+            kind: StructureErrorKind::UnexpectedRule { rule },
+            location: get_location(&span),
+        }),
+    }
+}
+
+fn parse_numeric_predicate(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ParseError,
+> {
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
+
+    // Parse size selector (only numeric selector for now)
+    let _size_selector = inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "size selector",
+            context: "numeric_predicate",
+        },
+        location: get_location(&span),
+    })?;
+
+    // Parse operator and value
+    let op_value_pair = inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "operator and value",
+            context: "numeric_predicate",
+        },
+        location: get_location(&span),
+    })?;
+
+    let op_value_rule = op_value_pair.as_rule();
+    let mut op_value_inner = op_value_pair.into_inner();
+    let _op_pair = op_value_inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "operator",
+            context: "numeric operator",
+        },
+        location: get_location(&span),
+    })?;
+
+    let value_pair = op_value_inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "value",
+            context: "numeric operator",
+        },
+        location: get_location(&span),
+    })?;
+
+    // Parse the numeric value directly as bytes
+    let bytes = match value_pair.as_rule() {
+        Rule::numeric_value => {
+            // Unwrap the numeric_value to get the inner size_value or bare_number
+            let inner = value_pair.into_inner().next().ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "numeric content",
+                    context: "numeric_value",
+                },
+                location: get_location(&span),
+            })?;
+            match inner.as_rule() {
+                Rule::size_value => parse_size_value_as_bytes(inner)?,
+                Rule::bare_number => {
+                    let num_str = inner.as_str();
+                    num_str.parse::<u64>().map_err(|_| ParseError::Structure {
+                        kind: StructureErrorKind::InvalidToken {
+                            expected: "numeric value",
+                            found: num_str.to_string(),
+                        },
+                        location: get_location(&span),
+                    })?
+                }
+                rule => {
+                    return Err(ParseError::Structure {
+                        kind: StructureErrorKind::UnexpectedRule { rule },
+                        location: get_location(&span),
+                    })
+                }
+            }
+        }
+        Rule::size_value => parse_size_value_as_bytes(value_pair)?,
+        Rule::bare_number => {
+            let num_str = value_pair.as_str();
+            num_str.parse::<u64>().map_err(|_| ParseError::Structure {
+                kind: StructureErrorKind::InvalidToken {
+                    expected: "numeric value",
+                    found: num_str.to_string(),
+                },
+                location: get_location(&span),
+            })?
+        }
+        rule => {
+            return Err(ParseError::Structure {
+                kind: StructureErrorKind::UnexpectedRule { rule },
+                location: get_location(&span),
+            })
+        }
+    };
+
+    // Create the numeric matcher based on operator
+    let numeric_matcher = match op_value_rule {
+        Rule::numeric_eq => NumberMatcher::Equals(bytes),
+        Rule::numeric_ne => NumberMatcher::NotEquals(bytes),
+        Rule::numeric_comparison => {
+            let op_rule = _op_pair.as_rule();
+            match op_rule {
+                Rule::gt => NumberMatcher::In(Bound::Left(RangeFrom { start: bytes })),
+                Rule::gteq => NumberMatcher::In(Bound::Left(RangeFrom { start: bytes.saturating_sub(1) })),
+                Rule::lt => NumberMatcher::In(Bound::Right(RangeTo { end: bytes.saturating_add(1) })),
+                Rule::lteq => NumberMatcher::In(Bound::Right(RangeTo { end: bytes })),
+                rule => {
+                    return Err(ParseError::Structure {
+                        kind: StructureErrorKind::UnexpectedRule { rule },
+                        location: get_location(&span),
+                    })
+                }
+            }
+        }
+        rule => {
+            return Err(ParseError::Structure {
+                kind: StructureErrorKind::UnexpectedRule { rule },
+                location: get_location(&span),
+            })
+        }
+    };
+
+    Ok(Expr::Predicate(Predicate::meta(
+        MetadataPredicate::Filesize(numeric_matcher),
+    )))
+}
+
+fn parse_temporal_predicate(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ParseError,
+> {
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
+
+    // Parse temporal selector
+    let selector_pair = inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "temporal selector",
+            context: "temporal_predicate",
+        },
+        location: get_location(&span),
+    })?;
+
+    let selector = selector_pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| ParseError::Structure {
+            kind: StructureErrorKind::MissingToken {
+                expected: "selector name",
+                context: "temporal_selector",
+            },
+            location: get_location(&span),
+        })?;
+
+    // Parse operator and value
+    let op_value_pair = inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "operator and value",
+            context: "temporal_predicate",
+        },
+        location: get_location(&span),
+    })?;
+
+    let op_value_rule = op_value_pair.as_rule();
+    let mut op_value_inner = op_value_pair.into_inner();
+    let op_pair = op_value_inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "operator",
+            context: "temporal operator",
+        },
+        location: get_location(&span),
+    })?;
+
+    let value_pair = op_value_inner.next().ok_or_else(|| ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "value",
+            context: "temporal operator",
+        },
+        location: get_location(&span),
+    })?;
+
+    // Parse the temporal value
+    let time_str = match value_pair.as_rule() {
+        Rule::temporal_value => {
+            // Unwrap the temporal_value to get the inner value
+            let inner = value_pair.into_inner().next().ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "temporal content",
+                    context: "temporal_value",
+                },
+                location: get_location(&span),
+            })?;
+            match inner.as_rule() {
+                Rule::time_value => inner.as_str().to_string(),
+                Rule::quoted_string => extract_string_value(inner)?,
+                Rule::time_keyword => inner.as_str().to_string(),
+                rule => {
+                    return Err(ParseError::Structure {
+                        kind: StructureErrorKind::UnexpectedRule { rule },
+                        location: get_location(&span),
+                    })
+                }
+            }
+        }
+        Rule::time_value => value_pair.as_str().to_string(),
+        Rule::quoted_string => extract_string_value(value_pair)?,
+        Rule::time_keyword => value_pair.as_str().to_string(),
+        rule => {
+            return Err(ParseError::Structure {
+                kind: StructureErrorKind::UnexpectedRule { rule },
+                location: get_location(&span),
+            })
+        }
+    };
+
+    // Parse the time value using the existing parse_time_value function
+    let parsed_time = predicate::parse_time_value(&time_str)
+        .map_err(|_| ParseError::Structure {
+            kind: StructureErrorKind::InvalidToken {
+                expected: "valid time value",
+                found: time_str.clone(),
+            },
+            location: get_location(&span),
+        })?;
+
+    // Create the time matcher based on operator
+    let time_matcher = match op_value_rule {
+        Rule::temporal_eq => TimeMatcher::Equals(parsed_time),
+        Rule::temporal_ne => TimeMatcher::NotEquals(parsed_time),
+        Rule::temporal_comparison => {
+            let op_rule = op_pair.as_rule();
+            match op_rule {
+                Rule::gt | Rule::gteq => TimeMatcher::After(parsed_time),
+                Rule::lt | Rule::lteq => TimeMatcher::Before(parsed_time),
+                rule => {
+                    return Err(ParseError::Structure {
+                        kind: StructureErrorKind::UnexpectedRule { rule },
+                        location: get_location(&span),
+                    })
+                }
+            }
+        }
+        rule => {
+            return Err(ParseError::Structure {
+                kind: StructureErrorKind::UnexpectedRule { rule },
+                location: get_location(&span),
+            })
+        }
+    };
+
+    // Create the appropriate predicate based on selector
+    match selector.as_rule() {
+        Rule::modified => Ok(Expr::Predicate(Predicate::meta(
+            MetadataPredicate::Modified(time_matcher),
+        ))),
+        Rule::created => Ok(Expr::Predicate(Predicate::meta(
+            MetadataPredicate::Created(time_matcher),
+        ))),
+        Rule::accessed => Ok(Expr::Predicate(Predicate::meta(
+            MetadataPredicate::Accessed(time_matcher),
+        ))),
+        rule => Err(ParseError::Structure {
+            kind: StructureErrorKind::UnexpectedRule { rule },
+            location: get_location(&span),
+        }),
+    }
+}
+
+
+fn parse_typed_predicates(
+    pairs: Pairs<Rule>,
+    pratt: &PrattParser<Rule>,
+) -> Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ParseError,
+> {
+    pratt
+        .map_primary(|primary| match primary.as_rule() {
+            Rule::typed_predicate => {
+                let span = primary.as_span();
+                let inner = primary.into_inner().next().ok_or_else(|| ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "predicate type",
+                        context: "typed_predicate",
+                    },
+                    location: get_location(&span),
+                })?;
+
+                match inner.as_rule() {
+                    Rule::string_predicate => parse_string_predicate(inner),
+                    Rule::numeric_predicate => parse_numeric_predicate(inner),
+                    Rule::temporal_predicate => parse_temporal_predicate(inner),
+                    rule => Err(ParseError::Structure {
+                        kind: StructureErrorKind::UnexpectedRule { rule },
+                        location: get_location(&span),
+                    }),
+                }
+            }
+            Rule::expr => parse_typed_predicates(primary.into_inner(), pratt),
             rule => Err(ParseError::Structure {
                 kind: StructureErrorKind::UnexpectedRule { rule },
                 location: None,
@@ -366,17 +681,6 @@ pub fn parse_expr(
 
     let pairs = expr_pair.into_inner();
 
-    let expr = parse(pairs, &pratt)?;
-
-    expr.map_predicate_err(|r| {
-        let selector = r.lhs.clone();
-        let operator = r.op.clone();
-        let value = r.rhs.clone();
-        r.parse().map_err(|e| ParseError::Predicate {
-            selector,
-            operator,
-            value,
-            source: e,
-        })
-    })
+    // Use the new typed predicate parser
+    parse_typed_predicates(pairs, &pratt)
 }

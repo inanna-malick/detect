@@ -371,9 +371,9 @@ async fn test_in_operator_with_quoted_set() {
 
 #[tokio::test]
 async fn test_in_operator_single_value() {
-    // Test that 'in' works with a single value (not a set)
+    // Test that 'in' requires a set literal
     Case {
-        expr: r#"ext in "js""#,
+        expr: r#"ext in ["js"]"#,
         expected: &["app.js", "index.js"],
         files: vec![f("app.js", ""), f("index.js", ""), f("style.css", "")],
     }

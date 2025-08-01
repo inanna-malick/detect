@@ -20,42 +20,109 @@ program         =   { SOI ~ expr ~ EOI }
       or        =   { "||" } // logical or
     prefix      =  _{ neg }
       neg       =   { "!" } // Negation
-    primary     =  _{ predicate | "(" ~ expr ~ ")" }
+    primary     =  _{ typed_predicate | "(" ~ expr ~ ")" }
 
 
-predicate =  { selector ~ op ~ rhs }
-  selector = { basename | dirpath | fullpath | size | type | filename | ext | contents | modified | created | accessed }
+// Typed predicates - each combines selector, operator, and appropriate RHS
+typed_predicate = { string_predicate | numeric_predicate | temporal_predicate }
+
+// String predicates (for name, path, content, and type selectors)
+string_predicate = {
+    string_selector ~ string_op_value
+}
+  string_op_value = _{
+    string_regex |
+    string_eq |
+    string_ne |
+    string_contains |
+    string_in
+  }
+  string_selector = { type | basename | fullpath | filename | dirpath | ext | contents }
     basename = { "basename" | "base" }
     filename = { "filename" | "file" }
     dirpath  = { "dirpath" | "dir" }
     fullpath = { "fullpath" | "full" }
     ext      = { "extension" | "ext" }
-    size     = { "filesize" | "size" }
-    type     = { "filetype" | "type" }
     contents = { "contents" | "content" }
+    type     = { "filetype" | "type" }
+
+  string_eq = { eq ~ string_value }
+  string_ne = { ne ~ string_value }
+  string_contains = { contains ~ string_value }
+  string_regex = { (match_ | like) ~ string_value }
+  string_in = { in_ ~ set_literal }
+
+  string_value = { quoted_string | bare_string }
+  bare_string = @{ bare_char+ }
+
+// Numeric predicates (for size selector)
+numeric_predicate = {
+    size ~ numeric_op_value
+}
+  numeric_op_value = _{
+    numeric_eq |
+    numeric_ne |
+    numeric_comparison
+  }
+  size = { "filesize" | "size" }
+  
+  numeric_eq = { eq ~ numeric_value }
+  numeric_ne = { ne ~ numeric_value }
+  numeric_comparison = { (gteq | lteq | gt | lt) ~ numeric_value }
+  
+  numeric_value = { size_value | bare_number }
+  size_value = ${ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ size_unit }
+  bare_number = @{ ASCII_DIGIT+ }
+
+// Temporal predicates (for time selectors)
+temporal_predicate = {
+    temporal_selector ~ temporal_op_value
+}
+  temporal_op_value = _{
+    temporal_eq |
+    temporal_ne |
+    temporal_comparison
+  }
+  temporal_selector = { modified | created | accessed }
     modified = { "modified" | "mtime" }
     created  = { "created" | "ctime" }
     accessed = { "accessed" | "atime" }
-  op      = _{ match_ | ne | eq | gteq | lteq | gt | lt | like | in_ | contains }
-    eq       = { "==" | "=" }         // exact equals
-    ne       = { "!=" }               // not equal
-    like     = { "~=" | "~" }         // regex (backward compat)
-    match_   = { "=~" }               // regex (explicit)
-    gteq     = { ">=" }
-    lteq     = { "<=" }
-    gt       = { ">" }
-    lt       = { "<" }
-    in_      = { "in" }               // set membership
-    contains = { "contains" }         // substring match
-  rhs     = { set_literal | quoted_string | size_value | bare_token }
-    set_literal = { "[" ~ set_items? ~ "]" }
-      set_items = { set_item ~ ("," ~ set_item)* }
-      set_item = { set_token | quoted_string }
-    quoted_string = ${ double_quoted | single_quoted }
-      double_quoted = { "\"" ~ inner_double ~ "\"" }
-      single_quoted = { "'" ~ inner_single ~ "'" }
-      inner_double = @{ (!"\"" ~ ANY)* }
-      inner_single = @{ (!"'" ~ ANY)* }
-    size_value = ${ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ size_unit }
-    bare_token = @{ bare_char+ }
-    set_token = @{ set_char+ }
+    
+  temporal_eq = { eq ~ temporal_value }
+  temporal_ne = { ne ~ temporal_value }
+  temporal_comparison = { (gteq | lteq | gt | lt) ~ temporal_value }
+  
+  temporal_value = { time_value | quoted_string | time_keyword }
+  time_value = ${ "-" ~ ASCII_DIGIT+ ~ "." ~ time_unit }
+  time_keyword = { "now" | "today" | "yesterday" }
+  time_unit = { seconds | minutes | hours | days | weeks | months }
+    seconds = { "seconds" | "second" | "secs" | "sec" | "s" }
+    minutes = { "minutes" | "minute" | "mins" | "min" | "m" }
+    hours   = { "hours" | "hour" | "hrs" | "hr" | "h" }
+    days    = { "days" | "day" | "d" }
+    weeks   = { "weeks" | "week" | "w" }
+    months  = { "months" | "month" }
+
+// Shared operator definitions
+eq       = { "==" | "=" }         // exact equals
+ne       = { "!=" }               // not equal
+like     = { "~=" | "~" }         // regex (backward compat)
+match_   = { "=~" }               // regex (explicit)
+gteq     = { ">=" }
+lteq     = { "<=" }
+gt       = { ">" }
+lt       = { "<" }
+in_      = { "in" }               // set membership
+contains = { "contains" }         // substring match
+
+// Shared value definitions
+set_literal = { "[" ~ set_items? ~ "]" }
+  set_items = { set_item ~ ("," ~ set_item)* }
+  set_item = { set_token | quoted_string }
+  set_token = @{ set_char+ }
+
+quoted_string = ${ double_quoted | single_quoted }
+  double_quoted = { "\"" ~ inner_double ~ "\"" }
+  single_quoted = { "'" ~ inner_single ~ "'" }
+  inner_double = @{ (!"\"" ~ ANY)* }
+  inner_single = @{ (!"'" ~ ANY)* }
