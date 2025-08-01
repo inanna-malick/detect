@@ -1,3 +1,4 @@
+pub mod ast;
 pub mod error;
 pub mod error_hints;
 mod eval;
