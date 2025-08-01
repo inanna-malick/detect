@@ -4,15 +4,17 @@ use pest::{
     Parser, Span,
 };
 
-use std::ops::{RangeFrom, RangeTo};
 use crate::{
     expr::Expr,
     parse_error::{ParseError, StructureErrorKind},
-    predicate::{self, Predicate, StreamingCompiledContentPredicate, StringMatcher, NumberMatcher, TimeMatcher, Bound},
+    predicate::{
+        self, Bound, NumberMatcher, Predicate, StreamingCompiledContentPredicate, StringMatcher,
+        TimeMatcher,
+    },
     MetadataPredicate, NamePredicate,
 };
 use regex::Regex;
-
+use std::ops::{RangeFrom, RangeTo};
 
 pub mod pratt_parser {
     use pest_derive::Parser;
@@ -93,30 +95,39 @@ fn extract_string_value(pair: pest::iterators::Pair<Rule>) -> Result<String, Par
     match pair.as_rule() {
         Rule::string_value => {
             // Unwrap the string_value to get the inner quoted_string or bare_string
-            let inner = pair.into_inner().next().ok_or_else(|| ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "string content",
-                    context: "string_value",
-                },
-                location: get_location(&span),
-            })?;
+            let inner = pair
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "string content",
+                        context: "string_value",
+                    },
+                    location: get_location(&span),
+                })?;
             extract_string_value(inner)
         }
         Rule::quoted_string => {
-            let quoted = pair.into_inner().next().ok_or_else(|| ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "quoted content",
-                    context: "quoted string",
-                },
-                location: get_location(&span),
-            })?;
-            let inner_str = quoted.into_inner().next().ok_or_else(|| ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "string content",
-                    context: "quoted string",
-                },
-                location: get_location(&span),
-            })?;
+            let quoted = pair
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "quoted content",
+                        context: "quoted string",
+                    },
+                    location: get_location(&span),
+                })?;
+            let inner_str = quoted
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "string content",
+                        context: "quoted string",
+                    },
+                    location: get_location(&span),
+                })?;
             Ok(inner_str.as_str().to_string())
         }
         Rule::bare_string => Ok(pair.as_str().to_string()),
@@ -145,16 +156,29 @@ fn parse_string_predicate(
         location: get_location(&span),
     })?;
 
-    let selector = selector_pair
-        .into_inner()
-        .next()
-        .ok_or_else(|| ParseError::Structure {
-            kind: StructureErrorKind::MissingToken {
-                expected: "selector name",
-                context: "string_selector",
-            },
-            location: get_location(&span),
-        })?;
+    // For path_selector, we might have a nested structure or a direct selector
+    let selector = if selector_pair.as_rule() == Rule::path_selector {
+        // Path selector might be just "path" or "path.component"
+        let mut inner = selector_pair.clone().into_inner();
+        if let Some(first) = inner.next() {
+            first
+        } else {
+            // No inner content means it's the atomic @{ } rule result
+            selector_pair
+        }
+    } else {
+        // For other selectors (contents, type), get the inner content
+        selector_pair
+            .into_inner()
+            .next()
+            .ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "selector name",
+                    context: "string_selector",
+                },
+                location: get_location(&span),
+            })?
+    };
 
     // Parse operator and value
     let op_value_pair = inner.next().ok_or_else(|| ParseError::Structure {
@@ -215,15 +239,16 @@ fn parse_string_predicate(
             if let Some(set_items) = value_pair.into_inner().next() {
                 for item in set_items.into_inner() {
                     if item.as_rule() == Rule::set_item {
-                        let inner_item = item.into_inner().next().ok_or_else(|| {
-                            ParseError::Structure {
-                                kind: StructureErrorKind::MissingToken {
-                                    expected: "set item value",
-                                    context: "set item",
-                                },
-                                location: get_location(&span),
-                            }
-                        })?;
+                        let inner_item =
+                            item.into_inner()
+                                .next()
+                                .ok_or_else(|| ParseError::Structure {
+                                    kind: StructureErrorKind::MissingToken {
+                                        expected: "set item value",
+                                        context: "set item",
+                                    },
+                                    location: get_location(&span),
+                                })?;
                         let value = match inner_item.as_rule() {
                             Rule::quoted_string => extract_string_value(inner_item)?,
                             Rule::set_token => inner_item.as_str().to_string(),
@@ -250,59 +275,119 @@ fn parse_string_predicate(
 
     // Create the appropriate predicate based on selector
     match selector.as_rule() {
-        Rule::basename => Ok(Expr::Predicate(Predicate::name(
-            NamePredicate::BaseName(string_matcher),
-        ))),
-        Rule::filename => Ok(Expr::Predicate(Predicate::name(
-            NamePredicate::FileName(string_matcher),
-        ))),
-        Rule::dirpath => Ok(Expr::Predicate(Predicate::name(
-            NamePredicate::DirPath(string_matcher),
-        ))),
-        Rule::fullpath => Ok(Expr::Predicate(Predicate::name(
-            NamePredicate::FullPath(string_matcher),
-        ))),
-        Rule::ext => Ok(Expr::Predicate(Predicate::name(
-            NamePredicate::Extension(string_matcher),
-        ))),
-        Rule::r#type => Ok(Expr::Predicate(Predicate::meta(
-            MetadataPredicate::Type(string_matcher),
-        ))),
+        Rule::path_selector => {
+            // Handle hierarchical path selectors
+            let mut path_parts = selector.into_inner();
+            let first = path_parts.next().ok_or_else(|| ParseError::Structure {
+                kind: StructureErrorKind::MissingToken {
+                    expected: "path selector",
+                    context: "path_selector",
+                },
+                location: get_location(&span),
+            })?;
+
+            match first.as_rule() {
+                Rule::path_alias => {
+                    // Simple 'path' selector - maps to full path (alias for path.full)
+                    Ok(Expr::Predicate(Predicate::name(NamePredicate::FullPath(
+                        string_matcher,
+                    ))))
+                }
+                Rule::path_with_component => {
+                    // Handle path.full, path.parent, path.name, etc.
+                    let inner = first.into_inner();
+                    // Find the component token (should be last)
+                    let component = inner
+                        .into_iter()
+                        .find(|t| {
+                            matches!(
+                                t.as_rule(),
+                                Rule::path_full
+                                    | Rule::path_parent
+                                    | Rule::path_name
+                                    | Rule::path_stem
+                                    | Rule::path_suffix
+                            )
+                        })
+                        .ok_or_else(|| ParseError::Structure {
+                            kind: StructureErrorKind::MissingToken {
+                                expected: "path component",
+                                context: "path_with_component",
+                            },
+                            location: get_location(&span),
+                        })?;
+
+                    match component.as_rule() {
+                        Rule::path_full => Ok(Expr::Predicate(Predicate::name(
+                            NamePredicate::FullPath(string_matcher),
+                        ))),
+                        Rule::path_parent => Ok(Expr::Predicate(Predicate::name(
+                            NamePredicate::DirPath(string_matcher),
+                        ))),
+                        Rule::path_name => Ok(Expr::Predicate(Predicate::name(
+                            NamePredicate::FileName(string_matcher),
+                        ))),
+                        Rule::path_stem => Ok(Expr::Predicate(Predicate::name(
+                            NamePredicate::BaseName(string_matcher),
+                        ))),
+                        Rule::path_suffix => Ok(Expr::Predicate(Predicate::name(
+                            NamePredicate::Extension(string_matcher),
+                        ))),
+                        rule => Err(ParseError::Structure {
+                            kind: StructureErrorKind::UnexpectedRule { rule },
+                            location: get_location(&span),
+                        }),
+                    }
+                }
+                rule => Err(ParseError::Structure {
+                    kind: StructureErrorKind::UnexpectedRule { rule },
+                    location: get_location(&span),
+                }),
+            }
+        }
+        Rule::r#type => Ok(Expr::Predicate(Predicate::meta(MetadataPredicate::Type(
+            string_matcher,
+        )))),
         Rule::contents => {
             // For contents, we need to create a StreamingCompiledContentPredicate
             match string_matcher {
                 StringMatcher::Regex(regex) => {
-                    let content_pred = StreamingCompiledContentPredicate::new(regex.as_str().to_string())
-                        .map_err(|_| ParseError::Structure {
-                            kind: StructureErrorKind::InvalidToken {
-                                expected: "valid regex pattern for DFA",
-                                found: regex.as_str().to_string(),
-                            },
-                            location: get_location(&span),
-                        })?;
+                    let content_pred =
+                        StreamingCompiledContentPredicate::new(regex.as_str().to_string())
+                            .map_err(|_| ParseError::Structure {
+                                kind: StructureErrorKind::InvalidToken {
+                                    expected: "valid regex pattern for DFA",
+                                    found: regex.as_str().to_string(),
+                                },
+                                location: get_location(&span),
+                            })?;
                     Ok(Expr::Predicate(Predicate::contents(content_pred)))
                 }
                 StringMatcher::Equals(s) => {
                     let regex = format!("^{}$", regex::escape(&s));
-                    let content_pred = StreamingCompiledContentPredicate::new(regex)
-                        .map_err(|_| ParseError::Structure {
-                            kind: StructureErrorKind::InvalidToken {
-                                expected: "valid regex pattern for DFA",
-                                found: s.clone(),
-                            },
-                            location: get_location(&span),
+                    let content_pred =
+                        StreamingCompiledContentPredicate::new(regex).map_err(|_| {
+                            ParseError::Structure {
+                                kind: StructureErrorKind::InvalidToken {
+                                    expected: "valid regex pattern for DFA",
+                                    found: s.clone(),
+                                },
+                                location: get_location(&span),
+                            }
                         })?;
                     Ok(Expr::Predicate(Predicate::contents(content_pred)))
                 }
                 StringMatcher::Contains(s) => {
                     let regex = regex::escape(&s);
-                    let content_pred = StreamingCompiledContentPredicate::new(regex)
-                        .map_err(|_| ParseError::Structure {
-                            kind: StructureErrorKind::InvalidToken {
-                                expected: "valid regex pattern for DFA",
-                                found: s.clone(),
-                            },
-                            location: get_location(&span),
+                    let content_pred =
+                        StreamingCompiledContentPredicate::new(regex).map_err(|_| {
+                            ParseError::Structure {
+                                kind: StructureErrorKind::InvalidToken {
+                                    expected: "valid regex pattern for DFA",
+                                    found: s.clone(),
+                                },
+                                location: get_location(&span),
+                            }
                         })?;
                     Ok(Expr::Predicate(Predicate::contents(content_pred)))
                 }
@@ -371,13 +456,16 @@ fn parse_numeric_predicate(
     let bytes = match value_pair.as_rule() {
         Rule::numeric_value => {
             // Unwrap the numeric_value to get the inner size_value or bare_number
-            let inner = value_pair.into_inner().next().ok_or_else(|| ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "numeric content",
-                    context: "numeric_value",
-                },
-                location: get_location(&span),
-            })?;
+            let inner = value_pair
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "numeric content",
+                        context: "numeric_value",
+                    },
+                    location: get_location(&span),
+                })?;
             match inner.as_rule() {
                 Rule::size_value => parse_size_value_as_bytes(inner)?,
                 Rule::bare_number => {
@@ -425,8 +513,12 @@ fn parse_numeric_predicate(
             let op_rule = _op_pair.as_rule();
             match op_rule {
                 Rule::gt => NumberMatcher::In(Bound::Left(RangeFrom { start: bytes })),
-                Rule::gteq => NumberMatcher::In(Bound::Left(RangeFrom { start: bytes.saturating_sub(1) })),
-                Rule::lt => NumberMatcher::In(Bound::Right(RangeTo { end: bytes.saturating_add(1) })),
+                Rule::gteq => NumberMatcher::In(Bound::Left(RangeFrom {
+                    start: bytes.saturating_sub(1),
+                })),
+                Rule::lt => NumberMatcher::In(Bound::Right(RangeTo {
+                    end: bytes.saturating_add(1),
+                })),
                 Rule::lteq => NumberMatcher::In(Bound::Right(RangeTo { end: bytes })),
                 rule => {
                     return Err(ParseError::Structure {
@@ -509,13 +601,16 @@ fn parse_temporal_predicate(
     let time_str = match value_pair.as_rule() {
         Rule::temporal_value => {
             // Unwrap the temporal_value to get the inner value
-            let inner = value_pair.into_inner().next().ok_or_else(|| ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "temporal content",
-                    context: "temporal_value",
-                },
-                location: get_location(&span),
-            })?;
+            let inner = value_pair
+                .into_inner()
+                .next()
+                .ok_or_else(|| ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "temporal content",
+                        context: "temporal_value",
+                    },
+                    location: get_location(&span),
+                })?;
             match inner.as_rule() {
                 Rule::time_value => inner.as_str().to_string(),
                 Rule::quoted_string => extract_string_value(inner)?,
@@ -540,8 +635,8 @@ fn parse_temporal_predicate(
     };
 
     // Parse the time value using the existing parse_time_value function
-    let parsed_time = predicate::parse_time_value(&time_str)
-        .map_err(|_| ParseError::Structure {
+    let parsed_time =
+        predicate::parse_time_value(&time_str).map_err(|_| ParseError::Structure {
             kind: StructureErrorKind::InvalidToken {
                 expected: "valid time value",
                 found: time_str.clone(),
@@ -592,7 +687,6 @@ fn parse_temporal_predicate(
     }
 }
 
-
 fn parse_typed_predicates(
     pairs: Pairs<Rule>,
     pratt: &PrattParser<Rule>,
@@ -604,13 +698,16 @@ fn parse_typed_predicates(
         .map_primary(|primary| match primary.as_rule() {
             Rule::typed_predicate => {
                 let span = primary.as_span();
-                let inner = primary.into_inner().next().ok_or_else(|| ParseError::Structure {
-                    kind: StructureErrorKind::MissingToken {
-                        expected: "predicate type",
-                        context: "typed_predicate",
-                    },
-                    location: get_location(&span),
-                })?;
+                let inner = primary
+                    .into_inner()
+                    .next()
+                    .ok_or_else(|| ParseError::Structure {
+                        kind: StructureErrorKind::MissingToken {
+                            expected: "predicate type",
+                            context: "typed_predicate",
+                        },
+                        location: get_location(&span),
+                    })?;
 
                 match inner.as_rule() {
                     Rule::string_predicate => parse_string_predicate(inner),
@@ -657,10 +754,10 @@ pub fn parse_expr(
         .op(Op::infix(Rule::and, Left))
         .op(Op::prefix(Rule::neg));
 
-    let mut parse_tree =
-        pratt_parser::Parser::parse(Rule::program, input).map_err(ParseError::Syntax)?;
+    let mut parse_tree = pratt_parser::Parser::parse(Rule::program, input)
+        .map_err(|e| ParseError::Syntax(Box::new(e)))?;
 
-    let program = parse_tree.next().ok_or_else(|| ParseError::Structure {
+    let program = parse_tree.next().ok_or(ParseError::Structure {
         kind: StructureErrorKind::MissingToken {
             expected: "program",
             context: "root",
@@ -668,16 +765,13 @@ pub fn parse_expr(
         location: None,
     })?;
 
-    let expr_pair = program
-        .into_inner()
-        .next()
-        .ok_or_else(|| ParseError::Structure {
-            kind: StructureErrorKind::MissingToken {
-                expected: "expression",
-                context: "program",
-            },
-            location: None,
-        })?;
+    let expr_pair = program.into_inner().next().ok_or(ParseError::Structure {
+        kind: StructureErrorKind::MissingToken {
+            expected: "expression",
+            context: "program",
+        },
+        location: None,
+    })?;
 
     let pairs = expr_pair.into_inner();
 

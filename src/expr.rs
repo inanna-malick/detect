@@ -35,10 +35,10 @@ impl<P: Display> Display for Expr<P> {
                         write!(f, "(")?;
                         e.fmt(f)?;
                         write!(f, ")")
-                    },
+                    }
                     _ => e.fmt(f),
                 }
-            },
+            }
             Expr::And(a, b) => {
                 // Add parentheses for Or expressions to preserve precedence
                 match a.as_ref() {
@@ -46,7 +46,7 @@ impl<P: Display> Display for Expr<P> {
                         write!(f, "(")?;
                         a.fmt(f)?;
                         write!(f, ")")?;
-                    },
+                    }
                     _ => a.fmt(f)?,
                 }
                 write!(f, " && ")?;
@@ -55,15 +55,15 @@ impl<P: Display> Display for Expr<P> {
                         write!(f, "(")?;
                         b.fmt(f)?;
                         write!(f, ")")
-                    },
+                    }
                     _ => b.fmt(f),
                 }
-            },
+            }
             Expr::Or(a, b) => {
                 a.fmt(f)?;
                 write!(f, " || ")?;
                 b.fmt(f)
-            },
+            }
             Expr::Predicate(p) => p.fmt(f),
             Expr::Literal(x) => x.fmt(f),
         }

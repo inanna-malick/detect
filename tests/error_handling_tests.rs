@@ -65,12 +65,16 @@ async fn test_broken_symlink() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "filename ~= .*".to_owned(),
+        "path.name ~= .*".to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
 
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Broken symlink test failed: {:?}",
+        result.err()
+    );
     // The behavior with broken symlinks may vary by implementation
     // Just verify it doesn't crash
 }
@@ -116,7 +120,7 @@ async fn test_file_disappears_during_traversal() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "ext == txt".to_owned(),
+        "path.suffix == txt".to_owned(),
         |p| {
             found.push(p.file_name().unwrap().to_string_lossy().to_string());
             *files_processed_search.lock().unwrap() += 1;
@@ -125,7 +129,11 @@ async fn test_file_disappears_during_traversal() {
     .await;
 
     // Should complete successfully even if a file disappeared
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "File disappears test failed: {:?}",
+        result.err()
+    );
 
     // We should have found at least some files
     assert!(!found.is_empty());
@@ -165,12 +173,16 @@ async fn test_very_long_path() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "filename == deep.txt".to_owned(),
+        "path.name == deep.txt".to_owned(),
         |p| found.push(p.to_string_lossy().to_string()),
     )
     .await;
 
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Very long path test failed: {:?}",
+        result.err()
+    );
     assert_eq!(found.len(), 1);
 }
 
@@ -207,12 +219,16 @@ async fn test_special_characters_in_filenames() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "ext == txt".to_owned(),
+        "path.suffix == txt".to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
 
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Special characters test failed: {:?}",
+        result.err()
+    );
 
     // Should find at least some of the files
     assert!(!found.is_empty());
@@ -223,12 +239,16 @@ async fn test_special_characters_in_filenames() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        r#"filename == "file with spaces.txt""#.to_owned(),
+        r#"path.name == "file with spaces.txt""#.to_owned(),
         |p| found_specific.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
 
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Special characters specific test failed: {:?}",
+        result.err()
+    );
     if found.iter().any(|f| f == "file with spaces.txt") {
         assert_eq!(found_specific.len(), 1);
     }
@@ -248,12 +268,16 @@ async fn test_empty_directory() {
         Logger::root(Discard, o!()),
         &empty_dir,
         false,
-        "filename ~= .*".to_owned(),
+        "path.name ~= .*".to_owned(),
         |p| found.push(p.to_string_lossy().to_string()),
     )
     .await;
 
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Empty directory test failed: {:?}",
+        result.err()
+    );
     // Should find the directory itself but no files
     assert!(found.is_empty() || found.len() == 1);
 }
@@ -281,12 +305,16 @@ async fn test_circular_symlinks() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "filename ~= .*".to_owned(),
+        "path.name ~= .*".to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
 
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Circular symlinks test failed: {:?}",
+        result.err()
+    );
     // Should find the normal file at least
     assert!(found.contains(&"normal.txt".to_string()));
 }

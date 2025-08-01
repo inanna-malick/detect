@@ -37,12 +37,19 @@ string_predicate = {
     string_contains |
     string_in
   }
-  string_selector = { type | basename | fullpath | filename | dirpath | ext | contents }
-    basename = { "basename" | "base" }
-    filename = { "filename" | "file" }
-    dirpath  = { "dirpath" | "dir" }
-    fullpath = { "fullpath" | "full" }
-    ext      = { "extension" | "ext" }
+  string_selector = { path_selector | contents | type }
+    // Hierarchical path selectors
+    path_selector = { path_with_component | path_alias }
+    path_alias = { "path" } // Alias for path.full
+    path_with_component = {
+        "path" ~ "." ~ (path_full | path_parent | path_name | path_stem | path_suffix)
+    }
+    path_full = { "full" }
+    path_parent = { "parent" }
+    path_name = { "name" }
+    path_stem = { "stem" }
+    path_suffix = { "suffix" }
+    
     contents = { "contents" | "content" }
     type     = { "filetype" | "type" }
 

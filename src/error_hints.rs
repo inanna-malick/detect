@@ -2,15 +2,17 @@
 pub fn get_parse_error_hints() -> &'static str {
     "Quick grammar guide:
   • Selectors:
-    - name (or filename)     # file name
-    - path (or filepath)     # full path
-    - ext (or extension)     # file extension
-    - size (or filesize)     # size in bytes
-    - type (or filetype)     # file, dir, or symlink
-    - contents (or file)     # file contents
-    - modified (or mtime)    # modification time
-    - created (or ctime)     # creation time
-    - accessed (or atime)    # access time
+    - path (or path.full)    # complete file path
+    - path.parent            # directory containing file
+    - path.name              # filename with extension
+    - path.stem              # filename without extension
+    - path.suffix            # file extension without dot
+    - type                   # file, dir, or symlink
+    - contents               # file contents
+    - size                   # size in bytes (supports KB/MB/GB)
+    - modified               # modification time
+    - created                # creation time
+    - accessed               # access time
   • Operators:
     - == (or =)             # exact match (case-sensitive)
     - !=                    # not equal
@@ -20,9 +22,11 @@ pub fn get_parse_error_hints() -> &'static str {
     - in [...]              # set membership
     - &&, ||, !             # boolean logic
   • Examples:
-    - name ~= \".*\\.rs\"      # regex match
-    - size > 1024            # size in bytes
-    - type == \"file\"         # file or directory
+    - path.full ~= \".*\\.rs\"     # Rust files
+    - path.name == \"test.rs\"    # specific filename
+    - path.parent contains \"src\" # in src directory
+    - size > 1KB             # files larger than 1KB
+    - type == \"file\"         # regular files only
     - contents ~= \"TODO\"     # search file contents
     - modified > \"-7.days\"   # modified in last week"
 }

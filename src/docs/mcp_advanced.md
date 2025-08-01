@@ -26,11 +26,11 @@
 The `~=` operator supports full regex syntax:
 
 ```
-filename ~= "^test_"           - Files starting with test_
-filename ~= "\.rs$"            - Files ending with .rs
-filename ~= "v\d+\.\d+\.\d+"   - Version patterns like v1.2.3
+path.name ~= "^test_"           - Files starting with test_
+path.name ~= "\.rs$"            - Files ending with .rs
+path.name ~= "v\d+\.\d+\.\d+"   - Version patterns like v1.2.3
 contents ~= "fn\s+main"        - Rust main functions
-fullpath ~= ".*/src/.*\.rs$"   - Rust files in src directories
+path.full ~= ".*/src/.*\.rs$"   - Rust files in src directories
 ```
 
 ### Important Regex Notes
@@ -48,29 +48,29 @@ From highest to lowest:
 
 Examples:
 ```
-!filename contains test && ext == rs || size > 1000
-# Parses as: ((!filename contains test) && (ext == rs)) || (size > 1000)
+!path.name contains test && path.suffix == rs || size > 1000
+# Parses as: ((!path.name contains test) && (path.suffix == rs)) || (size > 1000)
 
-ext == rs && size > 1000 || filename contains test
-# Parses as: ((ext == rs) && (size > 1000)) || (filename contains test)
+path.suffix == rs && size > 1000 || path.name contains test
+# Parses as: ((path.suffix == rs) && (size > 1000)) || (path.name contains test)
 ```
 
 Use parentheses to override precedence:
 ```
-!(filename contains test && ext == rs)
-ext == rs && (size > 1000 || filename contains test)
+!(path.name contains test && path.suffix == rs)
+path.suffix == rs && (size > 1000 || path.name contains test)
 (contents contains TODO || contents contains FIXME) && (size > 10000 || modified > "-1.day")
 ```
 
 ## All Selectors
 
 ### String Selectors
-- `basename`, `base` - Filename without extension
-- `filename`, `file` - Complete filename with extension
-- `dirpath`, `dir` - Directory path only
-- `fullpath`, `full` - Complete path including filename
-- `ext`, `extension` - File extension (without dot)
-- `contents`, `file` - Search file contents
+- `path.stem` - Filename without extension
+- `path.name` - Complete filename with extension
+- `path.parent` - Directory path only
+- `path.full` (or `path`) - Complete path including filename
+- `path.suffix` - File extension (without dot)
+- `contents` - Search file contents
 
 ### Number Selectors
 - `size`, `filesize` - Size in bytes
@@ -119,15 +119,15 @@ modified < "yesterday"
 
 **IMPORTANT**: All string comparisons in detect are case-sensitive. This affects:
 
-- Name/path matching: `filename == "README.md"` won't match "readme.md"
-- Extension matching: `ext == "MD"` won't match ".md" files
-- Contains operator: `filename contains "Test"` won't match "test"
+- Name/path matching: `path.name == "README.md"` won't match "readme.md"
+- Extension matching: `path.suffix == "MD"` won't match ".md" files
+- Contains operator: `path.name contains "Test"` won't match "test"
 - Content searches: `contents contains "TODO"` won't match "todo"
 
 For case-insensitive matching with regex:
 ```
 # Add (?i) flag at the start of regex pattern
-filename ~= "(?i)readme"     # Matches README, readme, ReadMe, etc.
+path.name ~= "(?i)readme"     # Matches README, readme, ReadMe, etc.
 contents ~= "(?i)todo"       # Matches TODO, todo, Todo, etc.
 ```
 
@@ -144,31 +144,31 @@ contents ~= "AKIA[0-9A-Z]{16}"
 contents contains "BEGIN RSA PRIVATE KEY"
 
 # Hardcoded passwords in code
-ext in [js, py, java] && contents ~= "password\s*=\s*[\"'][^\"']+[\"']"
+path.suffix in [js, py, java] && contents ~= "password\s*=\s*[\"'][^\"']+[\"']"
 ```
 
 ### Code Analysis
 ```
 # Large files with TODO comments
-ext in [js, py, rs] && size > 100000 && contents ~= "//\s*TODO|#\s*TODO"
+path.suffix in [js, py, rs] && size > 100000 && contents ~= "//\s*TODO|#\s*TODO"
 
 # Python files with multiple classes
-ext == py && !dirpath contains __pycache__ && contents ~= "class\s+\w+"
+path.suffix == py && !path.parent contains __pycache__ && contents ~= "class\s+\w+"
 
 # JavaScript files importing React
-ext in [js, jsx] && !dirpath contains node_modules && contents ~= "import.*React|from.*react"
+path.suffix in [js, jsx] && !path.parent contains node_modules && contents ~= "import.*React|from.*react"
 ```
 
 ### Project Maintenance
 ```
 # Stale test files
-filename contains test && modified < "-90.days"
+path.name contains test && modified < "-90.days"
 
 # Config files that might need review
-(filename ~= "config|settings" || ext in [yml, yaml, json]) && modified < "-180.days"
+(path.name ~= "config|settings" || path.suffix in [yml, yaml, json]) && modified < "-180.days"
 
 # Large generated files
-size > 1000000 && (filename contains generated || dirpath contains "/dist/")
+size > 1000000 && (path.name contains generated || path.parent contains "/dist/")
 ```
 
 ## Performance Optimization
@@ -178,34 +178,34 @@ Filters are evaluated left-to-right with short-circuiting:
 
 ```
 # FAST: Path/name filters eliminate files immediately
-ext == js && !dirpath contains node_modules && contents contains TODO
+path.suffix == js && !path.parent contains node_modules && contents contains TODO
 
 # SLOW: Searches all file contents before filtering
-contents contains TODO && ext == js && !dirpath contains node_modules
+contents contains TODO && path.suffix == js && !path.parent contains node_modules
 ```
 
 ### Three Tiers of Performance
 ```
 # Tier 1 (instant): Path/name/extension checks
-filename contains test && ext == py
+path.name contains test && path.suffix == py
 
 # Tier 2 (fast): Metadata checks  
-ext == log && size > 100000000 && modified < "-30.days"
+path.suffix == log && size > 100000000 && modified < "-30.days"
 
 # Tier 3 (slow): Content searches
-ext == rs && size < 10000 && contents contains "fn main"
+path.suffix == rs && size < 10000 && contents contains "fn main"
 ```
 
 ### Real-World Performance Patterns
 ```
 # Skip build artifacts first
-ext == py && !dirpath contains "build/" && !dirpath contains ".egg" && contents contains import
+path.suffix == py && !path.parent contains "build/" && !path.parent contains ".egg" && contents contains import
 
 # Target specific files before content search
-filename ~= "webpack\.config" && modified > "-7.days" && contents contains "devServer"
+path.name ~= "webpack\.config" && modified > "-7.days" && contents contains "devServer"
 
 # Combine metadata to narrow search space
-ext in [yml, yaml] && size < 50000 && contents contains "version:"
+path.suffix in [yml, yaml] && size < 50000 && contents contains "version:"
 ```
 
 ### Limit Scope
@@ -225,7 +225,7 @@ name ~= "*.rs"
 name ~= "\.rs$"
 
 # RIGHT: Or just use extension selector
-ext == rs
+path.suffix == rs
 ```
 
 ### Quote Usage
@@ -237,7 +237,7 @@ ext == rs
 
 # Quotes optional for:
 - Simple values: type == file
-- Single words: ext == rs
+- Single words: path.suffix == rs
 ```
 
 ### Content Search Limitations

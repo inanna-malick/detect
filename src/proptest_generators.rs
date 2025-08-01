@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use proptest::prelude::*;
     use crate::expr::Expr;
-    use crate::predicate::{
-        Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate, 
-        StreamingCompiledContentPredicate, StringMatcher, TimeMatcher
-    };
     use crate::parser::parse_expr;
-    use chrono::{Local, Duration};
+    use crate::predicate::{
+        Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
+        StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
+    };
+    use chrono::{Duration, Local};
+    use proptest::prelude::*;
 
     // Strategy for generating valid string values
     fn valid_string() -> impl Strategy<Value = String> {
@@ -32,9 +32,7 @@ mod tests {
     // Strategy for StringMatcher
     fn arb_string_matcher() -> impl Strategy<Value = StringMatcher> {
         prop_oneof![
-            valid_regex().prop_filter_map("valid regex", |s| {
-                StringMatcher::regex(&s).ok()
-            }),
+            valid_regex().prop_filter_map("valid regex", |s| { StringMatcher::regex(&s).ok() }),
             valid_string().prop_map(StringMatcher::Equals),
             valid_string().prop_map(StringMatcher::NotEquals),
             valid_string().prop_map(StringMatcher::Contains),
@@ -64,10 +62,14 @@ mod tests {
     fn arb_time_matcher() -> impl Strategy<Value = TimeMatcher> {
         let base_time = Local::now();
         prop_oneof![
-            (-365i64..365).prop_map(move |days| TimeMatcher::Before(base_time + Duration::days(days))),
-            (-365i64..365).prop_map(move |days| TimeMatcher::After(base_time + Duration::days(days))),
-            (-365i64..365).prop_map(move |days| TimeMatcher::Equals(base_time + Duration::days(days))),
-            (-365i64..365).prop_map(move |days| TimeMatcher::NotEquals(base_time + Duration::days(days))),
+            (-365i64..365)
+                .prop_map(move |days| TimeMatcher::Before(base_time + Duration::days(days))),
+            (-365i64..365)
+                .prop_map(move |days| TimeMatcher::After(base_time + Duration::days(days))),
+            (-365i64..365)
+                .prop_map(move |days| TimeMatcher::Equals(base_time + Duration::days(days))),
+            (-365i64..365)
+                .prop_map(move |days| TimeMatcher::NotEquals(base_time + Duration::days(days))),
         ]
     }
 
@@ -101,7 +103,9 @@ mod tests {
     }
 
     // Strategy for Predicate
-    fn arb_predicate() -> impl Strategy<Value = Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> {
+    fn arb_predicate() -> impl Strategy<
+        Value = Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+    > {
         prop_oneof![
             arb_name_predicate().prop_map(Predicate::name),
             arb_metadata_predicate().prop_map(Predicate::meta),
@@ -110,10 +114,14 @@ mod tests {
     }
 
     // Strategy for Expr - using idiomatic prop_recursive
-    fn arb_expr() -> impl Strategy<Value = Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>> {
+    fn arb_expr() -> impl Strategy<
+        Value = Expr<
+            Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+        >,
+    > {
         // Define the leaf (non-recursive) strategy
         let leaf = arb_predicate().prop_map(Expr::Predicate);
-        
+
         // Use prop_recursive to handle recursive generation safely
         leaf.prop_recursive(
             8,   // depth: up to 8 levels deep
@@ -125,34 +133,36 @@ mod tests {
                     // Unary operator - single recursive child
                     2 => inner.clone()
                         .prop_map(|e| Expr::Not(Box::new(e))),
-                    
+
                     // Binary operators - two recursive children
                     1 => (inner.clone(), inner.clone())
                         .prop_map(|(a, b)| Expr::And(Box::new(a), Box::new(b))),
-                        
+
                     1 => (inner.clone(), inner.clone())
                         .prop_map(|(a, b)| Expr::Or(Box::new(a), Box::new(b))),
                 ]
-            }
+            },
         )
     }
 
     #[test]
     fn test_basic_display() {
         let pred = NamePredicate::FileName(StringMatcher::Equals("test.txt".to_string()));
-        let expr: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> = 
-            Expr::Predicate(Predicate::name(pred));
+        let expr: Expr<
+            Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+        > = Expr::Predicate(Predicate::name(pred));
         let s = expr.to_string();
         println!("Basic display: {}", s);
-        assert!(s.contains("filename"));
+        assert!(s.contains("path.name"));
     }
-    
+
     #[test]
     fn test_deep_nesting() {
         let pred = NamePredicate::FileName(StringMatcher::Equals("test.txt".to_string()));
-        let base: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> = 
-            Expr::Predicate(Predicate::name(pred));
-        
+        let base: Expr<
+            Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+        > = Expr::Predicate(Predicate::name(pred));
+
         // Create deeply nested expression
         let mut expr = base;
         for i in 0..5 {
@@ -160,39 +170,40 @@ mod tests {
             println!("Depth {}: {}", i + 1, expr.to_string());
         }
     }
-    
+
     #[test]
     fn test_generation() {
         use proptest::test_runner::{Config, TestRunner};
-        
+
         let mut runner = TestRunner::new(Config {
             cases: 5,
             max_shrink_iters: 0,
             ..Config::default()
         });
-        
+
         println!("Testing generation...");
         let result = runner.run(&arb_expr(), |expr| {
             println!("Generated: {:?}", expr);
             Ok(())
         });
-        
+
         match result {
             Ok(_) => println!("Generation successful"),
             Err(e) => panic!("Generation failed: {:?}", e),
         }
     }
-    
+
     #[test]
     fn test_simple_round_trip() {
         // Test a simple expression round trip
         let pred = NamePredicate::FileName(StringMatcher::Equals("test.txt".to_string()));
-        let expr: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>> = 
-            Expr::Predicate(Predicate::name(pred));
-        
+        let expr: Expr<
+            Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+        > = Expr::Predicate(Predicate::name(pred));
+
         let expr_str = expr.to_string();
         println!("Expression string: {}", expr_str);
-        
+
         match parse_expr(&expr_str) {
             Ok(parsed) => {
                 println!("Parsed successfully");
@@ -207,13 +218,13 @@ mod tests {
     #[test]
     fn test_expr_generation_only() {
         use proptest::test_runner::{Config, TestRunner};
-        
+
         let mut runner = TestRunner::new(Config {
             cases: 10,
             max_shrink_iters: 0,
             ..Config::default()
         });
-        
+
         println!("Testing expression generation at depth 3...");
         let result = runner.run(&arb_expr(), |expr| {
             // Just generate, don't convert to string yet
@@ -221,30 +232,30 @@ mod tests {
             analyze_depth(&expr, 0);
             Ok(())
         });
-        
+
         match result {
             Ok(_) => println!("Generation successful"),
             Err(e) => panic!("Generation failed: {:?}", e),
         }
     }
-    
+
     fn analyze_depth<T>(expr: &Expr<T>, depth: usize) {
         let indent = "  ".repeat(depth);
         match expr {
             Expr::Not(e) => {
                 println!("{}Not", indent);
                 analyze_depth(e, depth + 1);
-            },
+            }
             Expr::And(a, b) => {
                 println!("{}And", indent);
                 analyze_depth(a, depth + 1);
                 analyze_depth(b, depth + 1);
-            },
+            }
             Expr::Or(a, b) => {
                 println!("{}Or", indent);
                 analyze_depth(a, depth + 1);
                 analyze_depth(b, depth + 1);
-            },
+            }
             Expr::Predicate(_) => println!("{}Predicate", indent),
             Expr::Literal(_) => println!("{}Literal", indent),
         }
@@ -255,7 +266,7 @@ mod tests {
         fn test_expr_round_trip(expr in arb_expr()) {
             // Convert expression to string
             let expr_str = expr.to_string();
-            
+
             // Parse it back
             match parse_expr(&expr_str) {
                 Ok(_parsed_expr) => {
@@ -277,7 +288,7 @@ mod tests {
         fn test_predicate_display_parse(pred in arb_predicate()) {
             // Convert predicate to string
             let pred_str = pred.to_string();
-            
+
             // Try to parse it directly as an expression
             match parse_expr(&pred_str) {
                 Ok(_) => prop_assert!(true),

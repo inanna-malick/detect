@@ -26,11 +26,11 @@ Every query follows: selector operator value
 ## SELECTORS
 
 **Name/Path**
-- `basename` or `base` - filename without extension
-- `filename` or `file` - complete filename with extension
-- `dirpath` or `dir` - directory path only
-- `fullpath` or `full` - complete path including filename
-- `ext` or `extension` - extension without dot
+- `path.stem` - filename without extension
+- `path.name` - complete filename with extension
+- `path.parent` - directory path only
+- `path.full` (or `path`) - complete path including filename
+- `path.suffix` - extension without dot
 
 **Metadata**
 - `size` or `filesize` - bytes
@@ -48,9 +48,9 @@ Every query follows: selector operator value
 
 **Basic Queries**
 ```
-filename == README.md
-basename == README
-ext == rs
+path.name == README.md
+path.stem == README
+path.suffix == rs
 size > 1000000
 contents contains TODO
 modified > "-7.days"
@@ -65,11 +65,11 @@ contents ~= (TODO|FIXME|HACK)
 contents ~= @(Injectable|Component)
 
 # Exclude paths
-!dirpath contains node_modules
-!fullpath contains test
+!path.parent contains node_modules
+!path.full contains test
 
 # Combined conditions
-ext == ts && size > 5000 && contents contains async && !dirpath contains test
+path.suffix == ts && size > 5000 && contents contains async && !path.parent contains test
 ```
 
 **Time Queries**
@@ -80,8 +80,8 @@ created > "2024-01-01"      # Absolute
 
 **Set Membership**
 ```
-ext in [js, ts, jsx]
-basename in [index, main, app]
+path.suffix in [js, ts, jsx]
+path.stem in [index, main, app]
 ```
 
 ## POWER PATTERNS
@@ -95,7 +95,7 @@ contents ~= @\w+                     # Any decorator
 
 **Security Scans**
 ```
-ext in [env, json, yml] && contents ~= (password|secret|api_key)
+path.suffix in [env, json, yml] && contents ~= (password|secret|api_key)
 contents ~= (BEGIN|END).*(PRIVATE|KEY)
 ```
 
@@ -105,16 +105,16 @@ contents ~= (BEGIN|END).*(PRIVATE|KEY)
 size > 10000 && contents ~= (async|await|Promise)
 
 # Stale tests
-filename contains test && modified < "-90.days"
+path.name contains test && modified < "-90.days"
 
 # Files without tests
-filename ~= \.service\.ts$ && !contents contains test
+path.name ~= \.service\.ts$ && !contents contains test
 ```
 
 **Smart Exclusions**
 ```
-ext == js && !dirpath contains node_modules && contents contains TODO
-ext == py && !dirpath contains __pycache__ && contents contains import
+path.suffix == js && !path.parent contains node_modules && contents contains TODO
+path.suffix == py && !path.parent contains __pycache__ && contents contains import
 ```
 
 ## NOTES

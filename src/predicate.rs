@@ -5,7 +5,12 @@ use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
 use std::os::unix::prelude::MetadataExt;
 use std::sync::Arc;
-use std::{fmt::{self, Display}, fs::Metadata, ops::Range, path::Path};
+use std::{
+    fmt::{self, Display},
+    fs::Metadata,
+    ops::Range,
+    path::Path,
+};
 
 use crate::expr::short_circuit::ShortCircuit;
 use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
@@ -14,8 +19,8 @@ use chrono::{DateTime, Duration, Local, NaiveDate};
 
 pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     // Handle relative time formats
-    if s.starts_with('-') {
-        let parts: Vec<&str> = s[1..].split('.').collect();
+    if let Some(stripped) = s.strip_prefix('-') {
+        let parts: Vec<&str> = stripped.split('.').collect();
         if parts.len() == 2 {
             let number: i64 = parts[0].parse().map_err(|e| TemporalError {
                 input: s.to_string(),
@@ -33,8 +38,7 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
                     return Err(TemporalError {
                         input: s.to_string(),
                         kind: TemporalErrorKind::UnknownUnit(unit.to_string()),
-                    }
-                    .into())
+                    })
                 }
             };
 
@@ -120,27 +124,35 @@ pub enum TimeUnit {
     Months,
 }
 
-
 // Helper function to quote strings when needed
 fn quote_if_needed(s: &str) -> String {
-    // Check if string could be parsed as a size value  
+    // Check if string could be parsed as a size value
     // This checks if the string could be ambiguously parsed as a size
-    let could_be_size_prefix = s.chars().take_while(|c| c.is_numeric() || *c == '.').count() > 0
-        && s.len() > 1 
-        && s.chars().nth(s.chars().take_while(|c| c.is_numeric() || *c == '.').count())
+    let could_be_size_prefix = s
+        .chars()
+        .take_while(|c| c.is_numeric() || *c == '.')
+        .count()
+        > 0
+        && s.len() > 1
+        && s.chars()
+            .nth(
+                s.chars()
+                    .take_while(|c| c.is_numeric() || *c == '.')
+                    .count(),
+            )
             .map(|c| matches!(c, 'k' | 'm' | 'g' | 't' | 'K' | 'M' | 'G' | 'T'))
             .unwrap_or(false);
-    
+
     // Check if string looks like a number
     // FIXME: If it looks like a number but it's being used in a string matcher context,
     // it should be coerced to a string using the original text representation
     let looks_like_number = !s.is_empty() && s.chars().all(|c| c.is_numeric());
-    
+
     // Check if string needs quoting
-    let needs_quotes = s.is_empty() || 
+    let needs_quotes = s.is_empty() ||
         could_be_size_prefix ||
         looks_like_number ||
-        s.contains(' ') || 
+        s.contains(' ') ||
         s.contains('"') ||
         s.contains('\\') || // TODO/FIXME: is this needed?
         s.contains('{') || // TODO/FIXME: is this needed?
@@ -148,11 +160,9 @@ fn quote_if_needed(s: &str) -> String {
         s.contains(')') ||
         s.contains('(') ||
         !s.chars().all(|c| c.is_alphanumeric() || "_./+-@#$%^&*~()|?".contains(c));
-    
+
     if needs_quotes {
-        let escaped = s
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"");
+        let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
         format!("\"{}\"", escaped)
     } else {
         s.to_string()
@@ -168,11 +178,13 @@ impl Display for RhsValue {
             RhsValue::Set(items) => {
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", quote_if_needed(item))?;
                 }
                 write!(f, "]")
-            },
+            }
             RhsValue::RelativeTime { value, unit } => {
                 let unit_str = match unit {
                     TimeUnit::Seconds => "seconds",
@@ -183,10 +195,10 @@ impl Display for RhsValue {
                     TimeUnit::Months => "months",
                 };
                 write!(f, "-{}.{}", value, unit_str)
-            },
+            }
             RhsValue::AbsoluteTime(s) => {
                 write!(f, "{}", quote_if_needed(s))
-            },
+            }
         }
     }
 }
@@ -244,11 +256,11 @@ impl RawPredicate {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Selector {
     // NAME:
-    BaseName,    // filename without extension (e.g. "report" from "report.txt")
-    FileName,    // complete filename with extension (e.g. "report.txt")
-    DirPath,     // directory path only (e.g. "src/services")
-    FullPath,    // complete path including filename (e.g. "src/services/report.txt")
-    Extension,   // file extension without dot (e.g. "txt")
+    BaseName,  // filename without extension (e.g. "report" from "report.txt")
+    FileName,  // complete filename with extension (e.g. "report.txt")
+    DirPath,   // directory path only (e.g. "src/services")
+    FullPath,  // complete path including filename (e.g. "src/services/report.txt")
+    Extension, // file extension without dot (e.g. "txt")
     // METADATA
     EntityType,
     Size,
@@ -314,19 +326,25 @@ impl Display for StringMatcher {
             StringMatcher::Regex(r) => {
                 let pattern = r.as_str();
                 // Always quote regex patterns to handle special characters and empty patterns
-                write!(f, "~= \"{}\"", pattern.replace('\\', "\\\\").replace('"', "\\\""))
-            },
+                write!(
+                    f,
+                    "~= \"{}\"",
+                    pattern.replace('\\', "\\\\").replace('"', "\\\"")
+                )
+            }
             StringMatcher::Equals(s) => write!(f, "== {}", quote_if_needed(s)),
             StringMatcher::NotEquals(s) => write!(f, "!= {}", quote_if_needed(s)),
             StringMatcher::Contains(s) => write!(f, "contains {}", quote_if_needed(s)),
             StringMatcher::In(items) => {
                 write!(f, "in [")?;
                 for (i, item) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", quote_if_needed(item))?;
                 }
                 write!(f, "]")
-            },
+            }
         }
     }
 }
@@ -548,16 +566,12 @@ pub fn parse_numerical(op: &Op, rhs: &RhsValue) -> Result<NumberMatcher, Predica
             // Could be extended to support sets of numbers
             Ok(NumberMatcher::Equals(parsed_rhs))
         }
-        Op::Matches => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "Regex operator ~= cannot be used with numeric values",
-            })
-        }
-        Op::Contains => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "'contains' operator cannot be used with numeric values",
-            })
-        }
+        Op::Matches => Err(PredicateParseError::IncompatibleOperation {
+            reason: "Regex operator ~= cannot be used with numeric values",
+        }),
+        Op::Contains => Err(PredicateParseError::IncompatibleOperation {
+            reason: "'contains' operator cannot be used with numeric values",
+        }),
     }
 }
 
@@ -586,16 +600,12 @@ pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateP
             // Could be extended to support sets of times
             Ok(TimeMatcher::Equals(parsed_time))
         }
-        Op::Matches => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "Regex operator ~= cannot be used with temporal values",
-            })
-        }
-        Op::Contains => {
-            return Err(PredicateParseError::IncompatibleOperation {
-                reason: "'contains' operator cannot be used with temporal values",
-            })
-        }
+        Op::Matches => Err(PredicateParseError::IncompatibleOperation {
+            reason: "Regex operator ~= cannot be used with temporal values",
+        }),
+        Op::Contains => Err(PredicateParseError::IncompatibleOperation {
+            reason: "'contains' operator cannot be used with temporal values",
+        }),
     }
 }
 
@@ -706,11 +716,11 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePredicate {
-    BaseName(StringMatcher),    // filename without extension
-    FileName(StringMatcher),    // complete filename with extension
-    DirPath(StringMatcher),     // directory path only
-    FullPath(StringMatcher),    // complete path including filename
-    Extension(StringMatcher),   // file extension
+    BaseName(StringMatcher),  // filename without extension
+    FileName(StringMatcher),  // complete filename with extension
+    DirPath(StringMatcher),   // directory path only
+    FullPath(StringMatcher),  // complete path including filename
+    Extension(StringMatcher), // file extension
 }
 
 impl NamePredicate {
@@ -751,11 +761,11 @@ impl NamePredicate {
 impl Display for NamePredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NamePredicate::BaseName(matcher) => write!(f, "basename {}", matcher),
-            NamePredicate::FileName(matcher) => write!(f, "filename {}", matcher),
-            NamePredicate::DirPath(matcher) => write!(f, "dirpath {}", matcher),
-            NamePredicate::FullPath(matcher) => write!(f, "fullpath {}", matcher),
-            NamePredicate::Extension(matcher) => write!(f, "ext {}", matcher),
+            NamePredicate::BaseName(matcher) => write!(f, "path.stem {}", matcher),
+            NamePredicate::FileName(matcher) => write!(f, "path.name {}", matcher),
+            NamePredicate::DirPath(matcher) => write!(f, "path.parent {}", matcher),
+            NamePredicate::FullPath(matcher) => write!(f, "path.full {}", matcher),
+            NamePredicate::Extension(matcher) => write!(f, "path.suffix {}", matcher),
         }
     }
 }
@@ -825,18 +835,18 @@ impl Display for NumberMatcher {
                     Bound::Left(range) => {
                         // For now, just use > for all left bounds
                         write!(f, "> {}", range.start)
-                    },
+                    }
                     Bound::Right(range) => {
                         // For now, just use < for all right bounds
                         write!(f, "< {}", range.end)
-                    },
+                    }
                     Bound::Full(range) => {
                         // This could represent complex queries, just use > for simplicity
                         // Since Full ranges are rare in our usage
                         write!(f, "> {}", range.start)
                     }
                 }
-            },
+            }
             NumberMatcher::Equals(n) => write!(f, "== {}", n),
             NumberMatcher::NotEquals(n) => write!(f, "!= {}", n),
         }
@@ -970,7 +980,11 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
 impl Display for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Always quote regex patterns to handle special characters and empty patterns
-        write!(f, "contents ~= \"{}\"", self.source.replace('\\', "\\\\").replace('"', "\\\""))
+        write!(
+            f,
+            "contents ~= \"{}\"",
+            self.source.replace('\\', "\\\\").replace('"', "\\\"")
+        )
     }
 }
 
@@ -986,6 +1000,10 @@ pub struct StreamingCompiledContentPredicateRef<'a> {
 impl Display for StreamingCompiledContentPredicateRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Always quote regex patterns to handle special characters and empty patterns
-        write!(f, "contents ~= \"{}\"", self.source.replace('\\', "\\\\").replace('"', "\\\""))
+        write!(
+            f,
+            "contents ~= \"{}\"",
+            self.source.replace('\\', "\\\\").replace('"', "\\\"")
+        )
     }
 }

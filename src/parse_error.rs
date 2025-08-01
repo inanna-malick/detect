@@ -6,7 +6,7 @@ use crate::parser::pratt_parser::Rule;
 #[derive(Debug)]
 pub enum ParseError {
     /// Pest grammar/syntax error - preserves location info
-    Syntax(pest::error::Error<Rule>),
+    Syntax(Box<pest::error::Error<Rule>>),
 
     /// Structural errors during AST construction
     Structure {
@@ -132,10 +132,15 @@ impl ParseError {
                 ..
             } => Some(format!(
                 "Unknown selector '{}'. Valid selectors:\n\
-                     • name (alias: filename), path (alias: filepath)\n\
-                     • ext (alias: extension), size (alias: filesize)\n\
-                     • type (alias: filetype), contents (alias: file)\n\
-                     • modified (alias: mtime), created (alias: ctime), accessed (alias: atime)",
+                     • path (or path.full) - complete file path\n\
+                     • path.parent - directory containing file\n\
+                     • path.name - filename with extension\n\
+                     • path.stem - filename without extension\n\
+                     • path.suffix - file extension\n\
+                     • type - file, dir, or symlink\n\
+                     • contents - search file contents\n\
+                     • size - file size (supports KB/MB/GB)\n\
+                     • modified, created, accessed - time selectors",
                 found
             )),
             _ => None,

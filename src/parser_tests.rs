@@ -13,7 +13,7 @@ mod tests {
 
     #[test]
     fn parse_name_equality() {
-        let parsed = parse_expr("filename == foo").unwrap();
+        let parsed = parse_expr("path.name == foo").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("foo".to_string()),
         ))));
@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn parse_name_not_equal() {
-        let parsed = parse_expr("filename != bar").unwrap();
+        let parsed = parse_expr("path.name != bar").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::NotEquals("bar".to_string()),
         ))));
@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn parse_name_regex() {
-        let parsed = parse_expr("filename ~= test.*").unwrap();
+        let parsed = parse_expr("path.name ~= test.*").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::regex("test.*").unwrap(),
         ))));
@@ -42,12 +42,12 @@ mod tests {
     fn parse_regex_with_special_chars() {
         // Test regex with curly braces, parentheses, etc.
         let cases = vec![
-            r"filename ~= ^[0-9]{10,13}.*\.ts$",
-            r#"filename ~= "(foo|bar)""#,
-            r"filename ~= test\?.*",
+            r"path.name ~= ^[0-9]{10,13}.*\.ts$",
+            r#"path.name ~= "(foo|bar)""#,
+            r"path.name ~= test\?.*",
             r"contents ~= TODO.*\{.*\}",
         ];
-        
+
         for expr in cases {
             let result = parse_expr(expr);
             assert!(result.is_ok(), "Failed to parse: {}", expr);
@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn parse_name_contains() {
-        let parsed = parse_expr(r#"filename contains "test""#).unwrap();
+        let parsed = parse_expr(r#"path.name contains "test""#).unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Contains("test".to_string()),
         ))));
@@ -66,8 +66,8 @@ mod tests {
     #[test]
     fn parse_name_in_set() {
         // Test case that appears to be failing
-        let result = parse_expr("filename in [foo, bar, baz]");
-        
+        let result = parse_expr("path.name in [foo, bar, baz]");
+
         // Let's see what the actual error is
         match result {
             Ok(parsed) => {
@@ -81,7 +81,7 @@ mod tests {
                 assert_eq!(parsed, expected);
             }
             Err(e) => {
-                panic!("Failed to parse 'filename in [foo, bar, baz]': {:?}", e);
+                panic!("Failed to parse 'path.name in [foo, bar, baz]': {:?}", e);
             }
         }
     }
@@ -89,21 +89,21 @@ mod tests {
     #[test]
     fn debug_set_parsing() {
         // Test different variations to understand the parsing issue
-        
+
         // Try without spaces
-        let result1 = parse_expr("filename in [foo,bar,baz]");
+        let result1 = parse_expr("path.name in [foo,bar,baz]");
         println!("Without spaces: {:?}", result1.is_ok());
-        
+
         // Try with quoted strings
-        let result2 = parse_expr(r#"filename in ["foo", "bar", "baz"]"#);
+        let result2 = parse_expr(r#"path.name in ["foo", "bar", "baz"]"#);
         println!("With quotes: {:?}", result2.is_ok());
-        
+
         // Try mixed
-        let result3 = parse_expr(r#"filename in [foo, "bar", baz]"#);
+        let result3 = parse_expr(r#"path.name in [foo, "bar", baz]"#);
         println!("Mixed: {:?}", result3.is_ok());
-        
+
         // Try the original that's failing
-        let result4 = parse_expr("filename in [foo, bar, baz]");
+        let result4 = parse_expr("path.name in [foo, bar, baz]");
         match &result4 {
             Ok(_) => println!("Original with spaces: OK"),
             Err(e) => println!("Original with spaces: Error - {:?}", e),
@@ -114,25 +114,32 @@ mod tests {
     fn test_set_parsing_bug() {
         // This is a parser bug: bare_char includes comma but set_char doesn't
         // This causes confusion when parsing sets with spaces after commas
-        
+
         // These should all parse the same way, but they don't due to the bug
-        let working = parse_expr("filename in [foo,bar,baz]");
+        let working = parse_expr("path.name in [foo,bar,baz]");
         assert!(working.is_ok(), "Should parse without spaces");
-        
-        let also_working = parse_expr(r#"filename in ["foo","bar","baz"]"#);
-        assert!(also_working.is_ok(), "Should parse with quotes and no spaces");
-        
-        let also_working2 = parse_expr(r#"filename in ["foo", "bar", "baz"]"#);
+
+        let also_working = parse_expr(r#"path.name in ["foo","bar","baz"]"#);
+        assert!(
+            also_working.is_ok(),
+            "Should parse with quotes and no spaces"
+        );
+
+        let also_working2 = parse_expr(r#"path.name in ["foo", "bar", "baz"]"#);
         assert!(also_working2.is_ok(), "Should parse with quotes and spaces");
-        
+
         // This fails due to parser bug
-        let failing = parse_expr("filename in [foo, bar, baz]");
-        assert!(failing.is_ok(), "Should parse with spaces - but doesn't due to parser bug: {:?}", failing);
+        let failing = parse_expr("path.name in [foo, bar, baz]");
+        assert!(
+            failing.is_ok(),
+            "Should parse with spaces - but doesn't due to parser bug: {:?}",
+            failing
+        );
     }
 
     #[test]
     fn parse_path_predicate() {
-        let parsed = parse_expr(r#"fullpath == "src/main.rs""#).unwrap();
+        let parsed = parse_expr(r#"path.full == "src/main.rs""#).unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FullPath(
             StringMatcher::Equals("src/main.rs".to_string()),
         ))));
@@ -141,7 +148,7 @@ mod tests {
 
     #[test]
     fn parse_extension_predicate() {
-        let parsed = parse_expr("ext == rs").unwrap();
+        let parsed = parse_expr("path.suffix == rs").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("rs".to_string()),
         ))));
@@ -150,7 +157,7 @@ mod tests {
 
     #[test]
     fn parse_extension_in_set() {
-        let parsed = parse_expr("ext in [js, ts, jsx, tsx]").unwrap();
+        let parsed = parse_expr("path.suffix in [js, ts, jsx, tsx]").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(vec![
                 "js".to_string(),
@@ -238,7 +245,7 @@ mod tests {
 
     #[test]
     fn parse_and_expression() {
-        let parsed = parse_expr("filename == foo && ext == rs").unwrap();
+        let parsed = parse_expr("path.name == foo && path.suffix == rs").unwrap();
         let left = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("foo".to_string()),
         ))));
@@ -251,7 +258,7 @@ mod tests {
 
     #[test]
     fn parse_or_expression() {
-        let parsed = parse_expr("filename == foo || filename == bar").unwrap();
+        let parsed = parse_expr("path.name == foo || path.name == bar").unwrap();
         let left = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("foo".to_string()),
         ))));
@@ -264,7 +271,7 @@ mod tests {
 
     #[test]
     fn parse_not_expression() {
-        let parsed = parse_expr("!filename == temp").unwrap();
+        let parsed = parse_expr("!path.name == temp").unwrap();
         let inner = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("temp".to_string()),
         ))));
@@ -274,9 +281,9 @@ mod tests {
 
     #[test]
     fn parse_operator_precedence() {
-        // filename == x || filename == y && filename == z
-        // Should parse as: filename == x || (filename == y && filename == z)
-        let parsed = parse_expr("filename == a || filename == b && filename == c").unwrap();
+        // path.name == x || path.name == y && path.name == z
+        // Should parse as: path.name == x || (path.name == y && path.name == z)
+        let parsed = parse_expr("path.name == a || path.name == b && path.name == c").unwrap();
 
         let a = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("a".to_string()),
@@ -296,8 +303,8 @@ mod tests {
 
     #[test]
     fn parse_parentheses_override() {
-        // (filename == x || filename == y) && filename == z
-        let parsed = parse_expr("(filename == a || filename == b) && filename == c").unwrap();
+        // (path.name == x || path.name == y) && path.name == z
+        let parsed = parse_expr("(path.name == a || path.name == b) && path.name == c").unwrap();
 
         let a = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("a".to_string()),
@@ -317,8 +324,10 @@ mod tests {
 
     #[test]
     fn parse_complex_nested() {
-        // !(filename == x || ext == y) && (size > z || type == w)
-        let parsed = parse_expr("!(filename == x || ext == y) && (size > 100 || type == dir)").unwrap();
+        // !(path.name == x || path.suffix == y) && (size > z || type == w)
+        let parsed =
+            parse_expr("!(path.name == x || path.suffix == y) && (size > 100 || type == dir)")
+                .unwrap();
 
         // Build expected tree
         let x = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
@@ -346,8 +355,8 @@ mod tests {
 
     #[test]
     fn parse_quoted_values() {
-        let double_quoted = parse_expr(r#"filename == "my file.txt""#).unwrap();
-        let single_quoted = parse_expr(r"filename == 'my file.txt'").unwrap();
+        let double_quoted = parse_expr(r#"path.name == "my file.txt""#).unwrap();
+        let single_quoted = parse_expr(r"path.name == 'my file.txt'").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("my file.txt".to_string()),
         ))));
@@ -357,21 +366,21 @@ mod tests {
 
     #[test]
     fn parse_set_literal_variations() {
-        let empty = parse_expr("ext in []").unwrap();
+        let empty = parse_expr("path.suffix in []").unwrap();
         let expected_empty = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(vec![]),
         ))));
         assert_eq!(empty, expected_empty);
 
         // Single item
-        let single = parse_expr("ext in [js]").unwrap();
+        let single = parse_expr("path.suffix in [js]").unwrap();
         let expected_single = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(vec!["js".to_string()]),
         ))));
         assert_eq!(single, expected_single);
 
         // Mixed quoted and unquoted
-        let mixed = parse_expr(r#"filename in [foo, "bar baz", 'qux']"#).unwrap();
+        let mixed = parse_expr(r#"path.name in [foo, "bar baz", 'qux']"#).unwrap();
         let expected_mixed = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::In(vec![
                 "foo".to_string(),
@@ -384,11 +393,8 @@ mod tests {
 
     #[test]
     fn parse_selector_aliases() {
-        // Test that aliases produce identical results
-        let name_variants = vec![
-            ("filename == test", "file == test"),
-            ("fullpath == foo", "full == foo"),
-            ("ext == rs", "extension == rs"),
+        // Test remaining aliases (non-path selectors)
+        let alias_variants = vec![
             ("size > 100kb", "filesize > 100kb"),
             ("type == dir", "filetype == dir"),
             ("contents ~= foo", "content ~= foo"),
@@ -397,27 +403,55 @@ mod tests {
             ("accessed > today", "atime > today"),
         ];
 
-        for (expr1_str, expr2_str) in name_variants {
-            let expr1 = parse_expr(expr1_str).unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", expr1_str, e));
-            let expr2 = parse_expr(expr2_str).unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", expr2_str, e));
+        for (expr1_str, expr2_str) in alias_variants {
+            let expr1 = parse_expr(expr1_str)
+                .unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", expr1_str, e));
+            let expr2 = parse_expr(expr2_str)
+                .unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", expr2_str, e));
             assert_eq!(expr1, expr2, "{} should equal {}", expr1_str, expr2_str);
         }
+
+        // Test that path is alias for path.full
+        let path_alias = parse_expr("path == test").unwrap();
+        let path_canonical = parse_expr("path.full == test").unwrap();
+        assert_eq!(path_alias, path_canonical);
     }
 
     #[test]
     fn test_size_comparison_parsing() {
         // Size comparisons can use units or bare numbers
         // Bare numbers are interpreted as bytes
-        assert!(parse_expr("size > 100").is_ok(), "Size with bare number should work (bytes)");
-        assert!(parse_expr("size > 100kb").is_ok(), "Size with kb unit should work");
-        assert!(parse_expr("size > 100mb").is_ok(), "Size with mb unit should work");
-        assert!(parse_expr("size > 100gb").is_ok(), "Size with gb unit should work");
-        assert!(parse_expr("size > 100tb").is_ok(), "Size with tb unit should work");
-        
+        assert!(
+            parse_expr("size > 100").is_ok(),
+            "Size with bare number should work (bytes)"
+        );
+        assert!(
+            parse_expr("size > 100kb").is_ok(),
+            "Size with kb unit should work"
+        );
+        assert!(
+            parse_expr("size > 100mb").is_ok(),
+            "Size with mb unit should work"
+        );
+        assert!(
+            parse_expr("size > 100gb").is_ok(),
+            "Size with gb unit should work"
+        );
+        assert!(
+            parse_expr("size > 100tb").is_ok(),
+            "Size with tb unit should work"
+        );
+
         // Test that filesize alias works (was broken due to PEG ordering issue)
-        assert!(parse_expr("filesize > 100").is_ok(), "Filesize with bare number should work");
-        assert!(parse_expr("filesize > 100kb").is_ok(), "Filesize with kb unit should work");
-        
+        assert!(
+            parse_expr("filesize > 100").is_ok(),
+            "Filesize with bare number should work"
+        );
+        assert!(
+            parse_expr("filesize > 100kb").is_ok(),
+            "Filesize with kb unit should work"
+        );
+
         // Verify what bare numbers parse to
         if let Ok(expr) = parse_expr("size > 100") {
             // Should parse as Filesize(In(Left(100..)))
@@ -431,38 +465,51 @@ mod tests {
 
     #[test]
     fn test_peg_ordering_aliases() {
-        // Test that longer aliases are matched before shorter prefixes
-        // This was a bug where "filesize" would match "file" first
-        
-        // filesize/filetype should not be confused with filename
-        assert!(parse_expr("filesize > 100kb").is_ok(), "filesize should parse");
-        assert!(parse_expr("filetype == dir").is_ok(), "filetype should parse");
-        
+        // Test that aliases parse correctly to the right predicates
+
+        assert!(
+            parse_expr("filesize > 100kb").is_ok(),
+            "filesize should parse"
+        );
+        assert!(
+            parse_expr("filetype == dir").is_ok(),
+            "filetype should parse"
+        );
+
         // Verify they parse to the correct predicates
         if let Ok(Expr::Predicate(pred)) = parse_expr("filesize > 100kb") {
-            assert!(matches!(pred, Predicate::Metadata(_)), "filesize should be metadata predicate");
+            assert!(
+                matches!(pred, Predicate::Metadata(_)),
+                "filesize should be metadata predicate"
+            );
         }
-        
+
         if let Ok(Expr::Predicate(pred)) = parse_expr("filetype == dir") {
-            assert!(matches!(pred, Predicate::Metadata(_)), "filetype should be metadata predicate");
+            assert!(
+                matches!(pred, Predicate::Metadata(_)),
+                "filetype should be metadata predicate"
+            );
         }
-        
-        if let Ok(Expr::Predicate(pred)) = parse_expr("filename == test") {
-            assert!(matches!(pred, Predicate::Name(_)), "filename should be name predicate");
+
+        if let Ok(Expr::Predicate(pred)) = parse_expr("path.name == test") {
+            assert!(
+                matches!(pred, Predicate::Name(_)),
+                "path.name should be name predicate"
+            );
         }
     }
 
     #[test]
     fn parse_operator_aliases() {
         // = vs ==
-        let eq1 = parse_expr("filename = foo").unwrap();
-        let eq2 = parse_expr("filename == foo").unwrap();
+        let eq1 = parse_expr("path.name = foo").unwrap();
+        let eq2 = parse_expr("path.name == foo").unwrap();
         assert_eq!(eq1, eq2);
 
         // ~ vs ~= vs =~
-        let regex1 = parse_expr("filename ~ pattern").unwrap();
-        let regex2 = parse_expr("filename ~= pattern").unwrap();
-        let regex3 = parse_expr("filename =~ pattern").unwrap();
+        let regex1 = parse_expr("path.name ~ pattern").unwrap();
+        let regex2 = parse_expr("path.name ~= pattern").unwrap();
+        let regex3 = parse_expr("path.name =~ pattern").unwrap();
         assert_eq!(regex1, regex2);
         assert_eq!(regex2, regex3);
     }
@@ -477,12 +524,12 @@ mod tests {
     #[test]
     fn error_incomplete_expressions() {
         let incomplete = vec![
-            "filename ==",
-            "filename",
+            "path.name ==",
+            "path.name",
             "@",
             "== foo",
-            "filename == foo &&",
-            "|| filename == foo",
+            "path.name == foo &&",
+            "|| path.name == foo",
         ];
         for expr in incomplete {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -492,9 +539,9 @@ mod tests {
     #[test]
     fn error_malformed_sets() {
         let malformed = vec![
-            "ext in [js ts]", // missing comma
-            "ext in js, ts]", // missing opening bracket
-            "ext in [js, ts", // missing closing bracket
+            "path.suffix in [js ts]", // missing comma
+            "path.suffix in js, ts]", // missing opening bracket
+            "path.suffix in [js, ts", // missing closing bracket
         ];
         for expr in malformed {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -504,9 +551,9 @@ mod tests {
     #[test]
     fn error_mismatched_quotes() {
         let mismatched = vec![
-            r#"filename == "unclosed"#,
-            r#"filename == 'unclosed"#,
-            r#"filename == "mixed'"#,
+            r#"path.name == "unclosed"#,
+            r#"path.name == 'unclosed"#,
+            r#"path.name == "mixed'"#,
         ];
         for expr in mismatched {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -522,13 +569,13 @@ mod tests {
         assert!(parse_expr(r#"modified > "not-a-date""#).is_err());
 
         // Invalid regex
-        assert!(parse_expr(r#"filename ~= "[unclosed""#).is_err());
+        assert!(parse_expr(r#"path.name ~= "[unclosed""#).is_err());
     }
 
     #[test]
     fn test_empty_string_extension() {
-        // Test parsing ext == ""
-        let parsed = parse_expr(r#"ext == """#).unwrap();
+        // Test parsing path.suffix == ""
+        let parsed = parse_expr(r#"path.suffix == """#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("".to_string()),
@@ -540,7 +587,7 @@ mod tests {
     #[test]
     fn test_empty_string_in_set() {
         // Test parsing empty string in set literal
-        let parsed = parse_expr(r#"ext in ["", txt, rs]"#).unwrap();
+        let parsed = parse_expr(r#"path.suffix in ["", txt, rs]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(vec!["".to_string(), "txt".to_string(), "rs".to_string()]),
@@ -573,7 +620,7 @@ mod tests {
     #[test]
     fn test_in_operator_parsing() {
         // Test parsing of 'in' operator with bare identifiers
-        let expr = parse_expr(r#"ext in [js, ts]"#).unwrap();
+        let expr = parse_expr(r#"path.suffix in [js, ts]"#).unwrap();
 
         // Check what we get
         if let Expr::Predicate(Predicate::Name(name_pred)) = &expr {
@@ -608,7 +655,7 @@ mod tests {
     #[test]
     fn test_name_in_operator_parsing() {
         // Test parsing name in [index, main] - the case used in failing integration test
-        let expr = parse_expr(r#"filename in [index, main]"#).unwrap();
+        let expr = parse_expr(r#"path.name in [index, main]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::In(vec!["index".to_string(), "main".to_string()]),
@@ -620,7 +667,7 @@ mod tests {
     #[test]
     fn test_compound_in_expression_parsing() {
         // Test the exact expression from the failing integration test
-        let expr = parse_expr(r#"ext in [js, ts] && filename in [index, main]"#).unwrap();
+        let expr = parse_expr(r#"path.suffix in [js, ts] && path.name in [index, main]"#).unwrap();
 
         let expected = Expr::And(
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
@@ -650,9 +697,9 @@ mod tests {
             "main".to_string(),
         ]));
 
-        // Only exact filename matches should work with FileName
+        // Only exact path.name matches should work with FileName
         assert!(!pred.is_match(Path::new("index.js"))); // "index" != "index.js"
-        assert!(!pred.is_match(Path::new("main.ts")));  // "main" != "main.ts"
+        assert!(!pred.is_match(Path::new("main.ts"))); // "main" != "main.ts"
 
         // These exact matches should work
         assert!(pred.is_match(Path::new("index")));
@@ -666,7 +713,7 @@ mod tests {
     #[test]
     fn test_star_pattern_special_case() {
         // Test that * gets converted to .* for regex matching
-        let expr = parse_expr(r#"filename ~= "*""#).unwrap();
+        let expr = parse_expr(r#"path.name ~= "*""#).unwrap();
 
         // The expression should parse successfully
         if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
@@ -692,7 +739,7 @@ mod tests {
     #[test]
     fn test_negation_operator_parsing() {
         // Test that negation operator produces correct AST
-        let parsed = parse_expr(r#"!(filename contains "test")"#).unwrap();
+        let parsed = parse_expr(r#"!(path.name contains "test")"#).unwrap();
 
         let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Contains("test".to_string()),
@@ -705,7 +752,7 @@ mod tests {
     #[test]
     fn test_complex_negation_parsing() {
         // Test the exact expression from the beta tester's bug report
-        let parsed = parse_expr(r#"ext == "rs" && !(filename contains "test")"#).unwrap();
+        let parsed = parse_expr(r#"path.suffix == "rs" && !(path.name contains "test")"#).unwrap();
 
         let left = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("rs".to_string()),
@@ -721,8 +768,8 @@ mod tests {
 
     #[test]
     fn test_negation_with_contains_in_compound() {
-        // Test the exact problematic case: ext == "rs" && !(filename contains "lib")
-        let parsed = parse_expr(r#"ext == "rs" && !(filename contains "lib")"#).unwrap();
+        // Test the exact problematic case: path.suffix == "rs" && !(path.name contains "lib")
+        let parsed = parse_expr(r#"path.suffix == "rs" && !(path.name contains "lib")"#).unwrap();
 
         // Build expected AST
         let ext_pred = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
@@ -741,8 +788,8 @@ mod tests {
 
     #[test]
     fn test_negation_without_parentheses() {
-        // Test negation without parentheses: !filename == "test"
-        let parsed = parse_expr(r#"!filename == "test""#).unwrap();
+        // Test negation without parentheses: !path.name == "test"
+        let parsed = parse_expr(r#"!path.name == "test""#).unwrap();
 
         let inner_pred = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("test".to_string()),
@@ -811,8 +858,8 @@ mod tests {
     #[ignore] // FIXME: Grammar doesn't support extended escape sequences yet
     fn test_bare_token_escape_sequences() {
         let supported_escapes = vec![
-            (r#"filename == test\n"#, "test\n"),
-            (r#"filename == test\\"#, "test\\"),
+            (r#"path.name == test\n"#, "test\n"),
+            (r#"path.name == test\\"#, "test\\"),
         ];
 
         for (expr_str, expected_value) in supported_escapes {
@@ -821,16 +868,16 @@ mod tests {
         }
 
         let unsupported_escapes = vec![
-            r#"filename ~= draft\.final\.final\.*"#,
-            r#"filename ~= \d+\.\d+"#,
-            r#"filename ~= test\$"#,
-            r#"filename ~= \^start"#,
-            r#"filename ~= foo\+bar"#,
-            r#"filename ~= test\?"#,
-            r#"filename ~= \(group\)"#,
-            r#"filename ~= \[abc\]"#,
-            r#"filename ~= a\{2,4\}"#,
-            r#"filename ~= one\|two"#,
+            r#"path.name ~= draft\.final\.final\.*"#,
+            r#"path.name ~= \d+\.\d+"#,
+            r#"path.name ~= test\$"#,
+            r#"path.name ~= \^start"#,
+            r#"path.name ~= foo\+bar"#,
+            r#"path.name ~= test\?"#,
+            r#"path.name ~= \(group\)"#,
+            r#"path.name ~= \[abc\]"#,
+            r#"path.name ~= a\{2,4\}"#,
+            r#"path.name ~= one\|two"#,
         ];
 
         for expr_str in unsupported_escapes {
@@ -842,25 +889,29 @@ mod tests {
     fn test_bare_token_escaped_regex_patterns() {
         let test_cases = vec![
             (
-                r#"filename ~= draft\.final\.final\.pptx"#,
+                r#"path.name ~= draft\.final\.final\.pptx"#,
                 "draft.final.final.pptx",
                 true,
             ),
             (
-                r#"filename ~= draft\.final\.final\.pptx"#,
+                r#"path.name ~= draft\.final\.final\.pptx"#,
                 "draft-final-final-pptx",
                 false,
             ),
-            (r#"filename ~= v\d+\.\d+\.\d+"#, "v1.2.3", true),
-            (r#"filename ~= v\d+\.\d+\.\d+"#, "v1-2-3", false),
-            (r#"filename ~= .*\.rs$"#, "main.rs", true),
-            (r#"filename ~= .*\.rs$"#, "main.rs.bak", false), // Should NOT match - filename ends with .bak
+            (r#"path.name ~= v\d+\.\d+\.\d+"#, "v1.2.3", true),
+            (r#"path.name ~= v\d+\.\d+\.\d+"#, "v1-2-3", false),
+            (r#"path.name ~= .*\.rs$"#, "main.rs", true),
+            (r#"path.name ~= .*\.rs$"#, "main.rs.bak", false), // Should NOT match - path.name ends with .bak
             (
-                r#"filename ~= \[DRAFT\]\..*\.docx"#,
+                r#"path.name ~= \[DRAFT\]\..*\.docx"#,
                 "[DRAFT].report.docx",
                 true,
             ),
-            (r#"filename ~= \[DRAFT\]\..*\.docx"#, "DRAFT.report.docx", false),
+            (
+                r#"path.name ~= \[DRAFT\]\..*\.docx"#,
+                "DRAFT.report.docx",
+                false,
+            ),
         ];
 
         for (expr_str, test_filename, should_match) in test_cases {
@@ -880,10 +931,10 @@ mod tests {
     fn test_bare_token_vs_quoted_string_escapes() {
         let dot_pattern = r#"draft\.final\.final"#;
 
-        let bare_expr = format!(r#"filename contains {}"#, dot_pattern);
+        let bare_expr = format!(r#"path.name contains {}"#, dot_pattern);
         assert_parse_error(&bare_expr);
 
-        let quoted_expr = format!(r#"filename contains "{}""#, dot_pattern);
+        let quoted_expr = format!(r#"path.name contains "{}""#, dot_pattern);
         let parsed = parse_expr(&quoted_expr).unwrap();
         assert_name_contains(&parsed, "draft\\.final\\.final");
     }
@@ -1090,15 +1141,15 @@ mod tests {
         // Test parentheses support in expressions
         let test_cases = vec![
             // Simple parentheses
-            ("(filename contains test)", true),
+            ("(path.name contains test)", true),
             // Parentheses with OR
-            ("(filename contains spec || filename contains test)", true),
+            ("(path.name contains spec || path.name contains test)", true),
             // Complex expression from bug report
-            ("dirpath contains multivendor-plugin && (filename contains spec || filename contains test)", true),
+            ("path.parent contains multivendor-plugin && (path.name contains spec || path.name contains test)", true),
             // Nested parentheses
-            ("((filename contains a || filename contains b) && ext == rs)", true),
+            ("((path.name contains a || path.name contains b) && path.suffix == rs)", true),
             // Multiple groups
-            ("(filename contains foo) && (size > 1000 || ext == txt)", true),
+            ("(path.name contains foo) && (size > 1000 || path.suffix == txt)", true),
         ];
 
         for (expr, should_succeed) in test_cases {
@@ -1109,5 +1160,156 @@ mod tests {
             }
             assert_eq!(result.is_ok(), should_succeed, "Failed for: {}", expr);
         }
+    }
+
+    #[test]
+    fn test_path_selectors() {
+        // Test simple path selector maps to FullPath (alias)
+        let parsed = parse_expr(r#"path == "src/lib.rs""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::FullPath(_) => (),
+                _ => panic!("Expected FullPath predicate, got {:?}", name_pred),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path.full canonical form
+        let parsed = parse_expr(r#"path.full == "src/lib.rs""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::FullPath(_) => (),
+                _ => panic!("Expected FullPath predicate, got {:?}", name_pred),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path contains (alias)
+        let parsed = parse_expr(r#"path contains "src""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::FullPath(StringMatcher::Contains(s)) => assert_eq!(s, "src"),
+                _ => panic!("Expected FullPath contains predicate"),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path.name maps to FileName
+        let parsed = parse_expr(r#"path.name == "lib.rs""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::FileName(StringMatcher::Equals(s)) => assert_eq!(s, "lib.rs"),
+                _ => panic!("Expected FileName predicate, got {:?}", name_pred),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path.parent maps to DirPath
+        let parsed = parse_expr(r#"path.parent contains "src""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::DirPath(StringMatcher::Contains(s)) => assert_eq!(s, "src"),
+                _ => panic!("Expected DirPath predicate, got {:?}", name_pred),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path.stem maps to BaseName
+        let parsed = parse_expr(r#"path.stem == "lib""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::BaseName(StringMatcher::Equals(s)) => assert_eq!(s, "lib"),
+                _ => panic!("Expected BaseName predicate, got {:?}", name_pred),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path.suffix maps to Extension (without dot)
+        let parsed = parse_expr(r#"path.suffix == "rs""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::Extension(StringMatcher::Equals(s)) => assert_eq!(s, "rs"),
+                _ => panic!("Expected Extension predicate, got {:?}", name_pred),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test path.suffix regex matching (without dots)
+        let parsed = parse_expr(r#"path.suffix ~= "(rs|toml)""#).unwrap();
+        if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
+            match name_pred.as_ref() {
+                NamePredicate::Extension(StringMatcher::Regex(_)) => (),
+                _ => panic!("Expected Extension regex predicate"),
+            }
+        } else {
+            panic!("Expected name predicate");
+        }
+
+        // Test complex path queries
+        let parsed = parse_expr(r#"path.parent contains "src" && path.suffix == ".rs""#).unwrap();
+        if let Expr::And(left, right) = parsed {
+            if let Expr::Predicate(Predicate::Name(left_pred)) = left.as_ref() {
+                assert!(matches!(left_pred.as_ref(), NamePredicate::DirPath(_)));
+            }
+            if let Expr::Predicate(Predicate::Name(right_pred)) = right.as_ref() {
+                assert!(matches!(right_pred.as_ref(), NamePredicate::Extension(_)));
+            }
+        } else {
+            panic!("Expected And expression");
+        }
+    }
+
+    #[test]
+    fn test_path_selector_evaluation() {
+        use std::path::Path;
+
+        // Test actual evaluation of path selectors
+        let test_path = Path::new("src/parser_tests.rs");
+
+        // Helper to verify name matching
+        fn verify_name_match(
+            expr: &Expr<
+                Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>,
+            >,
+            path: &Path,
+            expected: bool,
+        ) {
+            if let Expr::Predicate(Predicate::Name(name_pred)) = expr {
+                assert_eq!(name_pred.is_match(path), expected);
+            } else {
+                panic!("Expected name predicate");
+            }
+        }
+
+        // Test path (full path)
+        let expr = parse_expr(r#"path contains "src/parser""#).unwrap();
+        verify_name_match(&expr, test_path, true);
+
+        // Test path.name
+        let expr = parse_expr(r#"path.name == "parser_tests.rs""#).unwrap();
+        verify_name_match(&expr, test_path, true);
+
+        // Test path.parent
+        let expr = parse_expr(r#"path.parent == "src""#).unwrap();
+        verify_name_match(&expr, test_path, true);
+
+        // Test path.stem
+        let expr = parse_expr(r#"path.stem == "parser_tests""#).unwrap();
+        verify_name_match(&expr, test_path, true);
+
+        // Test path.suffix (note: extension is stored without dot internally)
+        let expr = parse_expr(r#"path.suffix == "rs""#).unwrap();
+        verify_name_match(&expr, test_path, true);
+
+        // Test negative cases
+        let expr = parse_expr(r#"path.name == "wrong.rs""#).unwrap();
+        verify_name_match(&expr, test_path, false);
     }
 }
