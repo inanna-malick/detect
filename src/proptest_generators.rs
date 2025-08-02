@@ -36,7 +36,7 @@ mod tests {
             valid_string().prop_map(StringMatcher::Equals),
             valid_string().prop_map(StringMatcher::NotEquals),
             valid_string().prop_map(StringMatcher::Contains),
-            prop::collection::vec(valid_string(), 1..5).prop_map(StringMatcher::In),
+            prop::collection::hash_set(valid_string(), 1..5).prop_map(StringMatcher::In),
         ]
     }
 

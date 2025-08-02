@@ -7,6 +7,7 @@ mod tests {
         Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
         StreamingCompiledContentPredicate, StringMatcher,
     };
+    use std::collections::HashSet;
     use std::sync::Arc;
 
     // Test basic parsing produces expected compiled predicates
@@ -72,11 +73,11 @@ mod tests {
         match result {
             Ok(parsed) => {
                 let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
-                    StringMatcher::In(vec![
+                    StringMatcher::In([
                         "foo".to_string(),
                         "bar".to_string(),
                         "baz".to_string(),
-                    ]),
+                    ].into_iter().collect()),
                 ))));
                 assert_eq!(parsed, expected);
             }
@@ -159,12 +160,12 @@ mod tests {
     fn parse_extension_in_set() {
         let parsed = parse_expr("path.suffix in [js, ts, jsx, tsx]").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
-            StringMatcher::In(vec![
+            StringMatcher::In([
                 "js".to_string(),
                 "ts".to_string(),
                 "jsx".to_string(),
                 "tsx".to_string(),
-            ]),
+            ].into_iter().collect()),
         ))));
         assert_eq!(parsed, expected);
     }
@@ -173,10 +174,10 @@ mod tests {
     fn parse_size_comparisons() {
         let cases = vec![
             ("size == 100", NumberMatcher::Equals(100)),
-            ("size > 100", NumberMatcher::In(Bound::Left(100..))),
-            ("size >= 100", NumberMatcher::In(Bound::Left(99..))),
-            ("size < 100", NumberMatcher::In(Bound::Right(..101))),
-            ("size <= 100", NumberMatcher::In(Bound::Right(..100))),
+            ("size > 100", NumberMatcher::In(Bound::Left(101..))),
+            ("size >= 100", NumberMatcher::In(Bound::Left(100..))),
+            ("size < 100", NumberMatcher::In(Bound::Right(..100))),
+            ("size <= 100", NumberMatcher::In(Bound::Right(..101))),
         ];
 
         for (expr_str, expected_matcher) in cases {
@@ -337,7 +338,7 @@ mod tests {
             StringMatcher::Equals("y".to_string()),
         ))));
         let size_check = Expr::Predicate(Predicate::Metadata(Arc::new(
-            MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(100..))),
+            MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(101..))),
         )));
         let type_check = Expr::Predicate(Predicate::Metadata(Arc::new(MetadataPredicate::Type(
             StringMatcher::Equals("dir".to_string()),
@@ -368,25 +369,25 @@ mod tests {
     fn parse_set_literal_variations() {
         let empty = parse_expr("path.suffix in []").unwrap();
         let expected_empty = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
-            StringMatcher::In(vec![]),
+            StringMatcher::In(HashSet::new()),
         ))));
         assert_eq!(empty, expected_empty);
 
         // Single item
         let single = parse_expr("path.suffix in [js]").unwrap();
         let expected_single = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
-            StringMatcher::In(vec!["js".to_string()]),
+            StringMatcher::In(["js".to_string()].into_iter().collect()),
         ))));
         assert_eq!(single, expected_single);
 
         // Mixed quoted and unquoted
         let mixed = parse_expr(r#"path.name in [foo, "bar baz", 'qux']"#).unwrap();
         let expected_mixed = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
-            StringMatcher::In(vec![
+            StringMatcher::In([
                 "foo".to_string(),
                 "bar baz".to_string(),
                 "qux".to_string(),
-            ]),
+            ].into_iter().collect()),
         ))));
         assert_eq!(mixed, expected_mixed);
     }
@@ -590,7 +591,7 @@ mod tests {
         let parsed = parse_expr(r#"path.suffix in ["", txt, rs]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
-            StringMatcher::In(vec!["".to_string(), "txt".to_string(), "rs".to_string()]),
+            StringMatcher::In(["".to_string(), "txt".to_string(), "rs".to_string()].into_iter().collect()),
         ))));
 
         assert_eq!(parsed, expected);
@@ -628,8 +629,8 @@ mod tests {
                 println!("Parsed values: {:?}", values);
                 // The parser should produce a JSON array string that parse_string will decode
                 assert_eq!(values.len(), 2);
-                assert_eq!(values[0], "js");
-                assert_eq!(values[1], "ts");
+                assert!(values.contains("js"));
+                assert!(values.contains("ts"));
             } else {
                 panic!("Expected In matcher, got: {:?}", name_pred);
             }
@@ -644,7 +645,7 @@ mod tests {
 
         // Test actual matching with 'in' operator
         let pred =
-            NamePredicate::Extension(StringMatcher::In(vec!["js".to_string(), "ts".to_string()]));
+            NamePredicate::Extension(StringMatcher::In(["js".to_string(), "ts".to_string()].into_iter().collect()));
 
         assert!(pred.is_match(Path::new("file.js")));
         assert!(pred.is_match(Path::new("file.ts")));
@@ -658,7 +659,7 @@ mod tests {
         let expr = parse_expr(r#"path.name in [index, main]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
-            StringMatcher::In(vec!["index".to_string(), "main".to_string()]),
+            StringMatcher::In(["index".to_string(), "main".to_string()].into_iter().collect()),
         ))));
 
         assert_eq!(expr, expected);
@@ -671,16 +672,16 @@ mod tests {
 
         let expected = Expr::And(
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
-                NamePredicate::Extension(StringMatcher::In(vec![
+                NamePredicate::Extension(StringMatcher::In([
                     "js".to_string(),
                     "ts".to_string(),
-                ])),
+                ].into_iter().collect())),
             )))),
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
-                NamePredicate::FileName(StringMatcher::In(vec![
+                NamePredicate::FileName(StringMatcher::In([
                     "index".to_string(),
                     "main".to_string(),
-                ])),
+                ].into_iter().collect())),
             )))),
         );
 
@@ -692,10 +693,10 @@ mod tests {
         use std::path::Path;
 
         // Test name matching with 'in' operator
-        let pred = NamePredicate::FileName(StringMatcher::In(vec![
+        let pred = NamePredicate::FileName(StringMatcher::In([
             "index".to_string(),
             "main".to_string(),
-        ]));
+        ].into_iter().collect()));
 
         // Only exact path.name matches should work with FileName
         assert!(!pred.is_match(Path::new("index.js"))); // "index" != "index.js"
@@ -944,25 +945,25 @@ mod tests {
         // Test various size units - all should be parsed successfully
         let test_cases = vec![
             // Kilobytes
-            ("size > 1kb", 1024),
-            ("size > 1KB", 1024),
-            ("size > 1k", 1024),
-            ("size > 1K", 1024),
+            ("size > 1kb", 1025),
+            ("size > 1KB", 1025),
+            ("size > 1k", 1025),
+            ("size > 1K", 1025),
             // Megabytes
-            ("size > 2mb", 2 * 1024 * 1024),
-            ("size > 2MB", 2 * 1024 * 1024),
-            ("size > 2m", 2 * 1024 * 1024),
-            ("size > 2M", 2 * 1024 * 1024),
+            ("size > 2mb", 2 * 1024 * 1024 + 1),
+            ("size > 2MB", 2 * 1024 * 1024 + 1),
+            ("size > 2m", 2 * 1024 * 1024 + 1),
+            ("size > 2M", 2 * 1024 * 1024 + 1),
             // Gigabytes
-            ("size > 3gb", 3 * 1024 * 1024 * 1024),
-            ("size > 3GB", 3 * 1024 * 1024 * 1024),
-            ("size > 3g", 3 * 1024 * 1024 * 1024),
-            ("size > 3G", 3 * 1024 * 1024 * 1024),
+            ("size > 3gb", 3 * 1024 * 1024 * 1024 + 1),
+            ("size > 3GB", 3 * 1024 * 1024 * 1024 + 1),
+            ("size > 3g", 3 * 1024 * 1024 * 1024 + 1),
+            ("size > 3G", 3 * 1024 * 1024 * 1024 + 1),
             // Terabytes
-            ("size > 1tb", 1024u64 * 1024 * 1024 * 1024),
-            ("size > 1TB", 1024u64 * 1024 * 1024 * 1024),
-            ("size > 1t", 1024u64 * 1024 * 1024 * 1024),
-            ("size > 1T", 1024u64 * 1024 * 1024 * 1024),
+            ("size > 1tb", 1024u64 * 1024 * 1024 * 1024 + 1),
+            ("size > 1TB", 1024u64 * 1024 * 1024 * 1024 + 1),
+            ("size > 1t", 1024u64 * 1024 * 1024 * 1024 + 1),
+            ("size > 1T", 1024u64 * 1024 * 1024 * 1024 + 1),
         ];
 
         for (expr_str, expected_bytes) in test_cases {
@@ -988,9 +989,9 @@ mod tests {
     fn test_size_decimal_parsing() {
         // Test decimal size values
         let test_cases = vec![
-            ("size > 2.5mb", (2.5 * 1024.0 * 1024.0) as u64),
-            ("size > 1.5gb", (1.5 * 1024.0 * 1024.0 * 1024.0) as u64),
-            ("size > 0.5kb", (0.5 * 1024.0) as u64),
+            ("size > 2.5mb", (2.5 * 1024.0 * 1024.0) as u64 + 1),
+            ("size > 1.5gb", (1.5 * 1024.0 * 1024.0 * 1024.0) as u64 + 1),
+            ("size > 0.5kb", (0.5 * 1024.0) as u64 + 1),
         ];
 
         for (expr_str, expected_bytes) in test_cases {
@@ -1023,15 +1024,15 @@ mod tests {
             ),
             (
                 "size < 500kb",
-                NumberMatcher::In(Bound::Right(..(500 * 1024 + 1))),
+                NumberMatcher::In(Bound::Right(..(500 * 1024))),
             ),
             (
                 "size <= 1gb",
-                NumberMatcher::In(Bound::Right(..(1024 * 1024 * 1024))),
+                NumberMatcher::In(Bound::Right(..(1024 * 1024 * 1024 + 1))),
             ),
             (
                 "size >= 100mb",
-                NumberMatcher::In(Bound::Left((100 * 1024 * 1024 - 1)..)),
+                NumberMatcher::In(Bound::Left((100 * 1024 * 1024)..)),
             ),
         ];
 
@@ -1076,8 +1077,8 @@ mod tests {
                 MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(size_range))),
             ) = (plain_pred.as_ref(), size_pred.as_ref())
             {
-                assert_eq!(plain_range.start, 1000);
-                assert_eq!(size_range.start, 1024);
+                assert_eq!(plain_range.start, 1001);
+                assert_eq!(size_range.start, 1025);
                 assert!(size_range.start > plain_range.start);
                 return;
             }

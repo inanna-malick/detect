@@ -1,6 +1,7 @@
 use git2::Blob;
 use regex::Regex;
 use regex_automata::dfa::dense::DFA;
+use std::collections::HashSet;
 use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
 use std::os::unix::prelude::MetadataExt;
@@ -307,7 +308,7 @@ pub enum StringMatcher {
     Equals(String),
     NotEquals(String),
     Contains(String),
-    In(Vec<String>),
+    In(HashSet<String>),
 }
 
 impl PartialEq for StringMatcher {
@@ -365,7 +366,7 @@ impl StringMatcher {
             StringMatcher::Equals(cmp) => cmp == s,
             StringMatcher::NotEquals(cmp) => cmp != s,
             StringMatcher::Contains(substr) => s.contains(substr),
-            StringMatcher::In(values) => values.contains(&s.to_string()),
+            StringMatcher::In(values) => values.contains(s),
         }
     }
 }
@@ -470,7 +471,11 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
                 Op::Equality => StringMatcher::Equals(s.clone()),
                 Op::NotEqual => StringMatcher::NotEquals(s.clone()),
                 Op::Contains => StringMatcher::Contains(s.clone()),
-                Op::In => StringMatcher::In(vec![s.clone()]),
+                Op::In => {
+                    let mut set = HashSet::new();
+                    set.insert(s.clone());
+                    StringMatcher::In(set)
+                }
                 Op::NumericComparison(_) => {
                     return Err(PredicateParseError::IncompatibleOperation {
                         reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with string values",
@@ -479,7 +484,7 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
             })
         }
         RhsValue::Set(items) => match op {
-            Op::In => Ok(StringMatcher::In(items.clone())),
+            Op::In => Ok(StringMatcher::In(items.iter().cloned().collect())),
             _ => Err(PredicateParseError::IncompatibleOperation {
                 reason: "Set values can only be used with 'in' operator",
             }),

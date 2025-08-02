@@ -693,7 +693,7 @@ impl TypedPredicate {
                 Ok(Expr::Predicate(predicate))
             }
             TypedPredicate::Set { selector, items } => {
-                let string_matcher = StringMatcher::In(items);
+                let string_matcher = StringMatcher::In(items.into_iter().collect());
                 let predicate = match selector {
                     StringSelectorType::PathFull => {
                         DomainPredicate::name(NamePredicate::FullPath(string_matcher))
