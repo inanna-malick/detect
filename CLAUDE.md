@@ -82,6 +82,7 @@ The tool uses a custom expression language defined in `src/expr/expr.pest`:
 - **Integration tests**: In `tests/integration.rs`
 - **Temporal tests**: In `tests/temporal_tests.rs` for time-based queries
 - **Test utilities**: Helper functions for creating test filesystems
+- **Recommendation**: Use unit and integration tests to test as you go instead of cargo run
 
 ## Important Implementation Details
 

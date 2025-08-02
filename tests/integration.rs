@@ -666,6 +666,47 @@ async fn test_parent_dir_selector() {
 }
 
 #[tokio::test]
+async fn test_content_selector_forms() {
+    // Test all content selector forms work
+    Case {
+        expr: r#"content.text contains "TODO""#,
+        expected: &["todo.txt", "src/main.rs"],
+        files: vec![
+            f("todo.txt", "TODO: finish this"),
+            f("src/main.rs", "// TODO: implement"),
+            f("done.txt", "All done!"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test bare text shorthand
+    Case {
+        expr: r#"text contains "FIXME""#,
+        expected: &["broken.rs", "needs_work.py"],
+        files: vec![
+            f("broken.rs", "// FIXME: handle error"),
+            f("needs_work.py", "# FIXME: optimize this"),
+            f("working.rs", "// All good"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test legacy contents form still works
+    Case {
+        expr: r#"contents contains "HACK""#,
+        expected: &["workaround.js"],
+        files: vec![
+            f("workaround.js", "// HACK: temporary solution"),
+            f("clean.js", "// Clean implementation"),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

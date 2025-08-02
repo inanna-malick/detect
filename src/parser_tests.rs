@@ -61,6 +61,30 @@ mod tests {
     }
 
     #[test]
+    fn test_content_selector_forms() {
+        // All forms should compile to the same content predicate
+        let expected = Expr::Predicate(Predicate::Content(
+            StreamingCompiledContentPredicate::new(regex::escape("TODO")).unwrap()
+        ));
+        
+        // Test canonical form: content.text
+        let expr = parse_expr(r#"content.text contains "TODO""#).unwrap();
+        assert_eq!(expr, expected);
+        
+        // Test bare shorthand: text
+        let expr = parse_expr(r#"text contains "TODO""#).unwrap();
+        assert_eq!(expr, expected);
+        
+        // Test legacy form: contents (for backward compat)
+        let expr = parse_expr(r#"contents contains "TODO""#).unwrap();
+        assert_eq!(expr, expected);
+        
+        // Test legacy form: content (for backward compat)
+        let expr = parse_expr(r#"content contains "TODO""#).unwrap();
+        assert_eq!(expr, expected);
+    }
+
+    #[test]
     fn parse_name_equality() {
         let parsed = parse_expr("path.name == foo").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(

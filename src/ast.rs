@@ -323,7 +323,16 @@ impl TypedPredicate {
                     }),
                 }
             }
-            Rule::contents => Ok(StringSelectorType::Contents),
+            Rule::content_selector => {
+                // Handle content selector with possible domain
+                let mut inner = pair.into_inner();
+                let content_part = inner.expect_next("content_selector")?;
+                match content_part.as_rule() {
+                    Rule::content_with_domain => Ok(StringSelectorType::Contents),
+                    Rule::bare_content => Ok(StringSelectorType::Contents),
+                    rule => Err(ParseError::unexpected_rule(rule, None)),
+                }
+            }
             Rule::r#type => Ok(StringSelectorType::Type),
             rule => Err(ParseError::unexpected_rule(rule, None)),
         }

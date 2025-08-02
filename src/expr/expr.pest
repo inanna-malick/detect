@@ -37,7 +37,7 @@ string_predicate = {
     string_contains |
     string_in
   }
-  string_selector = { path_selector | bare_path_shorthand | contents | type }
+  string_selector = { path_selector | bare_path_shorthand | content_selector | type }
     // Hierarchical path selectors
     path_selector = { path_with_component | path_alias }
     path_alias = { "path" } // Alias for path.full
@@ -62,7 +62,10 @@ string_predicate = {
     path_extension = { "extension" | "ext" }
     path_suffix = { "suffix" }  // Kept as alias for backward compatibility
     
-    contents = { "contents" | "content" }
+    // Content selectors with domain support
+    content_selector = { content_with_domain | bare_content }
+    content_with_domain = { "content" ~ "." ~ "text" }
+    bare_content = { "text" | "contents" | "content" }  // text is new shorthand, keep others for compat
     type     = { "filetype" | "type" }
 
   string_eq = { eq ~ string_value }
