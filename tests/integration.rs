@@ -777,6 +777,65 @@ async fn test_meta_domain_forms() {
 }
 
 #[tokio::test]
+async fn test_word_form_boolean_operators() {
+    // Test 'and' word form
+    Case {
+        expr: r#"name == "test.rs" and size > 10"#,
+        expected: &["test.rs"],
+        files: vec![
+            f("test.rs", "this is a test file with content"),
+            f("small.rs", "tiny"),
+            f("test.txt", "this is also big but wrong extension"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test 'or' word form
+    Case {
+        expr: r#"suffix == rs or suffix == py"#,
+        expected: &["main.rs", "test.py"],
+        files: vec![
+            f("main.rs", "rust"),
+            f("test.py", "python"),
+            f("config.json", "json"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test 'not' word form
+    Case {
+        expr: r#"type == file and not name contains test"#,
+        expected: &["main.rs", "lib.rs"],
+        files: vec![
+            f("main.rs", "main"),
+            f("lib.rs", "lib"),
+            f("test.rs", "test"),
+            f("test_utils.rs", "test utils"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test complex expression with word forms
+    Case {
+        expr: r#"(name contains lib or name contains main) and not suffix == txt"#,
+        expected: &["lib.rs", "main.py", "mylib.js"],
+        files: vec![
+            f("lib.rs", "lib"),
+            f("lib.txt", "lib text"),
+            f("main.py", "main"),
+            f("main.txt", "main text"),
+            f("mylib.js", "lib"),
+            f("other.rs", "other"),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

@@ -16,10 +16,10 @@ escapable = { "n" | "\\" | "\""}
 program         =   { SOI ~ expr ~ EOI }
   expr          =   { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
     infix       =  _{ and | or }
-      and       =   { "&&" } // logical and
-      or        =   { "||" } // logical or
+      and       =   { "&&" | "and" } // logical and (symbol or word)
+      or        =   { "||" | "or" }  // logical or (symbol or word)
     prefix      =  _{ neg }
-      neg       =   { "!" } // Negation
+      neg       =   { "!" | "not" }  // Negation (symbol or word)
     primary     =  _{ typed_predicate | "(" ~ expr ~ ")" }
 
 

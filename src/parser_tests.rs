@@ -631,6 +631,33 @@ mod tests {
     }
 
     #[test]
+    fn test_word_form_boolean_operators() {
+        // Test 'and' word form
+        let word_and = parse_expr("name == foo and size > 100").unwrap();
+        let symbol_and = parse_expr("name == foo && size > 100").unwrap();
+        assert_eq!(word_and, symbol_and, "'and' and '&&' should be equivalent");
+        
+        // Test 'or' word form
+        let word_or = parse_expr("name == foo or name == bar").unwrap();
+        let symbol_or = parse_expr("name == foo || name == bar").unwrap();
+        assert_eq!(word_or, symbol_or, "'or' and '||' should be equivalent");
+        
+        // Test 'not' word form
+        let word_not = parse_expr("not name == foo").unwrap();
+        let symbol_not = parse_expr("!name == foo").unwrap();
+        assert_eq!(word_not, symbol_not, "'not' and '!' should be equivalent");
+        
+        // Test complex expression with word forms
+        let complex_word = parse_expr("name == foo and not (size > 100 or type == dir)").unwrap();
+        let complex_symbol = parse_expr("name == foo && !(size > 100 || type == dir)").unwrap();
+        assert_eq!(complex_word, complex_symbol, "Complex expressions should work with word forms");
+        
+        // Test mixed forms (word and symbol)
+        let mixed = parse_expr("name == foo and size > 100 || not type == dir");
+        assert!(mixed.is_ok(), "Mixed word and symbol forms should work");
+    }
+    
+    #[test]
     fn parse_operator_aliases() {
         // = vs ==
         let eq1 = parse_expr("path.name = foo").unwrap();
