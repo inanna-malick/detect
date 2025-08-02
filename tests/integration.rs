@@ -554,6 +554,40 @@ async fn test_negation_variants() {
 }
 
 #[tokio::test]
+async fn test_empty_extension_matching() {
+    // Test finding files without extensions
+    Case {
+        expr: r#"path.extension == """#,
+        expected: &["README", "Makefile", "noext"],
+        files: vec![
+            f("README", ""),
+            f("Makefile", ""),
+            f("noext", ""),
+            f("file.txt", ""),
+            f("script.rs", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
+async fn test_empty_parent_matching() {
+    // Test finding files in root (no parent directory)
+    Case {
+        expr: r#"path.parent == "" && type == "file""#,
+        expected: &["rootfile.txt"],
+        files: vec![
+            f("rootfile.txt", ""),
+            f("dir/file.txt", ""),
+            f("dir/subdir/file.txt", ""),
+        ],
+    }
+    .run()
+    .await
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

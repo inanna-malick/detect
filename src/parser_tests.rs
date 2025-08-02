@@ -605,7 +605,7 @@ mod tests {
         let pred_txt = NamePredicate::Extension(StringMatcher::Equals("txt".to_string()));
 
         // File with no extension
-        assert!(!pred_empty.is_match(Path::new("README"))); // This will be false!
+        assert!(pred_empty.is_match(Path::new("README"))); // Now matches empty extension
         assert!(!pred_txt.is_match(Path::new("README")));
 
         // File with extension
@@ -613,7 +613,7 @@ mod tests {
         assert!(pred_txt.is_match(Path::new("file.txt")));
 
         // Hidden file with no extension
-        assert!(!pred_empty.is_match(Path::new(".gitignore")));
+        assert!(pred_empty.is_match(Path::new(".gitignore"))); // Now matches empty extension
         assert!(!pred_txt.is_match(Path::new(".gitignore")));
     }
 

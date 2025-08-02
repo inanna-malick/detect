@@ -795,9 +795,14 @@ impl NamePredicate {
             }
             NamePredicate::Extension(x) => {
                 // Match against extension without dot
-                path.extension()
-                    .and_then(|os_str| os_str.to_str())
-                    .is_some_and(|s| x.is_match(s))
+                // Handle empty extension case for files without extensions
+                match path.extension() {
+                    Some(ext) => ext.to_str().is_some_and(|s| x.is_match(s)),
+                    None => {
+                        // No extension - check if looking for empty string
+                        x.is_match("")
+                    }
+                }
             }
         }
     }
