@@ -32,12 +32,21 @@ mod tests {
             ))))
         );
         
-        // Test bare suffix shorthand
-        let expr = parse_expr("suffix == md").unwrap();
+        // Test bare extension shorthand
+        let expr = parse_expr("extension == md").unwrap();
         assert_eq!(
             expr,
             Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
                 StringMatcher::Equals("md".to_owned())
+            ))))
+        );
+        
+        // Test short form 'ext'
+        let expr = parse_expr("ext == rs").unwrap();
+        assert_eq!(
+            expr,
+            Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
+                StringMatcher::Equals("rs".to_owned())
             ))))
         );
         
@@ -221,7 +230,7 @@ mod tests {
 
     #[test]
     fn parse_extension_predicate() {
-        let parsed = parse_expr("path.suffix == rs").unwrap();
+        let parsed = parse_expr("path.extension == rs").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("rs".to_string()),
         ))));
@@ -230,7 +239,7 @@ mod tests {
 
     #[test]
     fn parse_extension_in_set() {
-        let parsed = parse_expr("path.suffix in [js, ts, jsx, tsx]").unwrap();
+        let parsed = parse_expr("path.extension in [js, ts, jsx, tsx]").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(
                 [
@@ -376,7 +385,7 @@ mod tests {
 
     #[test]
     fn parse_and_expression() {
-        let parsed = parse_expr("path.name == foo && path.suffix == rs").unwrap();
+        let parsed = parse_expr("path.name == foo && path.extension == rs").unwrap();
         let left = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
             StringMatcher::Equals("foo".to_string()),
         ))));
@@ -455,9 +464,9 @@ mod tests {
 
     #[test]
     fn parse_complex_nested() {
-        // !(path.name == x || path.suffix == y) && (size > z || type == w)
+        // !(path.name == x || path.extension == y) && (size > z || type == w)
         let parsed =
-            parse_expr("!(path.name == x || path.suffix == y) && (size > 100 || type == dir)")
+            parse_expr("!(path.name == x || path.extension == y) && (size > 100 || type == dir)")
                 .unwrap();
 
         // Build expected tree
@@ -497,14 +506,14 @@ mod tests {
 
     #[test]
     fn parse_set_literal_variations() {
-        let empty = parse_expr("path.suffix in []").unwrap();
+        let empty = parse_expr("path.extension in []").unwrap();
         let expected_empty = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(HashSet::new()),
         ))));
         assert_eq!(empty, expected_empty);
 
         // Single item
-        let single = parse_expr("path.suffix in [js]").unwrap();
+        let single = parse_expr("path.extension in [js]").unwrap();
         let expected_single = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(["js".to_string()].into_iter().collect()),
         ))));
@@ -697,9 +706,9 @@ mod tests {
     #[test]
     fn error_malformed_sets() {
         let malformed = vec![
-            "path.suffix in [js ts]", // missing comma
-            "path.suffix in js, ts]", // missing opening bracket
-            "path.suffix in [js, ts", // missing closing bracket
+            "path.extension in [js ts]", // missing comma
+            "path.extension in js, ts]", // missing opening bracket
+            "path.extension in [js, ts", // missing closing bracket
         ];
         for expr in malformed {
             assert!(parse_expr(expr).is_err(), "Should fail: {}", expr);
@@ -732,8 +741,8 @@ mod tests {
 
     #[test]
     fn test_empty_string_extension() {
-        // Test parsing path.suffix == ""
-        let parsed = parse_expr(r#"path.suffix == """#).unwrap();
+        // Test parsing path.extension == ""
+        let parsed = parse_expr(r#"path.extension == """#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("".to_string()),
@@ -745,7 +754,7 @@ mod tests {
     #[test]
     fn test_empty_string_in_set() {
         // Test parsing empty string in set literal
-        let parsed = parse_expr(r#"path.suffix in ["", txt, rs]"#).unwrap();
+        let parsed = parse_expr(r#"path.extension in ["", txt, rs]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::In(
@@ -782,7 +791,7 @@ mod tests {
     #[test]
     fn test_in_operator_parsing() {
         // Test parsing of 'in' operator with bare identifiers
-        let expr = parse_expr(r#"path.suffix in [js, ts]"#).unwrap();
+        let expr = parse_expr(r#"path.extension in [js, ts]"#).unwrap();
 
         // Check what we get
         if let Expr::Predicate(Predicate::Name(name_pred)) = &expr {
@@ -834,7 +843,7 @@ mod tests {
     #[test]
     fn test_compound_in_expression_parsing() {
         // Test the exact expression from the failing integration test
-        let expr = parse_expr(r#"path.suffix in [js, ts] && path.name in [index, main]"#).unwrap();
+        let expr = parse_expr(r#"path.extension in [js, ts] && path.name in [index, main]"#).unwrap();
 
         let expected = Expr::And(
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
@@ -920,7 +929,7 @@ mod tests {
     #[test]
     fn test_complex_negation_parsing() {
         // Test the exact expression from the beta tester's bug report
-        let parsed = parse_expr(r#"path.suffix == "rs" && !(path.name contains "test")"#).unwrap();
+        let parsed = parse_expr(r#"path.extension == "rs" && !(path.name contains "test")"#).unwrap();
 
         let left = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("rs".to_string()),
@@ -936,8 +945,8 @@ mod tests {
 
     #[test]
     fn test_negation_with_contains_in_compound() {
-        // Test the exact problematic case: path.suffix == "rs" && !(path.name contains "lib")
-        let parsed = parse_expr(r#"path.suffix == "rs" && !(path.name contains "lib")"#).unwrap();
+        // Test the exact problematic case: path.extension == "rs" && !(path.name contains "lib")
+        let parsed = parse_expr(r#"path.extension == "rs" && !(path.name contains "lib")"#).unwrap();
 
         // Build expected AST
         let ext_pred = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
@@ -1318,9 +1327,9 @@ mod tests {
             // Complex expression from bug report
             ("path.parent contains multivendor-plugin && (path.name contains spec || path.name contains test)", true),
             // Nested parentheses
-            ("((path.name contains a || path.name contains b) && path.suffix == rs)", true),
+            ("((path.name contains a || path.name contains b) && path.extension == rs)", true),
             // Multiple groups
-            ("(path.name contains foo) && (size > 1000 || path.suffix == txt)", true),
+            ("(path.name contains foo) && (size > 1000 || path.extension == txt)", true),
         ];
 
         for (expr, should_succeed) in test_cases {
@@ -1401,8 +1410,8 @@ mod tests {
             panic!("Expected name predicate");
         }
 
-        // Test path.suffix maps to Extension (without dot)
-        let parsed = parse_expr(r#"path.suffix == "rs""#).unwrap();
+        // Test path.extension maps to Extension (without dot)
+        let parsed = parse_expr(r#"path.extension == "rs""#).unwrap();
         if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
             match name_pred.as_ref() {
                 NamePredicate::Extension(StringMatcher::Equals(s)) => assert_eq!(s, "rs"),
@@ -1412,8 +1421,8 @@ mod tests {
             panic!("Expected name predicate");
         }
 
-        // Test path.suffix regex matching (without dots)
-        let parsed = parse_expr(r#"path.suffix ~= "(rs|toml)""#).unwrap();
+        // Test path.extension regex matching (without dots)
+        let parsed = parse_expr(r#"path.extension ~= "(rs|toml)""#).unwrap();
         if let Expr::Predicate(Predicate::Name(name_pred)) = parsed {
             match name_pred.as_ref() {
                 NamePredicate::Extension(StringMatcher::Regex(_)) => (),
@@ -1424,7 +1433,7 @@ mod tests {
         }
 
         // Test complex path queries
-        let parsed = parse_expr(r#"path.parent contains "src" && path.suffix == ".rs""#).unwrap();
+        let parsed = parse_expr(r#"path.parent contains "src" && path.extension == ".rs""#).unwrap();
         if let Expr::And(left, right) = parsed {
             if let Expr::Predicate(Predicate::Name(left_pred)) = left.as_ref() {
                 assert!(matches!(left_pred.as_ref(), NamePredicate::DirPath(_)));
@@ -1475,8 +1484,8 @@ mod tests {
         let expr = parse_expr(r#"path.stem == "parser_tests""#).unwrap();
         verify_name_match(&expr, test_path, true);
 
-        // Test path.suffix (note: extension is stored without dot internally)
-        let expr = parse_expr(r#"path.suffix == "rs""#).unwrap();
+        // Test path.extension (note: extension is stored without dot internally)
+        let expr = parse_expr(r#"path.extension == "rs""#).unwrap();
         verify_name_match(&expr, test_path, true);
 
         // Test negative cases

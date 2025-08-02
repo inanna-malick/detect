@@ -133,7 +133,7 @@ async fn test_name_and_contents() {
 #[tokio::test]
 async fn test_extension() {
     Case {
-        expr: "path.suffix == rs",
+        expr: "path.extension == rs",
         expected: &["test.rs"],
         files: vec![f("test.rs", ""), f("test2", "")],
     }
@@ -242,7 +242,7 @@ async fn test_backward_compatibility() {
 #[tokio::test]
 async fn test_not_equal_operator() {
     Case {
-        expr: "path.suffix != txt",
+        expr: "path.extension != txt",
         expected: &["script.sh", "config.json", ""],
         files: vec![
             f("readme.txt", "text"),
@@ -338,7 +338,7 @@ async fn test_match_operator_bare() {
 #[tokio::test]
 async fn test_in_operator_with_set() {
     Case {
-        expr: r#"path.suffix in [js, ts, jsx, tsx]"#,
+        expr: r#"path.extension in [js, ts, jsx, tsx]"#,
         expected: &["app.js", "lib.ts", "component.jsx", "page.tsx"],
         files: vec![
             f("app.js", ""),
@@ -373,7 +373,7 @@ async fn test_in_operator_with_quoted_set() {
 async fn test_in_operator_single_value() {
     // Test that 'in' requires a set literal
     Case {
-        expr: r#"path.suffix in ["js"]"#,
+        expr: r#"path.extension in ["js"]"#,
         expected: &["app.js", "index.js"],
         files: vec![f("app.js", ""), f("index.js", ""), f("style.css", "")],
     }
@@ -435,7 +435,7 @@ async fn test_contains_with_regex_special_chars() {
 #[tokio::test]
 async fn test_multiple_in_operators() {
     Case {
-        expr: r#"path.suffix in [js, ts] && path.stem in [index, main]"#,
+        expr: r#"path.extension in [js, ts] && path.stem in [index, main]"#,
         expected: &["index.js", "main.js", "index.ts", "main.ts"],
         files: vec![
             f("index.js", ""),
@@ -454,7 +454,7 @@ async fn test_multiple_in_operators() {
 #[tokio::test]
 async fn test_complex_nested_expression() {
     Case {
-        expr: r#"(path.suffix in [rs, toml] || path.suffix == md) && (size < 1000 || contents contains "important")"#,
+        expr: r#"(path.extension in [rs, toml] || path.extension == md) && (size < 1000 || contents contains "important")"#,
         expected: &["small.rs", "README.md", "config.toml", "large.rs"],
         files: vec![
             f("small.rs", "fn main() {}"),  // Small .rs file
@@ -487,7 +487,7 @@ async fn test_mixed_quotes_in_values() {
 async fn test_negation_with_contains() {
     // Test for the negation bug reported by beta tester
     Case {
-        expr: r#"path.suffix == "rs" && !(path.name contains "test")"#,
+        expr: r#"path.extension == "rs" && !(path.name contains "test")"#,
         expected: &["main.rs", "lib.rs", "mod.rs"],
         files: vec![
             f("main.rs", "fn main() {}"),
@@ -525,7 +525,7 @@ async fn test_negation_variants() {
 
     // Negation with equals - should work
     Case {
-        expr: r#"path.suffix == "rs" && !(path.name == "test.rs")"#,
+        expr: r#"path.extension == "rs" && !(path.name == "test.rs")"#,
         expected: &["main.rs", "lib.rs"],
         files: vec![
             f("main.rs", ""),
@@ -539,7 +539,7 @@ async fn test_negation_variants() {
 
     // The problematic case - negation with contains in compound expr
     Case {
-        expr: r#"path.suffix == "rs" && !(path.name contains "lib")"#,
+        expr: r#"path.extension == "rs" && !(path.name contains "lib")"#,
         expected: &["main.rs", "test.rs"],
         files: vec![
             f("main.rs", ""),
@@ -793,7 +793,7 @@ async fn test_word_form_boolean_operators() {
     
     // Test 'or' word form
     Case {
-        expr: r#"suffix == rs or suffix == py"#,
+        expr: r#"extension == rs or extension == py"#,
         expected: &["main.rs", "test.py"],
         files: vec![
             f("main.rs", "rust"),
@@ -820,7 +820,7 @@ async fn test_word_form_boolean_operators() {
     
     // Test complex expression with word forms
     Case {
-        expr: r#"(name contains lib or name contains main) and not suffix == txt"#,
+        expr: r#"(name contains lib or name contains main) and not extension == txt"#,
         expected: &["lib.rs", "main.py", "mylib.js"],
         files: vec![
             f("lib.rs", "lib"),
@@ -903,7 +903,7 @@ async fn test_set_with_special_filenames() {
 async fn test_combining_all_new_operators() {
     // Use regex patterns, in, contains, and != all in one expression
     Case {
-        expr: r#"path.name contains ".config." && path.suffix in [js, json, yaml, yml] && contents contains "version" && size != 0"#,
+        expr: r#"path.name contains ".config." && path.extension in [js, json, yaml, yml] && contents contains "version" && size != 0"#,
         expected: &["app.config.js", "db.config.json"],
         files: vec![
             f("app.config.js", "module.exports = { version: '1.0.0' }"),
@@ -958,7 +958,7 @@ async fn test_files_without_extensions() {
 #[tokio::test]
 async fn test_files_with_multiple_dots() {
     Case {
-        expr: r#"path.suffix == gz"#,
+        expr: r#"path.extension == gz"#,
         expected: &["archive.tar.gz", "backup.sql.gz"],
         files: vec![
             f("archive.tar.gz", ""),
@@ -1074,7 +1074,7 @@ async fn test_files_with_spaces_in_names() {
 #[tokio::test]
 async fn test_extension_edge_cases() {
     Case {
-        expr: r#"path.suffix in [d, "2", "1"]"#,
+        expr: r#"path.extension in [d, "2", "1"]"#,
         expected: &[".gitignore.d", "file.2", "archive.1"],
         files: vec![
             f(".gitignore.d", ""), // Extension is "d"

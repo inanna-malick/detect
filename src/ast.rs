@@ -235,7 +235,7 @@ impl TypedPredicate {
             Rule::path_parent_dir => Some(StringSelectorType::PathParentDir),
             Rule::path_name => Some(StringSelectorType::PathName),
             Rule::path_stem => Some(StringSelectorType::PathStem),
-            Rule::path_extension | Rule::path_suffix => Some(StringSelectorType::PathSuffix),
+            Rule::path_extension => Some(StringSelectorType::PathSuffix),
             _ => None,
         }
     }
@@ -295,7 +295,7 @@ impl TypedPredicate {
                 match shorthand.as_rule() {
                     Rule::bare_name => Ok(StringSelectorType::PathName),
                     Rule::bare_stem => Ok(StringSelectorType::PathStem),
-                    Rule::bare_suffix => Ok(StringSelectorType::PathSuffix),
+                    Rule::bare_extension => Ok(StringSelectorType::PathSuffix),  // Maps to PathSuffix internally
                     Rule::bare_parent => Ok(StringSelectorType::PathParent),
                     Rule::bare_full => Ok(StringSelectorType::PathFull),
                     rule => Err(ParseError::unexpected_rule(rule, None)),

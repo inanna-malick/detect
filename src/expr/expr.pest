@@ -44,15 +44,15 @@ string_predicate = {
     
     // Bare shorthand forms for path selectors (without path. prefix)
     bare_path_shorthand = { 
-        bare_name | bare_stem | bare_suffix | bare_parent | bare_full
+        bare_name | bare_stem | bare_extension | bare_parent | bare_full
     }
     bare_name = { "name" }
     bare_stem = { "stem" }
-    bare_suffix = { "suffix" }
+    bare_extension = { "extension" | "ext" }
     bare_parent = { "parent" }
     bare_full = { "full" }
     path_with_component = {
-        "path" ~ "." ~ (path_full | path_parent_dir | path_parent | path_name | path_stem | path_extension | path_suffix)
+        "path" ~ "." ~ (path_full | path_parent_dir | path_parent | path_name | path_stem | path_extension)
     }
     path_full = { "full" }
     path_parent = { "parent" }
@@ -60,7 +60,6 @@ string_predicate = {
     path_name = { "name" }
     path_stem = { "stem" }
     path_extension = { "extension" | "ext" }
-    path_suffix = { "suffix" }  // Kept as alias for backward compatibility
     
     // Content selectors with domain support
     content_selector = { content_with_domain | bare_content }
