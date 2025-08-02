@@ -120,7 +120,7 @@ async fn test_file_disappears_during_traversal() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "path.suffix == txt".to_owned(),
+        "path.extension == txt".to_owned(),
         |p| {
             found.push(p.file_name().unwrap().to_string_lossy().to_string());
             *files_processed_search.lock().unwrap() += 1;
@@ -219,7 +219,7 @@ async fn test_special_characters_in_filenames() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "path.suffix == txt".to_owned(),
+        "path.extension == txt".to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await;
