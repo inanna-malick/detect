@@ -73,11 +73,11 @@ mod tests {
         match result {
             Ok(parsed) => {
                 let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
-                    StringMatcher::In([
-                        "foo".to_string(),
-                        "bar".to_string(),
-                        "baz".to_string(),
-                    ].into_iter().collect()),
+                    StringMatcher::In(
+                        ["foo".to_string(), "bar".to_string(), "baz".to_string()]
+                            .into_iter()
+                            .collect(),
+                    ),
                 ))));
                 assert_eq!(parsed, expected);
             }
@@ -160,12 +160,16 @@ mod tests {
     fn parse_extension_in_set() {
         let parsed = parse_expr("path.suffix in [js, ts, jsx, tsx]").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
-            StringMatcher::In([
-                "js".to_string(),
-                "ts".to_string(),
-                "jsx".to_string(),
-                "tsx".to_string(),
-            ].into_iter().collect()),
+            StringMatcher::In(
+                [
+                    "js".to_string(),
+                    "ts".to_string(),
+                    "jsx".to_string(),
+                    "tsx".to_string(),
+                ]
+                .into_iter()
+                .collect(),
+            ),
         ))));
         assert_eq!(parsed, expected);
     }
@@ -383,11 +387,11 @@ mod tests {
         // Mixed quoted and unquoted
         let mixed = parse_expr(r#"path.name in [foo, "bar baz", 'qux']"#).unwrap();
         let expected_mixed = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
-            StringMatcher::In([
-                "foo".to_string(),
-                "bar baz".to_string(),
-                "qux".to_string(),
-            ].into_iter().collect()),
+            StringMatcher::In(
+                ["foo".to_string(), "bar baz".to_string(), "qux".to_string()]
+                    .into_iter()
+                    .collect(),
+            ),
         ))));
         assert_eq!(mixed, expected_mixed);
     }
@@ -591,7 +595,11 @@ mod tests {
         let parsed = parse_expr(r#"path.suffix in ["", txt, rs]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
-            StringMatcher::In(["".to_string(), "txt".to_string(), "rs".to_string()].into_iter().collect()),
+            StringMatcher::In(
+                ["".to_string(), "txt".to_string(), "rs".to_string()]
+                    .into_iter()
+                    .collect(),
+            ),
         ))));
 
         assert_eq!(parsed, expected);
@@ -644,8 +652,9 @@ mod tests {
         use std::path::Path;
 
         // Test actual matching with 'in' operator
-        let pred =
-            NamePredicate::Extension(StringMatcher::In(["js".to_string(), "ts".to_string()].into_iter().collect()));
+        let pred = NamePredicate::Extension(StringMatcher::In(
+            ["js".to_string(), "ts".to_string()].into_iter().collect(),
+        ));
 
         assert!(pred.is_match(Path::new("file.js")));
         assert!(pred.is_match(Path::new("file.ts")));
@@ -659,7 +668,11 @@ mod tests {
         let expr = parse_expr(r#"path.name in [index, main]"#).unwrap();
 
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
-            StringMatcher::In(["index".to_string(), "main".to_string()].into_iter().collect()),
+            StringMatcher::In(
+                ["index".to_string(), "main".to_string()]
+                    .into_iter()
+                    .collect(),
+            ),
         ))));
 
         assert_eq!(expr, expected);
@@ -672,16 +685,16 @@ mod tests {
 
         let expected = Expr::And(
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
-                NamePredicate::Extension(StringMatcher::In([
-                    "js".to_string(),
-                    "ts".to_string(),
-                ].into_iter().collect())),
+                NamePredicate::Extension(StringMatcher::In(
+                    ["js".to_string(), "ts".to_string()].into_iter().collect(),
+                )),
             )))),
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
-                NamePredicate::FileName(StringMatcher::In([
-                    "index".to_string(),
-                    "main".to_string(),
-                ].into_iter().collect())),
+                NamePredicate::FileName(StringMatcher::In(
+                    ["index".to_string(), "main".to_string()]
+                        .into_iter()
+                        .collect(),
+                )),
             )))),
         );
 
@@ -693,10 +706,11 @@ mod tests {
         use std::path::Path;
 
         // Test name matching with 'in' operator
-        let pred = NamePredicate::FileName(StringMatcher::In([
-            "index".to_string(),
-            "main".to_string(),
-        ].into_iter().collect()));
+        let pred = NamePredicate::FileName(StringMatcher::In(
+            ["index".to_string(), "main".to_string()]
+                .into_iter()
+                .collect(),
+        ));
 
         // Only exact path.name matches should work with FileName
         assert!(!pred.is_match(Path::new("index.js"))); // "index" != "index.js"

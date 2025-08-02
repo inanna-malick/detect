@@ -268,7 +268,7 @@ pub enum Selector {
     // METADATA
     EntityType,
     Size,
-    Depth,  // directory depth from base path
+    Depth, // directory depth from base path
     // TEMPORAL
     Modified,
     Created,
@@ -674,8 +674,12 @@ impl<A, B> Predicate<NamePredicate, A, B> {
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
         }
     }
-    
-    pub fn eval_name_predicate_with_base(self, path: &Path, base_path: Option<&Path>) -> ShortCircuit<Predicate<Done, A, B>> {
+
+    pub fn eval_name_predicate_with_base(
+        self,
+        path: &Path,
+        base_path: Option<&Path>,
+    ) -> ShortCircuit<Predicate<Done, A, B>> {
         match self {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match_with_base(path, base_path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
@@ -695,7 +699,7 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
     }
-    
+
     pub fn eval_metadata_predicate_with_path(
         self,
         metadata: &Metadata,
@@ -703,7 +707,9 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
         base_path: Option<&Path>,
     ) -> ShortCircuit<Predicate<A, Done, B>> {
         match self {
-            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match_with_path(metadata, Some(path), base_path)),
+            Predicate::Metadata(p) => {
+                ShortCircuit::Known(p.is_match_with_path(metadata, Some(path), base_path))
+            }
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
@@ -759,7 +765,7 @@ impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
         self.is_match_with_base(path, None)
     }
-    
+
     pub fn is_match_with_base(&self, path: &Path, base_path: Option<&Path>) -> bool {
         match self {
             NamePredicate::BaseName(x) => {
@@ -966,8 +972,13 @@ impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
         self.is_match_with_path(metadata, None, None)
     }
-    
-    pub fn is_match_with_path(&self, metadata: &Metadata, path: Option<&Path>, base_path: Option<&Path>) -> bool {
+
+    pub fn is_match_with_path(
+        &self,
+        metadata: &Metadata,
+        path: Option<&Path>,
+        base_path: Option<&Path>,
+    ) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
             MetadataPredicate::Type(matcher) => {

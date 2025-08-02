@@ -604,7 +604,7 @@ async fn test_depth_selector() {
     }
     .run()
     .await;
-    
+
     Case {
         expr: r#"depth == 3 && type == file"#,
         expected: &["dir/subdir/level2.txt"],
@@ -617,7 +617,7 @@ async fn test_depth_selector() {
     }
     .run()
     .await;
-    
+
     Case {
         expr: r#"depth > 2 && type == file"#,
         expected: &["dir/subdir/level2.txt", "dir/subdir/deep/level3.txt"],
@@ -648,7 +648,7 @@ async fn test_parent_dir_selector() {
     }
     .run()
     .await;
-    
+
     // Test parent_dir with 'in' operator
     Case {
         expr: r#"path.parent_dir in [src, lib, test] && type == file"#,
@@ -658,7 +658,7 @@ async fn test_parent_dir_selector() {
             f("lib/util.rs", ""),
             f("test/runner.rs", ""),
             f("src/utils/helper.rs", ""), // parent_dir is utils, not src
-            f("main.rs", ""), // No parent directory
+            f("main.rs", ""),             // No parent directory
         ],
     }
     .run()
