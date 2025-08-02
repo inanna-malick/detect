@@ -106,7 +106,9 @@ temporal_predicate = {
     temporal_ne |
     temporal_comparison
   }
-  temporal_selector = { modified | created | accessed }
+  temporal_selector = { time_with_domain | bare_time }
+    time_with_domain = { "time" ~ "." ~ (modified | created | accessed) }
+    bare_time = { modified | created | accessed }
     modified = { "modified" | "mtime" }
     created  = { "created" | "ctime" }
     accessed = { "accessed" | "atime" }

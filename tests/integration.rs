@@ -707,6 +707,36 @@ async fn test_content_selector_forms() {
 }
 
 #[tokio::test]
+async fn test_time_domain_forms() {
+    // Note: These tests can't actually test time-based queries since we can't control
+    // file timestamps in a temp dir. We just verify the queries parse and run.
+    
+    // Test canonical form parses and runs
+    Case {
+        expr: r#"time.modified > "-100.days" && type == file"#,
+        expected: &["file1.txt", "file2.txt"],  // All files match since they're newly created
+        files: vec![
+            f("file1.txt", "content"),
+            f("file2.txt", "content"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test bare form still works
+    Case {
+        expr: r#"modified > "-100.days" && type == file"#,
+        expected: &["file1.txt", "file2.txt"],
+        files: vec![
+            f("file1.txt", "content"),
+            f("file2.txt", "content"),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

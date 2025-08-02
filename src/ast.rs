@@ -477,6 +477,32 @@ impl TypedPredicate {
                     .next()
                     .ok_or_else(|| ParseError::missing_token("temporal selector type", "temporal_selector"))?;
                 match inner.as_rule() {
+                    Rule::time_with_domain => {
+                        // Extract the actual time component after "time."
+                        let time_component = inner
+                            .into_inner()
+                            .next()
+                            .ok_or_else(|| ParseError::missing_token("time component", "time_with_domain"))?;
+                        match time_component.as_rule() {
+                            Rule::modified => TemporalSelectorType::Modified,
+                            Rule::created => TemporalSelectorType::Created,
+                            Rule::accessed => TemporalSelectorType::Accessed,
+                            rule => return Err(ParseError::unexpected_rule(rule, None)),
+                        }
+                    }
+                    Rule::bare_time => {
+                        // Handle bare time selector
+                        let time_component = inner
+                            .into_inner()
+                            .next()
+                            .ok_or_else(|| ParseError::missing_token("bare time component", "bare_time"))?;
+                        match time_component.as_rule() {
+                            Rule::modified => TemporalSelectorType::Modified,
+                            Rule::created => TemporalSelectorType::Created,
+                            Rule::accessed => TemporalSelectorType::Accessed,
+                            rule => return Err(ParseError::unexpected_rule(rule, None)),
+                        }
+                    }
                     Rule::modified => TemporalSelectorType::Modified,
                     Rule::created => TemporalSelectorType::Created,
                     Rule::accessed => TemporalSelectorType::Accessed,

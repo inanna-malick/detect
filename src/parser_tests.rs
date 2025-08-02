@@ -294,6 +294,32 @@ mod tests {
     }
 
     #[test]
+    fn test_time_domain_support() {
+        use crate::predicate::TimeMatcher;
+        
+        // Test canonical form: time.modified
+        let result = parse_expr(r#"time.modified > "-7.days""#);
+        assert!(result.is_ok(), "Failed to parse time.modified");
+        
+        // Test canonical form: time.created
+        let result = parse_expr(r#"time.created < "2024-01-01""#);
+        assert!(result.is_ok(), "Failed to parse time.created");
+        
+        // Test canonical form: time.accessed
+        let result = parse_expr(r#"time.accessed > "-30.minutes""#);
+        assert!(result.is_ok(), "Failed to parse time.accessed");
+        
+        // Test bare forms still work
+        let result = parse_expr(r#"modified > "-7.days""#);
+        assert!(result.is_ok(), "Failed to parse bare modified");
+        
+        // Verify both forms produce the same result
+        let canonical = parse_expr(r#"time.modified == "2024-01-01""#).unwrap();
+        let bare = parse_expr(r#"modified == "2024-01-01""#).unwrap();
+        assert_eq!(canonical, bare, "Canonical and bare forms should be equivalent");
+    }
+    
+    #[test]
     fn parse_temporal_selectors() {
         // Just verify they parse to the correct variant
         let modified = parse_expr(r#"modified > "-7.days""#).unwrap();
