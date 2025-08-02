@@ -1170,6 +1170,27 @@ mod tests {
     }
 
     #[test]
+    fn test_temporal_syntax_relaxed() {
+        // Test that we want more relaxed temporal syntax
+        // Currently requires quotes and periods: "-7.days"
+        // We want to support: 7days, -7days, "7 days", etc.
+        
+        // Test what currently works
+        assert!(parse_expr("modified > \"-7.days\"").is_ok(), "Current syntax should work");
+        assert!(parse_expr("created < \"-30.minutes\"").is_ok(), "Current syntax should work");
+        
+        // Test what we WANT to work - these will fail initially
+        assert!(parse_expr("modified > -7days").is_ok(), "Should support: -7days (no quotes, no period)");
+        assert!(parse_expr("modified > 7days").is_ok(), "Should support: 7days (no quotes, no period, no minus)");
+        assert!(parse_expr("created < 30minutes").is_ok(), "Should support: 30minutes (no quotes, no period)");
+        assert!(parse_expr("accessed > -1hour").is_ok(), "Should support: -1hour (singular, no quotes)");
+        assert!(parse_expr("modified > -2weeks").is_ok(), "Should support: -2weeks (no quotes, no period)");
+        assert!(parse_expr("modified > -7d").is_ok(), "Should support: -7d (short form)");
+        assert!(parse_expr("created < 30m").is_ok(), "Should support: 30m (short form minutes)");
+        assert!(parse_expr("accessed > 1h").is_ok(), "Should support: 1h (short form hours)");
+    }
+
+    #[test]
     fn test_size_decimal_parsing() {
         // Test decimal size values
         let test_cases = vec![

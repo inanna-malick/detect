@@ -983,6 +983,36 @@ async fn test_size_units_case_insensitive() {
 }
 
 #[tokio::test]
+async fn test_temporal_syntax_variations() {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::fs;
+    use tempdir::TempDir;
+    
+    // This test will check various temporal syntax options
+    // Currently quotes and periods are required: "-7.days"
+    // We want to support: 7days, -7days, "7 days", etc.
+    
+    let temp_dir = TempDir::new("detect_test").unwrap();
+    let recent_file = temp_dir.path().join("recent.txt");
+    fs::write(&recent_file, "recent").unwrap();
+    
+    // Test currently working syntax (baseline)
+    Case {
+        expr: "modified > \"-1.days\"",
+        expected: &["recent.txt"],
+        files: vec![f("recent.txt", "recent")],
+    }
+    .run()
+    .await;
+    
+    // These should work but currently don't:
+    // "modified > 7days" - no quotes or period
+    // "modified > -7days" - no quotes
+    // "modified > 7.days" - no quotes
+    // Let's test what actually works
+}
+
+#[tokio::test]
 async fn test_combining_all_new_operators() {
     // Use regex patterns, in, contains, and != all in one expression
     Case {

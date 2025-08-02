@@ -18,32 +18,60 @@ use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
 use crate::util::Done;
 use chrono::{DateTime, Duration, Local, NaiveDate};
 
+fn parse_duration(number: i64, unit: &str, original: &str) -> Result<Duration, TemporalError> {
+    match unit {
+        "seconds" | "second" | "secs" | "sec" | "s" => Ok(Duration::seconds(number)),
+        "minutes" | "minute" | "mins" | "min" | "m" => Ok(Duration::minutes(number)),
+        "hours" | "hour" | "hrs" | "hr" | "h" => Ok(Duration::hours(number)),
+        "days" | "day" | "d" => Ok(Duration::days(number)),
+        "weeks" | "week" | "w" => Ok(Duration::weeks(number)),
+        _ => Err(TemporalError {
+            input: original.to_string(),
+            kind: TemporalErrorKind::UnknownUnit(unit.to_string()),
+        }),
+    }
+}
+
 pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
-    // Handle relative time formats
-    if let Some(stripped) = s.strip_prefix('-') {
-        let parts: Vec<&str> = stripped.split('.').collect();
-        if parts.len() == 2 {
-            let number: i64 = parts[0].parse().map_err(|e| TemporalError {
-                input: s.to_string(),
-                kind: TemporalErrorKind::ParseInt(e),
-            })?;
-            let unit = parts[1];
-
-            let duration = match unit {
-                "seconds" | "second" | "secs" | "sec" | "s" => Duration::seconds(number),
-                "minutes" | "minute" | "mins" | "min" | "m" => Duration::minutes(number),
-                "hours" | "hour" | "hrs" | "hr" | "h" => Duration::hours(number),
-                "days" | "day" | "d" => Duration::days(number),
-                "weeks" | "week" | "w" => Duration::weeks(number),
-                _ => {
-                    return Err(TemporalError {
-                        input: s.to_string(),
-                        kind: TemporalErrorKind::UnknownUnit(unit.to_string()),
-                    })
-                }
+    // Handle relative time formats (both new and legacy)
+    // New format: -7days, 7days, 30minutes
+    // Legacy format: -7.days
+    
+    // Try parsing as relative time (with or without minus)
+    let (is_negative, stripped) = if let Some(rest) = s.strip_prefix('-') {
+        (true, rest)
+    } else {
+        (false, s)
+    };
+    
+    // First try legacy format with period
+    if let Some((num_str, unit)) = stripped.split_once('.') {
+        if let Ok(number) = num_str.parse::<i64>() {
+            let duration = parse_duration(number, unit, s)?;
+            return if is_negative {
+                Ok(Local::now() - duration)
+            } else {
+                Ok(Local::now() + duration)
             };
-
-            return Ok(Local::now() - duration);
+        }
+    }
+    
+    // Try new format without period (e.g., "7days", "30m")
+    // Find where the digits end and the unit begins
+    let digit_end = stripped.find(|c: char| !c.is_ascii_digit());
+    if let Some(idx) = digit_end {
+        let num_str = &stripped[..idx];
+        let unit = &stripped[idx..];
+        
+        if let Ok(number) = num_str.parse::<i64>() {
+            if !unit.is_empty() {
+                let duration = parse_duration(number, unit, s)?;
+                return if is_negative {
+                    Ok(Local::now() - duration)
+                } else {
+                    Ok(Local::now() + duration)
+                };
+            }
         }
     }
 

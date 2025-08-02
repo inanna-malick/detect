@@ -570,6 +570,7 @@ impl TypedPredicate {
                     .ok_or_else(|| ParseError::missing_token("temporal content", "temporal_value"))?;
                 Self::parse_temporal_value(inner)
             }
+            Rule::relaxed_time_value => Ok(pair.as_str().to_string()),
             Rule::time_value => Ok(pair.as_str().to_string()),
             Rule::quoted_string => Self::extract_string_value(pair),
             Rule::time_keyword => Ok(pair.as_str().to_string()),

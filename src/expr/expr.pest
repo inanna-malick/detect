@@ -126,8 +126,9 @@ temporal_predicate = {
   temporal_ne = { ne ~ temporal_value }
   temporal_comparison = { (gteq | lteq | gt | lt) ~ temporal_value }
   
-  temporal_value = { time_value | quoted_string | time_keyword }
-  time_value = ${ "-" ~ ASCII_DIGIT+ ~ "." ~ time_unit }
+  temporal_value = { relaxed_time_value | time_value | quoted_string | time_keyword }
+  relaxed_time_value = ${ "-"? ~ ASCII_DIGIT+ ~ time_unit }  // Optional minus, no period required
+  time_value = ${ "-" ~ ASCII_DIGIT+ ~ "." ~ time_unit }     // Legacy format for compatibility
   time_keyword = { "now" | "today" | "yesterday" }
   time_unit = { seconds | minutes | hours | days | weeks | months }
     seconds = { "seconds" | "second" | "secs" | "sec" | "s" }
