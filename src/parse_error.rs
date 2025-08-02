@@ -39,6 +39,14 @@ pub enum StructureErrorKind {
         expected: &'static str,
         found: String,
     },
+    ExpectedRule {
+        expected: Rule,
+        found: Rule,
+    },
+    ExpectedOneOf {
+        expected: &'static [Rule],
+        found: Rule,
+    },
 }
 
 #[derive(Debug)]
@@ -192,6 +200,18 @@ impl fmt::Display for StructureErrorKind {
             }
             StructureErrorKind::InvalidToken { expected, found } => {
                 write!(f, "Invalid token: expected {}, found '{}'", expected, found)
+            }
+            StructureErrorKind::ExpectedRule { expected, found } => {
+                write!(f, "Expected {:?}, found {:?}", expected, found)
+            }
+            StructureErrorKind::ExpectedOneOf { expected, found } => {
+                let rules: Vec<String> = expected.iter().map(|r| format!("{:?}", r)).collect();
+                write!(
+                    f,
+                    "Expected one of [{}], found {:?}",
+                    rules.join(", "),
+                    found
+                )
             }
         }
     }

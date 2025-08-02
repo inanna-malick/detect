@@ -18,6 +18,23 @@ use crate::predicate::{
     StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
 };
 
+// Extension trait for better error handling with iterators
+trait ParseIterExt<'i> {
+    fn expect_next(&mut self, context: &'static str) -> Result<Pair<'i, Rule>, ParseError>;
+}
+
+impl<'i> ParseIterExt<'i> for Pairs<'i, Rule> {
+    fn expect_next(&mut self, context: &'static str) -> Result<Pair<'i, Rule>, ParseError> {
+        self.next().ok_or(ParseError::Structure {
+            kind: StructureErrorKind::MissingToken {
+                expected: "token",
+                context,
+            },
+            location: None,
+        })
+    }
+}
+
 // Helper for extracting string from span
 fn span_to_string(span: Span) -> String {
     span.as_str().to_string()
@@ -74,7 +91,7 @@ pub enum TypedPredicate {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StringSelectorType {
     PathFull,
     PathParent,
@@ -85,6 +102,7 @@ pub enum StringSelectorType {
     Type,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringOp {
     Equals,
     NotEquals,
@@ -92,6 +110,7 @@ pub enum StringOp {
     Regex,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericOp {
     Equals,
     NotEquals,
@@ -101,12 +120,14 @@ pub enum NumericOp {
     LessOrEqual,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemporalSelectorType {
     Modified,
     Created,
     Accessed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TemporalOp {
     Equals,
     NotEquals,
@@ -115,19 +136,23 @@ pub enum TemporalOp {
 }
 
 impl TypedPredicate {
+    /// Helper to convert path rules to selector types
+    fn path_rule_to_selector(rule: Rule) -> Option<StringSelectorType> {
+        match rule {
+            Rule::path_full => Some(StringSelectorType::PathFull),
+            Rule::path_parent => Some(StringSelectorType::PathParent),
+            Rule::path_name => Some(StringSelectorType::PathName),
+            Rule::path_stem => Some(StringSelectorType::PathStem),
+            Rule::path_suffix => Some(StringSelectorType::PathSuffix),
+            _ => None,
+        }
+    }
+
     /// Parse a typed predicate from a Pest pair
     pub fn from_pair(pair: Pair<'_, Rule>) -> Result<Self, ParseError> {
         let span = pair.as_span();
-        let inner = pair
-            .into_inner()
-            .next()
-            .ok_or_else(|| ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "predicate type",
-                    context: "typed_predicate",
-                },
-                location: Some((span.start_pos().line_col().0, span.start_pos().line_col().1)),
-            })?;
+        let mut inner = pair.into_inner();
+        let inner = inner.expect_next("typed_predicate")?;
 
         match inner.as_rule() {
             Rule::string_predicate => Self::parse_string_predicate(inner),
@@ -144,24 +169,11 @@ impl TypedPredicate {
         let mut inner = pair.into_inner();
 
         // Parse selector
-        let selector_pair = inner.next().ok_or(ParseError::Structure {
-            kind: StructureErrorKind::MissingToken {
-                expected: "string selector",
-                context: "string_predicate",
-            },
-            location: None,
-        })?;
-
+        let selector_pair = inner.expect_next("string_predicate")?;
         let selector = Self::parse_string_selector(selector_pair)?;
 
         // Parse operator and value
-        let op_value_pair = inner.next().ok_or(ParseError::Structure {
-            kind: StructureErrorKind::MissingToken {
-                expected: "operator and value",
-                context: "string_predicate",
-            },
-            location: None,
-        })?;
+        let op_value_pair = inner.expect_next("string_predicate")?;
 
         let (op, value, set_items) = Self::parse_string_op_value(op_value_pair)?;
 
@@ -180,53 +192,22 @@ impl TypedPredicate {
         match pair.as_rule() {
             Rule::string_selector => {
                 // Unwrap the string_selector wrapper
-                let inner = pair
-                    .into_inner()
-                    .next()
-                    .ok_or(ParseError::Structure {
-                        kind: StructureErrorKind::MissingToken {
-                            expected: "selector type",
-                            context: "string_selector",
-                        },
-                        location: None,
-                    })?;
+                let mut inner_pairs = pair.into_inner();
+                let inner = inner_pairs.expect_next("string_selector")?;
                 Self::parse_string_selector(inner)
             }
             Rule::path_selector => {
                 // Path selector has nested structure
                 let mut path_inner = pair.into_inner();
-                let first = path_inner.next().ok_or(ParseError::Structure {
-                    kind: StructureErrorKind::MissingToken {
-                        expected: "path component",
-                        context: "path_selector",
-                    },
-                    location: None,
-                })?;
+                let first = path_inner.expect_next("path_selector")?;
 
                 match first.as_rule() {
                     Rule::path_alias => Ok(StringSelectorType::PathFull),
                     Rule::path_with_component => {
-                        // Find the component
+                        // Find the component and convert it to selector type
                         first
                             .into_inner()
-                            .find(|t| {
-                                matches!(
-                                    t.as_rule(),
-                                    Rule::path_full
-                                        | Rule::path_parent
-                                        | Rule::path_name
-                                        | Rule::path_stem
-                                        | Rule::path_suffix
-                                )
-                            })
-                            .map(|comp| match comp.as_rule() {
-                                Rule::path_full => StringSelectorType::PathFull,
-                                Rule::path_parent => StringSelectorType::PathParent,
-                                Rule::path_name => StringSelectorType::PathName,
-                                Rule::path_stem => StringSelectorType::PathStem,
-                                Rule::path_suffix => StringSelectorType::PathSuffix,
-                                _ => unreachable!("filtered above"),
-                            })
+                            .find_map(|t| Self::path_rule_to_selector(t.as_rule()))
                             .ok_or(ParseError::Structure {
                                 kind: StructureErrorKind::MissingToken {
                                     expected: "path component",
@@ -329,16 +310,13 @@ impl TypedPredicate {
     fn extract_string_value(pair: Pair<'_, Rule>) -> Result<String, ParseError> {
         match pair.as_rule() {
             Rule::string_value => {
-                let inner = pair
-                    .into_inner()
-                    .next()
-                    .ok_or(ParseError::Structure {
-                        kind: StructureErrorKind::MissingToken {
-                            expected: "string content",
-                            context: "string_value",
-                        },
-                        location: None,
-                    })?;
+                let inner = pair.into_inner().next().ok_or(ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "string content",
+                        context: "string_value",
+                    },
+                    location: None,
+                })?;
                 Self::extract_string_value(inner)
             }
             Rule::quoted_string => Self::extract_quoted_string(pair),
@@ -353,26 +331,20 @@ impl TypedPredicate {
     }
 
     fn extract_quoted_string(pair: Pair<'_, Rule>) -> Result<String, ParseError> {
-        let quoted = pair
-            .into_inner()
-            .next()
-            .ok_or(ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "quoted content",
-                    context: "quoted string",
-                },
-                location: None,
-            })?;
-        let inner_str = quoted
-            .into_inner()
-            .next()
-            .ok_or(ParseError::Structure {
-                kind: StructureErrorKind::MissingToken {
-                    expected: "string content",
-                    context: "quoted string",
-                },
-                location: None,
-            })?;
+        let quoted = pair.into_inner().next().ok_or(ParseError::Structure {
+            kind: StructureErrorKind::MissingToken {
+                expected: "quoted content",
+                context: "quoted string",
+            },
+            location: None,
+        })?;
+        let inner_str = quoted.into_inner().next().ok_or(ParseError::Structure {
+            kind: StructureErrorKind::MissingToken {
+                expected: "string content",
+                context: "quoted string",
+            },
+            location: None,
+        })?;
         Ok(inner_str.as_str().to_string())
     }
 
@@ -453,16 +425,13 @@ impl TypedPredicate {
     fn parse_numeric_value(pair: Pair<'_, Rule>) -> Result<u64, ParseError> {
         match pair.as_rule() {
             Rule::numeric_value => {
-                let inner = pair
-                    .into_inner()
-                    .next()
-                    .ok_or(ParseError::Structure {
-                        kind: StructureErrorKind::MissingToken {
-                            expected: "numeric content",
-                            context: "numeric_value",
-                        },
-                        location: None,
-                    })?;
+                let inner = pair.into_inner().next().ok_or(ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "numeric content",
+                        context: "numeric_value",
+                    },
+                    location: None,
+                })?;
                 Self::parse_numeric_value(inner)
             }
             Rule::size_value => crate::parser::parse_size_value_as_bytes(pair),
@@ -495,17 +464,16 @@ impl TypedPredicate {
         let selector = match selector_pair.as_rule() {
             Rule::temporal_selector => {
                 // Unwrap the temporal_selector wrapper
-                let inner =
-                    selector_pair
-                        .into_inner()
-                        .next()
-                        .ok_or(ParseError::Structure {
-                            kind: StructureErrorKind::MissingToken {
-                                expected: "temporal selector type",
-                                context: "temporal_selector",
-                            },
-                            location: None,
-                        })?;
+                let inner = selector_pair
+                    .into_inner()
+                    .next()
+                    .ok_or(ParseError::Structure {
+                        kind: StructureErrorKind::MissingToken {
+                            expected: "temporal selector type",
+                            context: "temporal_selector",
+                        },
+                        location: None,
+                    })?;
                 match inner.as_rule() {
                     Rule::modified => TemporalSelectorType::Modified,
                     Rule::created => TemporalSelectorType::Created,
@@ -602,16 +570,13 @@ impl TypedPredicate {
     fn parse_temporal_value(pair: Pair<'_, Rule>) -> Result<String, ParseError> {
         match pair.as_rule() {
             Rule::temporal_value => {
-                let inner = pair
-                    .into_inner()
-                    .next()
-                    .ok_or(ParseError::Structure {
-                        kind: StructureErrorKind::MissingToken {
-                            expected: "temporal content",
-                            context: "temporal_value",
-                        },
-                        location: None,
-                    })?;
+                let inner = pair.into_inner().next().ok_or(ParseError::Structure {
+                    kind: StructureErrorKind::MissingToken {
+                        expected: "temporal content",
+                        context: "temporal_value",
+                    },
+                    location: None,
+                })?;
                 Self::parse_temporal_value(inner)
             }
             Rule::time_value => Ok(pair.as_str().to_string()),

@@ -22,9 +22,29 @@ pub mod pratt_parser {
 
 use pratt_parser::Rule;
 
-fn get_location(span: &Span) -> Option<(usize, usize)> {
-    let (line, col) = span.start_pos().line_col();
-    Some((line, col))
+// Size units and their multipliers
+const SIZE_UNITS: &[(&str, f64)] = &[
+    ("b", 1.0),
+    ("k", 1024.0),
+    ("kb", 1024.0),
+    ("m", 1024.0 * 1024.0),
+    ("mb", 1024.0 * 1024.0),
+    ("g", 1024.0 * 1024.0 * 1024.0),
+    ("gb", 1024.0 * 1024.0 * 1024.0),
+    ("t", 1024.0 * 1024.0 * 1024.0 * 1024.0),
+    ("tb", 1024.0 * 1024.0 * 1024.0 * 1024.0),
+];
+
+// Extension trait for cleaner span location extraction
+trait SpanExt {
+    fn to_location(&self) -> (usize, usize);
+}
+
+impl SpanExt for Span<'_> {
+    #[inline]
+    fn to_location(&self) -> (usize, usize) {
+        self.start_pos().line_col()
+    }
 }
 
 pub fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u64, ParseError> {
@@ -49,7 +69,7 @@ pub fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u6
                 expected: "size value with unit",
                 found: text.to_string(),
             },
-            location: get_location(&span),
+            location: Some(span.to_location()),
         });
     }
 
@@ -63,25 +83,21 @@ pub fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u6
                 expected: "numeric value",
                 found: number_part.to_string(),
             },
-            location: get_location(&span),
+            location: Some(span.to_location()),
         })?;
 
-    let multiplier = match unit_part.to_lowercase().as_str() {
-        "b" => 1.0,
-        "k" | "kb" => 1024.0,
-        "m" | "mb" => 1024.0 * 1024.0,
-        "g" | "gb" => 1024.0 * 1024.0 * 1024.0,
-        "t" | "tb" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
-        _ => {
-            return Err(ParseError::Structure {
-                kind: StructureErrorKind::InvalidToken {
-                    expected: "size unit (B, KB, MB, GB, TB)",
-                    found: unit_part.to_string(),
-                },
-                location: get_location(&span),
-            })
-        }
-    };
+    let unit_lower = unit_part.to_lowercase();
+    let multiplier = SIZE_UNITS
+        .iter()
+        .find(|(unit, _)| *unit == unit_lower)
+        .map(|(_, mult)| *mult)
+        .ok_or_else(|| ParseError::Structure {
+            kind: StructureErrorKind::InvalidToken {
+                expected: "size unit (B, KB, MB, GB, TB)",
+                found: unit_part.to_string(),
+            },
+            location: Some(span.to_location()),
+        })?;
 
     Ok((value * multiplier) as u64)
 }
