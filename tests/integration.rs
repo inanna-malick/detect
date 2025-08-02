@@ -633,6 +633,39 @@ async fn test_depth_selector() {
 }
 
 #[tokio::test]
+async fn test_parent_dir_selector() {
+    // Test matching immediate parent directory name
+    Case {
+        expr: r#"path.parent_dir == utils"#,
+        expected: &["src/utils/helper.rs", "lib/utils/math.rs"],
+        files: vec![
+            f("src/utils/helper.rs", ""),
+            f("lib/utils/math.rs", ""),
+            f("src/main.rs", ""),
+            f("utils.rs", ""), // File named utils, not in utils directory
+            f("tests/utils_test.rs", ""), // In tests dir, not utils
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test parent_dir with 'in' operator
+    Case {
+        expr: r#"path.parent_dir in [src, lib, test] && type == file"#,
+        expected: &["src/main.rs", "lib/util.rs", "test/runner.rs"],
+        files: vec![
+            f("src/main.rs", ""),
+            f("lib/util.rs", ""),
+            f("test/runner.rs", ""),
+            f("src/utils/helper.rs", ""), // parent_dir is utils, not src
+            f("main.rs", ""), // No parent directory
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

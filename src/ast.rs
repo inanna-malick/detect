@@ -96,6 +96,7 @@ pub enum TypedPredicate {
 pub enum StringSelectorType {
     PathFull,
     PathParent,
+    PathParentDir,
     PathName,
     PathStem,
     PathSuffix,
@@ -148,6 +149,7 @@ impl TypedPredicate {
         match rule {
             Rule::path_full => Some(StringSelectorType::PathFull),
             Rule::path_parent => Some(StringSelectorType::PathParent),
+            Rule::path_parent_dir => Some(StringSelectorType::PathParentDir),
             Rule::path_name => Some(StringSelectorType::PathName),
             Rule::path_stem => Some(StringSelectorType::PathStem),
             Rule::path_extension | Rule::path_suffix => Some(StringSelectorType::PathSuffix),
@@ -647,6 +649,9 @@ impl TypedPredicate {
                     StringSelectorType::PathParent => {
                         DomainPredicate::name(NamePredicate::DirPath(string_matcher))
                     }
+                    StringSelectorType::PathParentDir => {
+                        DomainPredicate::name(NamePredicate::ParentDir(string_matcher))
+                    }
                     StringSelectorType::PathName => {
                         DomainPredicate::name(NamePredicate::FileName(string_matcher))
                     }
@@ -695,6 +700,9 @@ impl TypedPredicate {
                     }
                     StringSelectorType::PathParent => {
                         DomainPredicate::name(NamePredicate::DirPath(string_matcher))
+                    }
+                    StringSelectorType::PathParentDir => {
+                        DomainPredicate::name(NamePredicate::ParentDir(string_matcher))
                     }
                     StringSelectorType::PathName => {
                         DomainPredicate::name(NamePredicate::FileName(string_matcher))

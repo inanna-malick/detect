@@ -747,6 +747,7 @@ pub enum NamePredicate {
     DirPath(StringMatcher),   // directory path only
     FullPath(StringMatcher),  // complete path including filename
     Extension(StringMatcher), // file extension
+    ParentDir(StringMatcher), // immediate parent directory name
 }
 
 impl NamePredicate {
@@ -822,6 +823,14 @@ impl NamePredicate {
                     }
                 }
             }
+            NamePredicate::ParentDir(x) => {
+                // Match against immediate parent directory name only
+                // e.g., for "src/utils/helper.rs", parent_dir would be "utils"
+                path.parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|os_str| os_str.to_str())
+                    .is_some_and(|s| x.is_match(s))
+            }
         }
     }
 }
@@ -834,6 +843,7 @@ impl Display for NamePredicate {
             NamePredicate::DirPath(matcher) => write!(f, "path.parent {}", matcher),
             NamePredicate::FullPath(matcher) => write!(f, "path.full {}", matcher),
             NamePredicate::Extension(matcher) => write!(f, "path.extension {}", matcher),
+            NamePredicate::ParentDir(matcher) => write!(f, "path.parent_dir {}", matcher),
         }
     }
 }

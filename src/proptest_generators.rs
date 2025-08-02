@@ -81,6 +81,7 @@ mod tests {
             arb_string_matcher().prop_map(NamePredicate::DirPath),
             arb_string_matcher().prop_map(NamePredicate::FullPath),
             arb_string_matcher().prop_map(NamePredicate::Extension),
+            arb_string_matcher().prop_map(NamePredicate::ParentDir),
         ]
     }
 
