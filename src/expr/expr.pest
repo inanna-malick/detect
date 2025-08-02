@@ -46,7 +46,7 @@ string_predicate = {
     bare_path_shorthand = { 
         bare_name | bare_stem | bare_extension | bare_parent | bare_full
     }
-    bare_name = { "name" }
+    bare_name = { "name" | "filename" }
     bare_stem = { "stem" }
     bare_extension = { "extension" | "ext" }
     bare_parent = { "parent" }

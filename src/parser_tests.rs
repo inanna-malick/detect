@@ -1191,6 +1191,25 @@ mod tests {
     }
 
     #[test]
+    fn test_filename_alias() {
+        // Test that 'filename' works as an alias for 'path.name'
+        
+        // These should produce identical results
+        let path_name_expr = parse_expr("path.name == test.rs").unwrap();
+        let filename_expr = parse_expr("filename == test.rs").unwrap();
+        
+        // They should be equivalent
+        assert_eq!(path_name_expr, filename_expr, "'filename' should be equivalent to 'path.name'");
+        
+        // Test various operators with filename
+        assert!(parse_expr("filename == README.md").is_ok());
+        assert!(parse_expr("filename contains test").is_ok());
+        assert!(parse_expr("filename ~= \\.rs$").is_ok());
+        assert!(parse_expr("filename in [Makefile, Dockerfile]").is_ok());
+        assert!(parse_expr("filename != .gitignore").is_ok());
+    }
+
+    #[test]
     fn test_size_decimal_parsing() {
         // Test decimal size values
         let test_cases = vec![
