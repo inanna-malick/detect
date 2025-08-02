@@ -37,7 +37,7 @@ string_predicate = {
     string_contains |
     string_in
   }
-  string_selector = { path_selector | bare_path_shorthand | content_selector | type }
+  string_selector = { path_selector | bare_path_shorthand | content_selector | type_selector }
     // Hierarchical path selectors
     path_selector = { path_with_component | path_alias }
     path_alias = { "path" } // Alias for path.full
@@ -66,7 +66,12 @@ string_predicate = {
     content_selector = { content_with_domain | bare_content }
     content_with_domain = { "content" ~ "." ~ "text" }
     bare_content = { "text" | "contents" | "content" }  // text is new shorthand, keep others for compat
-    type     = { "filetype" | "type" }
+    
+    // Type selector with meta domain support
+    type_selector = { meta_type | bare_type }
+    meta_type = { "meta" ~ "." ~ "type" }
+    bare_type = { type }
+    type = { "filetype" | "type" }
 
   string_eq = { eq ~ string_value }
   string_ne = { ne ~ string_value }
@@ -79,8 +84,13 @@ string_predicate = {
 
 // Numeric predicates (for size and depth selectors)
 numeric_predicate = {
-    (size | depth) ~ numeric_op_value
+    numeric_selector ~ numeric_op_value
 }
+  numeric_selector = { meta_size | meta_depth | bare_size | bare_depth }
+    meta_size = { "meta" ~ "." ~ "size" }
+    meta_depth = { "meta" ~ "." ~ "depth" }
+    bare_size = { size }
+    bare_depth = { depth }
   numeric_op_value = _{
     numeric_eq |
     numeric_ne |

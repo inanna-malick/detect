@@ -737,6 +737,46 @@ async fn test_time_domain_forms() {
 }
 
 #[tokio::test]
+async fn test_meta_domain_forms() {
+    // Test meta.size canonical form (with type == file to exclude dirs)
+    Case {
+        expr: "meta.size > 10 && type == file",
+        expected: &["big.txt"],
+        files: vec![
+            f("small.txt", "tiny"),
+            f("big.txt", "this is a longer file content"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test meta.type canonical form
+    Case {
+        expr: r#"meta.type == "file""#,
+        expected: &["file1.txt", "file2.txt", "dir/nested.txt"],  // All files, not dirs
+        files: vec![
+            f("file1.txt", "content"),
+            f("file2.txt", "content"),
+            f("dir/nested.txt", "content"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test bare forms still work
+    Case {
+        expr: "size < 10 && type == file",
+        expected: &["tiny.txt"],
+        files: vec![
+            f("tiny.txt", "small"),
+            f("bigger.txt", "this is bigger than 10 bytes"),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

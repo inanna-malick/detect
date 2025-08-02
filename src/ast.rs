@@ -333,7 +333,20 @@ impl TypedPredicate {
                     rule => Err(ParseError::unexpected_rule(rule, None)),
                 }
             }
-            Rule::r#type => Ok(StringSelectorType::Type),
+            Rule::type_selector => {
+                // Handle type selector with possible meta domain
+                let mut inner = pair.into_inner();
+                let type_part = inner.expect_next("type_selector")?;
+                match type_part.as_rule() {
+                    Rule::meta_type => Ok(StringSelectorType::Type),
+                    Rule::bare_type => {
+                        // bare_type wraps type, need to unwrap
+                        Ok(StringSelectorType::Type)
+                    }
+                    rule => Err(ParseError::unexpected_rule(rule, None)),
+                }
+            }
+            Rule::r#type => Ok(StringSelectorType::Type),  // Keep for backward compat
             rule => Err(ParseError::unexpected_rule(rule, None)),
         }
     }
@@ -417,6 +430,18 @@ impl TypedPredicate {
             .ok_or_else(|| ParseError::missing_token("numeric selector", "numeric_predicate"))?;
 
         let selector = match selector_pair.as_rule() {
+            Rule::numeric_selector => {
+                // Unwrap the numeric_selector wrapper
+                let inner = selector_pair
+                    .into_inner()
+                    .next()
+                    .ok_or_else(|| ParseError::missing_token("numeric selector type", "numeric_selector"))?;
+                match inner.as_rule() {
+                    Rule::meta_size | Rule::bare_size => NumericSelectorType::Size,
+                    Rule::meta_depth | Rule::bare_depth => NumericSelectorType::Depth,
+                    rule => return Err(ParseError::unexpected_rule(rule, None)),
+                }
+            }
             Rule::size => NumericSelectorType::Size,
             Rule::depth => NumericSelectorType::Depth,
             rule => return Err(ParseError::unexpected_rule(rule, None)),

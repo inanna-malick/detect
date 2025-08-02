@@ -247,6 +247,34 @@ mod tests {
     }
 
     #[test]
+    fn test_meta_domain_support() {
+        // Test canonical form: meta.size
+        let result = parse_expr("meta.size > 1000");
+        assert!(result.is_ok(), "Failed to parse meta.size");
+        
+        // Test canonical form: meta.type
+        let result = parse_expr(r#"meta.type == "file""#);
+        assert!(result.is_ok(), "Failed to parse meta.type");
+        
+        // Test canonical form: meta.depth
+        let result = parse_expr("meta.depth > 2");
+        assert!(result.is_ok(), "Failed to parse meta.depth");
+        
+        // Test bare forms still work
+        let result = parse_expr("size > 1000");
+        assert!(result.is_ok(), "Failed to parse bare size");
+        
+        // Verify both forms produce the same result
+        let canonical_size = parse_expr("meta.size == 1000").unwrap();
+        let bare_size = parse_expr("size == 1000").unwrap();
+        assert_eq!(canonical_size, bare_size, "Size forms should be equivalent");
+        
+        let canonical_type = parse_expr(r#"meta.type == "file""#).unwrap();
+        let bare_type = parse_expr(r#"type == "file""#).unwrap();
+        assert_eq!(canonical_type, bare_type, "Type forms should be equivalent");
+    }
+    
+    #[test]
     fn parse_size_comparisons() {
         let cases = vec![
             ("size == 100", NumberMatcher::Equals(100)),
