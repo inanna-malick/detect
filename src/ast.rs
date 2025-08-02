@@ -288,6 +288,19 @@ impl TypedPredicate {
                 let inner = inner_pairs.expect_next("string_selector")?;
                 Self::parse_string_selector(inner)
             }
+            Rule::bare_path_shorthand => {
+                // Handle bare path shorthands
+                let mut inner = pair.into_inner();
+                let shorthand = inner.expect_next("bare_path_shorthand")?;
+                match shorthand.as_rule() {
+                    Rule::bare_name => Ok(StringSelectorType::PathName),
+                    Rule::bare_stem => Ok(StringSelectorType::PathStem),
+                    Rule::bare_suffix => Ok(StringSelectorType::PathSuffix),
+                    Rule::bare_parent => Ok(StringSelectorType::PathParent),
+                    Rule::bare_full => Ok(StringSelectorType::PathFull),
+                    rule => Err(ParseError::unexpected_rule(rule, None)),
+                }
+            }
             Rule::path_selector => {
                 // Path selector has nested structure
                 let mut path_inner = pair.into_inner();

@@ -37,10 +37,20 @@ string_predicate = {
     string_contains |
     string_in
   }
-  string_selector = { path_selector | contents | type }
+  string_selector = { path_selector | bare_path_shorthand | contents | type }
     // Hierarchical path selectors
     path_selector = { path_with_component | path_alias }
     path_alias = { "path" } // Alias for path.full
+    
+    // Bare shorthand forms for path selectors (without path. prefix)
+    bare_path_shorthand = { 
+        bare_name | bare_stem | bare_suffix | bare_parent | bare_full
+    }
+    bare_name = { "name" }
+    bare_stem = { "stem" }
+    bare_suffix = { "suffix" }
+    bare_parent = { "parent" }
+    bare_full = { "full" }
     path_with_component = {
         "path" ~ "." ~ (path_full | path_parent_dir | path_parent | path_name | path_stem | path_extension | path_suffix)
     }

@@ -13,6 +13,54 @@ mod tests {
     // Test basic parsing produces expected compiled predicates
 
     #[test]
+    fn test_bare_path_shorthands() {
+        // Test bare name shorthand
+        let expr = parse_expr("name == README.md").unwrap();
+        assert_eq!(
+            expr,
+            Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
+                StringMatcher::Equals("README.md".to_owned())
+            ))))
+        );
+        
+        // Test bare stem shorthand
+        let expr = parse_expr("stem == README").unwrap();
+        assert_eq!(
+            expr,
+            Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::BaseName(
+                StringMatcher::Equals("README".to_owned())
+            ))))
+        );
+        
+        // Test bare suffix shorthand
+        let expr = parse_expr("suffix == md").unwrap();
+        assert_eq!(
+            expr,
+            Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
+                StringMatcher::Equals("md".to_owned())
+            ))))
+        );
+        
+        // Test bare parent shorthand
+        let expr = parse_expr("parent == src").unwrap();
+        assert_eq!(
+            expr,
+            Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::DirPath(
+                StringMatcher::Equals("src".to_owned())
+            ))))
+        );
+        
+        // Test bare full shorthand
+        let expr = parse_expr(r#"full == "/home/user/file.txt""#).unwrap();
+        assert_eq!(
+            expr,
+            Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FullPath(
+                StringMatcher::Equals("/home/user/file.txt".to_owned())
+            ))))
+        );
+    }
+
+    #[test]
     fn parse_name_equality() {
         let parsed = parse_expr("path.name == foo").unwrap();
         let expected = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::FileName(
