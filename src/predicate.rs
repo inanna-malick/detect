@@ -239,6 +239,9 @@ impl RawPredicate {
             Selector::Size => Predicate::meta(MetadataPredicate::Filesize(parse_numerical(
                 &self.op, &self.rhs,
             )?)),
+            Selector::Depth => Predicate::meta(MetadataPredicate::Depth(parse_numerical(
+                &self.op, &self.rhs,
+            )?)),
             Selector::Modified => Predicate::meta(MetadataPredicate::Modified(parse_temporal(
                 &self.op, &self.rhs,
             )?)),
@@ -264,6 +267,7 @@ pub enum Selector {
     // METADATA
     EntityType,
     Size,
+    Depth,  // directory depth from base path
     // TEMPORAL
     Modified,
     Created,
@@ -286,6 +290,7 @@ impl Display for Selector {
             Selector::Extension => write!(f, "ext"),
             Selector::EntityType => write!(f, "type"),
             Selector::Size => write!(f, "size"),
+            Selector::Depth => write!(f, "depth"),
             Selector::Modified => write!(f, "modified"),
             Selector::Created => write!(f, "created"),
             Selector::Accessed => write!(f, "accessed"),
@@ -685,6 +690,19 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
         }
     }
+    
+    pub fn eval_metadata_predicate_with_path(
+        self,
+        metadata: &Metadata,
+        path: &Path,
+        base_path: Option<&Path>,
+    ) -> ShortCircuit<Predicate<A, Done, B>> {
+        match self {
+            Predicate::Metadata(p) => ShortCircuit::Known(p.is_match_with_path(metadata, Some(path), base_path)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+        }
+    }
 
     pub fn eval_metadata_predicate_git_tree(self) -> ShortCircuit<Predicate<A, Done, B>> {
         match self {
@@ -845,6 +863,7 @@ pub enum MetadataPredicate {
     Modified(TimeMatcher),
     Created(TimeMatcher),
     Accessed(TimeMatcher),
+    Depth(NumberMatcher), // Directory depth from base path
 }
 
 impl Display for MetadataPredicate {
@@ -855,6 +874,7 @@ impl Display for MetadataPredicate {
             MetadataPredicate::Modified(matcher) => write!(f, "modified {}", matcher),
             MetadataPredicate::Created(matcher) => write!(f, "created {}", matcher),
             MetadataPredicate::Accessed(matcher) => write!(f, "accessed {}", matcher),
+            MetadataPredicate::Depth(matcher) => write!(f, "depth {}", matcher),
         }
     }
 }
@@ -867,6 +887,7 @@ impl PartialEq for MetadataPredicate {
             (MetadataPredicate::Modified(a), MetadataPredicate::Modified(b)) => a == b,
             (MetadataPredicate::Created(a), MetadataPredicate::Created(b)) => a == b,
             (MetadataPredicate::Accessed(a), MetadataPredicate::Accessed(b)) => a == b,
+            (MetadataPredicate::Depth(a), MetadataPredicate::Depth(b)) => a == b,
             _ => false,
         }
     }
@@ -928,6 +949,10 @@ impl Display for TimeMatcher {
 
 impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
+        self.is_match_with_path(metadata, None, None)
+    }
+    
+    pub fn is_match_with_path(&self, metadata: &Metadata, path: Option<&Path>, base_path: Option<&Path>) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
             MetadataPredicate::Type(matcher) => {
@@ -952,6 +977,25 @@ impl MetadataPredicate {
             MetadataPredicate::Modified(matcher) => matcher.is_match(metadata.mtime()),
             MetadataPredicate::Created(matcher) => matcher.is_match(metadata.ctime()),
             MetadataPredicate::Accessed(matcher) => matcher.is_match(metadata.atime()),
+            MetadataPredicate::Depth(matcher) => {
+                // Calculate depth based on path components
+                if let Some(path) = path {
+                    let depth = if let Some(base) = base_path {
+                        // Calculate relative depth from base
+                        match path.strip_prefix(base) {
+                            Ok(relative) => relative.components().count() as u64,
+                            Err(_) => path.components().count() as u64,
+                        }
+                    } else {
+                        // Use absolute depth
+                        path.components().count() as u64
+                    };
+                    matcher.is_match(depth)
+                } else {
+                    // No path provided, can't calculate depth
+                    false
+                }
+            }
         }
     }
 
@@ -966,8 +1010,9 @@ impl MetadataPredicate {
             }
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
-            | MetadataPredicate::Accessed(_) => {
-                // Git trees don't have timestamps
+            | MetadataPredicate::Accessed(_)
+            | MetadataPredicate::Depth(_) => {
+                // Git trees don't have timestamps or depth info without path
                 false
             }
         }
@@ -979,8 +1024,9 @@ impl MetadataPredicate {
             MetadataPredicate::Type(matcher) => matcher.is_match("file"),
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
-            | MetadataPredicate::Accessed(_) => {
-                // Git blobs don't have timestamps
+            | MetadataPredicate::Accessed(_)
+            | MetadataPredicate::Depth(_) => {
+                // Git blobs don't have timestamps or depth info without path
                 false
             }
         }

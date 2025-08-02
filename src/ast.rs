@@ -77,6 +77,7 @@ pub enum TypedPredicate {
         value: String,
     },
     Numeric {
+        selector: NumericSelectorType,
         op: NumericOp,
         value: u64,
     },
@@ -100,6 +101,12 @@ pub enum StringSelectorType {
     PathSuffix,
     Contents,
     Type,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NumericSelectorType {
+    Size,
+    Depth,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -351,8 +358,23 @@ impl TypedPredicate {
     fn parse_numeric_predicate(pair: Pair<'_, Rule>) -> Result<Self, ParseError> {
         let mut inner = pair.into_inner();
 
-        // Skip size selector
-        let _ = inner.next();
+        // Parse selector (size or depth)
+        let selector_pair = inner.next().ok_or(ParseError::Structure {
+            kind: StructureErrorKind::MissingToken {
+                expected: "numeric selector",
+                context: "numeric_predicate",
+            },
+            location: None,
+        })?;
+        
+        let selector = match selector_pair.as_rule() {
+            Rule::size => NumericSelectorType::Size,
+            Rule::depth => NumericSelectorType::Depth,
+            rule => return Err(ParseError::Structure {
+                kind: StructureErrorKind::UnexpectedRule { rule },
+                location: None,
+            }),
+        };
 
         // Parse operator and value
         let op_value_pair = inner.next().ok_or(ParseError::Structure {
@@ -364,7 +386,7 @@ impl TypedPredicate {
         })?;
 
         let (op, value) = Self::parse_numeric_op_value(op_value_pair)?;
-        Ok(TypedPredicate::Numeric { op, value })
+        Ok(TypedPredicate::Numeric { selector, op, value })
     }
 
     fn parse_numeric_op_value(pair: Pair<'_, Rule>) -> Result<(NumericOp, u64), ParseError> {
@@ -698,27 +720,28 @@ impl TypedPredicate {
                 };
                 Ok(Expr::Predicate(predicate))
             }
-            TypedPredicate::Numeric { op, value } => {
+            TypedPredicate::Numeric { selector, op, value } => {
                 let number_matcher = match op {
                     NumericOp::Equals => NumberMatcher::Equals(value),
                     NumericOp::NotEquals => NumberMatcher::NotEquals(value),
-                    // Match existing parser behavior (even though semantically incorrect)
                     NumericOp::Greater => {
+                        NumberMatcher::In(Bound::Left(RangeFrom { start: value + 1 }))
+                    }
+                    NumericOp::GreaterOrEqual => {
                         NumberMatcher::In(Bound::Left(RangeFrom { start: value }))
                     }
-                    NumericOp::GreaterOrEqual => NumberMatcher::In(Bound::Left(RangeFrom {
-                        start: value.saturating_sub(1),
-                    })),
-                    NumericOp::Less => NumberMatcher::In(Bound::Right(RangeTo {
-                        end: value.saturating_add(1),
-                    })),
-                    NumericOp::LessOrEqual => {
+                    NumericOp::Less => {
                         NumberMatcher::In(Bound::Right(RangeTo { end: value }))
                     }
+                    NumericOp::LessOrEqual => {
+                        NumberMatcher::In(Bound::Right(RangeTo { end: value + 1 }))
+                    }
                 };
-                Ok(Expr::Predicate(DomainPredicate::meta(
-                    MetadataPredicate::Filesize(number_matcher),
-                )))
+                let predicate = match selector {
+                    NumericSelectorType::Size => DomainPredicate::meta(MetadataPredicate::Filesize(number_matcher)),
+                    NumericSelectorType::Depth => DomainPredicate::meta(MetadataPredicate::Depth(number_matcher)),
+                };
+                Ok(Expr::Predicate(predicate))
             }
             TypedPredicate::Temporal {
                 selector,

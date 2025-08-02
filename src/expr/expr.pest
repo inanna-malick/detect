@@ -63,9 +63,9 @@ string_predicate = {
   string_value = { quoted_string | bare_string }
   bare_string = @{ bare_char+ }
 
-// Numeric predicates (for size selector)
+// Numeric predicates (for size and depth selectors)
 numeric_predicate = {
-    size ~ numeric_op_value
+    (size | depth) ~ numeric_op_value
 }
   numeric_op_value = _{
     numeric_eq |
@@ -73,6 +73,7 @@ numeric_predicate = {
     numeric_comparison
   }
   size = { "filesize" | "size" }
+  depth = { "depth" }
   
   numeric_eq = { eq ~ numeric_value }
   numeric_ne = { ne ~ numeric_value }

@@ -16,6 +16,7 @@ use crate::eval::run_contents_predicate_stream;
 /// - file name matchers
 /// - metadata matchers
 /// - file content matchers
+#[allow(dead_code)]
 pub async fn eval<'dfa>(
     logger: &Logger,
     e: &'dfa Expr<
@@ -55,7 +56,7 @@ pub async fn eval_with_base<'dfa>(
     let metadata = file.metadata().await?;
 
     let e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'dfa>>> =
-        e.reduce_predicate_and_short_circuit(|p| p.eval_metadata_predicate(&metadata));
+        e.reduce_predicate_and_short_circuit(|p| p.eval_metadata_predicate_with_path(&metadata, path, base_path));
 
     if let Expr::Literal(b) = e {
         debug!(logger, "short circuit after metadata predicate eval";  "expr" => %e, "result" => %b);

@@ -588,6 +588,51 @@ async fn test_empty_parent_matching() {
 }
 
 #[tokio::test]
+async fn test_depth_selector() {
+    // Test finding files at specific depth
+    // Depth = number of path components from base directory
+    // root.txt = 1, dir/level1.txt = 2, dir/subdir/level2.txt = 3, etc.
+    Case {
+        expr: r#"depth == 1 && type == file"#,
+        expected: &["root.txt"],
+        files: vec![
+            f("root.txt", ""),
+            f("dir/level1.txt", ""),
+            f("dir/subdir/level2.txt", ""),
+            f("dir/subdir/deep/level3.txt", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    Case {
+        expr: r#"depth == 3 && type == file"#,
+        expected: &["dir/subdir/level2.txt"],
+        files: vec![
+            f("root.txt", ""),
+            f("dir/level1.txt", ""),
+            f("dir/subdir/level2.txt", ""),
+            f("dir/subdir/deep/level3.txt", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    Case {
+        expr: r#"depth > 2 && type == file"#,
+        expected: &["dir/subdir/level2.txt", "dir/subdir/deep/level3.txt"],
+        files: vec![
+            f("root.txt", ""),
+            f("dir/level1.txt", ""),
+            f("dir/subdir/level2.txt", ""),
+            f("dir/subdir/deep/level3.txt", ""),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_escape_sequences_in_regex() {
     Case {
         expr: r#"contents ~= "\$\d+\.\d{2}""#, // Matches dollar amounts like $19.99

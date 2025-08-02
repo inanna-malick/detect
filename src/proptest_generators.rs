@@ -92,6 +92,7 @@ mod tests {
             arb_time_matcher().prop_map(MetadataPredicate::Modified),
             arb_time_matcher().prop_map(MetadataPredicate::Created),
             arb_time_matcher().prop_map(MetadataPredicate::Accessed),
+            arb_number_matcher().prop_map(MetadataPredicate::Depth),
         ]
     }
 

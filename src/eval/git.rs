@@ -69,6 +69,10 @@ pub fn eval<'dfa>(
                     // Git trees don't have timestamps
                     false
                 }
+                MetadataPredicate::Depth(_) => {
+                    // Git trees don't track depth in the same way
+                    false
+                }
             },
             Predicate::Content(_) => false,
             Predicate::Name(_) => unreachable!(),
