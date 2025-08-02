@@ -900,6 +900,89 @@ async fn test_set_with_special_filenames() {
 }
 
 #[tokio::test]
+async fn test_size_units_case_insensitive() {
+    // Test that all case variations of size units work
+    // Create files with specific sizes for testing
+    let kb_size = "x".repeat(1025); // Just over 1KB
+    let mb_size = "x".repeat(1024 * 1024 + 1); // Just over 1MB
+    
+    // Test lowercase kb
+    Case {
+        expr: "size > 1kb",
+        expected: &["large.txt"],
+        files: vec![
+            f("large.txt", &kb_size),
+            f("small.txt", "tiny"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test uppercase KB
+    Case {
+        expr: "size > 1KB",
+        expected: &["large.txt"],
+        files: vec![
+            f("large.txt", &kb_size),
+            f("small.txt", "tiny"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test mixed case Kb
+    Case {
+        expr: "size > 1Kb",
+        expected: &["large.txt"],
+        files: vec![
+            f("large.txt", &kb_size),
+            f("small.txt", "tiny"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test lowercase mb
+    Case {
+        expr: "size > 1mb",
+        expected: &["huge.txt"],
+        files: vec![
+            f("huge.txt", &mb_size),
+            f("large.txt", &kb_size),
+            f("small.txt", "tiny"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test uppercase MB - THIS IS THE KEY TEST
+    Case {
+        expr: "size > 1MB",
+        expected: &["huge.txt"],
+        files: vec![
+            f("huge.txt", &mb_size),
+            f("large.txt", &kb_size),
+            f("small.txt", "tiny"),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test single letter M
+    Case {
+        expr: "size > 1M",
+        expected: &["huge.txt"],
+        files: vec![
+            f("huge.txt", &mb_size),
+            f("large.txt", &kb_size),
+            f("small.txt", "tiny"),
+        ],
+    }
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn test_combining_all_new_operators() {
     // Use regex patterns, in, contains, and != all in one expression
     Case {
