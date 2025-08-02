@@ -116,7 +116,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
                 let start = Instant::now();
 
-                let is_match = eval::fs::eval(&logger, &expr, path)
+                let is_match = eval::fs::eval_with_base(&logger, &expr, path, Some(root))
                     .await
                     .context(format!("failed to eval for ${path:?}"))
                     .map_err(DetectError::from)?;

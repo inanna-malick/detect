@@ -23,12 +23,24 @@ pub async fn eval<'dfa>(
     >,
     path: &Path,
 ) -> std::io::Result<bool> {
+    eval_with_base(logger, e, path, None).await
+}
+
+/// multipass evaluation with short circuiting and base path for relative paths
+pub async fn eval_with_base<'dfa>(
+    logger: &Logger,
+    e: &'dfa Expr<
+        Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicateRef<'dfa>>,
+    >,
+    path: &Path,
+    base_path: Option<&Path>,
+) -> std::io::Result<bool> {
     let logger = logger.new(o!("path" => format!("{:?}", path)));
 
     debug!(logger, "visit entity"; "expr" => %e);
 
     let e: Expr<Predicate<Done, MetadataPredicate, StreamingCompiledContentPredicateRef<'dfa>>> =
-        e.reduce_predicate_and_short_circuit(|p| p.eval_name_predicate(path));
+        e.reduce_predicate_and_short_circuit(|p| p.eval_name_predicate_with_base(path, base_path));
 
     if let Expr::Literal(b) = e {
         debug!(logger, "short circuit after path predicate eval"; "expr" => %e, "result" => %b);

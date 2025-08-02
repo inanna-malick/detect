@@ -966,7 +966,8 @@ mod tests {
         ];
 
         for (expr_str, expected_bytes) in test_cases {
-            let parsed = parse_expr(expr_str).unwrap_or_else(|_| panic!("Failed to parse: {}", expr_str));
+            let parsed =
+                parse_expr(expr_str).unwrap_or_else(|_| panic!("Failed to parse: {}", expr_str));
             if let Expr::Predicate(Predicate::Metadata(meta_pred)) = parsed {
                 if let MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(range))) =
                     meta_pred.as_ref()
@@ -993,7 +994,8 @@ mod tests {
         ];
 
         for (expr_str, expected_bytes) in test_cases {
-            let parsed = parse_expr(expr_str).unwrap_or_else(|_| panic!("Failed to parse: {}", expr_str));
+            let parsed =
+                parse_expr(expr_str).unwrap_or_else(|_| panic!("Failed to parse: {}", expr_str));
             if let Expr::Predicate(Predicate::Metadata(meta_pred)) = parsed {
                 if let MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(range))) =
                     meta_pred.as_ref()
@@ -1034,7 +1036,8 @@ mod tests {
         ];
 
         for (expr_str, expected_matcher) in test_cases {
-            let parsed = parse_expr(expr_str).unwrap_or_else(|_| panic!("Failed to parse: {}", expr_str));
+            let parsed =
+                parse_expr(expr_str).unwrap_or_else(|_| panic!("Failed to parse: {}", expr_str));
             if let Expr::Predicate(Predicate::Metadata(meta_pred)) = parsed {
                 if let MetadataPredicate::Filesize(matcher) = meta_pred.as_ref() {
                     assert_eq!(

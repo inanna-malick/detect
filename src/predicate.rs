@@ -664,6 +664,14 @@ impl<A, B> Predicate<NamePredicate, A, B> {
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
         }
     }
+    
+    pub fn eval_name_predicate_with_base(self, path: &Path, base_path: Option<&Path>) -> ShortCircuit<Predicate<Done, A, B>> {
+        match self {
+            Predicate::Name(p) => ShortCircuit::Known(p.is_match_with_base(path, base_path)),
+            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
+            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+        }
+    }
 }
 
 impl<A, B> Predicate<A, MetadataPredicate, B> {
@@ -725,6 +733,10 @@ pub enum NamePredicate {
 
 impl NamePredicate {
     pub fn is_match(&self, path: &Path) -> bool {
+        self.is_match_with_base(path, None)
+    }
+    
+    pub fn is_match_with_base(&self, path: &Path, base_path: Option<&Path>) -> bool {
         match self {
             NamePredicate::BaseName(x) => {
                 // Match against filename without extension (stem)
@@ -740,13 +752,46 @@ impl NamePredicate {
             }
             NamePredicate::DirPath(x) => {
                 // Match against directory path only (parent)
-                path.parent()
-                    .and_then(|p| p.as_os_str().to_str())
-                    .is_some_and(|s| x.is_match(s))
+                // If base_path is provided, make the parent path relative to it
+                if let Some(base) = base_path {
+                    if let Some(parent) = path.parent() {
+                        // Try to make parent relative to base
+                        match parent.strip_prefix(base) {
+                            Ok(relative) => {
+                                // Use relative path
+                                relative.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+                            }
+                            Err(_) => {
+                                // If strip_prefix fails, fall back to absolute path
+                                parent.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+                            }
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    // No base path provided, use absolute path (backward compatibility)
+                    path.parent()
+                        .and_then(|p| p.as_os_str().to_str())
+                        .is_some_and(|s| x.is_match(s))
+                }
             }
             NamePredicate::FullPath(x) => {
                 // Match against complete path including filename
-                path.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+                // If base_path is provided, make it relative
+                if let Some(base) = base_path {
+                    match path.strip_prefix(base) {
+                        Ok(relative) => {
+                            relative.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+                        }
+                        Err(_) => {
+                            // If strip_prefix fails, use absolute path
+                            path.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+                        }
+                    }
+                } else {
+                    path.as_os_str().to_str().is_some_and(|s| x.is_match(s))
+                }
             }
             NamePredicate::Extension(x) => {
                 // Match against extension without dot

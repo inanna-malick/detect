@@ -288,7 +288,7 @@ async fn test_name_regex_patterns() {
 #[tokio::test]
 async fn test_path_regex_patterns() {
     Case {
-        expr: r#"path.full ~= ".*/test/.*\.rs$""#,
+        expr: r#"path.full ~= "(^|.*/)?test/.*\.rs$""#,
         expected: &["src/test/utils.rs", "lib/test/helpers.rs", "test/main.rs"],
         files: vec![
             f("src/test/utils.rs", ""),
