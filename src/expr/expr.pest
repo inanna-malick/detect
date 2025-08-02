@@ -42,13 +42,14 @@ string_predicate = {
     path_selector = { path_with_component | path_alias }
     path_alias = { "path" } // Alias for path.full
     path_with_component = {
-        "path" ~ "." ~ (path_full | path_parent | path_name | path_stem | path_suffix)
+        "path" ~ "." ~ (path_full | path_parent | path_name | path_stem | path_extension | path_suffix)
     }
     path_full = { "full" }
     path_parent = { "parent" }
     path_name = { "name" }
     path_stem = { "stem" }
-    path_suffix = { "suffix" }
+    path_extension = { "extension" | "ext" }
+    path_suffix = { "suffix" }  // Kept as alias for backward compatibility
     
     contents = { "contents" | "content" }
     type     = { "filetype" | "type" }

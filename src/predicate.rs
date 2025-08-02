@@ -810,7 +810,7 @@ impl Display for NamePredicate {
             NamePredicate::FileName(matcher) => write!(f, "path.name {}", matcher),
             NamePredicate::DirPath(matcher) => write!(f, "path.parent {}", matcher),
             NamePredicate::FullPath(matcher) => write!(f, "path.full {}", matcher),
-            NamePredicate::Extension(matcher) => write!(f, "path.suffix {}", matcher),
+            NamePredicate::Extension(matcher) => write!(f, "path.extension {}", matcher),
         }
     }
 }

@@ -143,7 +143,7 @@ impl TypedPredicate {
             Rule::path_parent => Some(StringSelectorType::PathParent),
             Rule::path_name => Some(StringSelectorType::PathName),
             Rule::path_stem => Some(StringSelectorType::PathStem),
-            Rule::path_suffix => Some(StringSelectorType::PathSuffix),
+            Rule::path_extension | Rule::path_suffix => Some(StringSelectorType::PathSuffix),
             _ => None,
         }
     }
