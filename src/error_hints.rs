@@ -6,7 +6,7 @@ pub fn get_parse_error_hints() -> &'static str {
     - path.parent            # directory containing file
     - path.name              # filename with extension
     - path.stem              # filename without extension
-    - path.suffix            # file extension without dot
+    - path.extension         # file extension without dot
     - type                   # file, dir, or symlink
     - contents               # file contents
     - size                   # size in bytes (supports KB/MB/GB)

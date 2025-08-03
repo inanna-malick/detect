@@ -48,18 +48,18 @@ From highest to lowest:
 
 Examples:
 ```
-!path.name contains test && path.suffix == rs || size > 1000
-# Parses as: ((!path.name contains test) && (path.suffix == rs)) || (size > 1000)
+!path.name contains test && path.extension == rs || size > 1000
+# Parses as: ((!path.name contains test) && (path.extension == rs)) || (size > 1000)
 
-path.suffix == rs && size > 1000 || path.name contains test
-# Parses as: ((path.suffix == rs) && (size > 1000)) || (path.name contains test)
+path.extension == rs && size > 1000 || path.name contains test
+# Parses as: ((path.extension == rs) && (size > 1000)) || (path.name contains test)
 ```
 
 Use parentheses to override precedence:
 ```
-!(path.name contains test && path.suffix == rs)
-path.suffix == rs && (size > 1000 || path.name contains test)
-(contents contains TODO || contents contains FIXME) && (size > 10000 || modified > "-1.day")
+!(path.name contains test && path.extension == rs)
+path.extension == rs && (size > 1000 || path.name contains test)
+(contents contains TODO || contents contains FIXME) && (size > 10000 || modified > -1.day)
 ```
 
 ## All Selectors
@@ -69,7 +69,7 @@ path.suffix == rs && (size > 1000 || path.name contains test)
 - `path.name` - Complete filename with extension
 - `path.parent` - Directory path only
 - `path.full` (or `path`) - Complete path including filename
-- `path.suffix` - File extension (without dot)
+- `path.extension` - File extension (without dot)
 - `contents` - Search file contents
 
 ### Number Selectors
@@ -86,33 +86,33 @@ path.suffix == rs && (size > 1000 || path.name contains test)
 ## Temporal Query Syntax
 
 ### Relative Time
-Format: `"-N.unit"` (quotes required)
+Format: `-N.unit`
 
 Units:
 - seconds, minutes, hours, days, weeks, months
 
 Examples:
 ```
-modified > "-30.seconds"
-modified > "-5.minutes"  
-modified > "-2.hours"
-modified > "-7.days"
-modified > "-1.week"
-modified > "-3.months"
+modified > -30.seconds
+modified > -5.minutes  
+modified > -2.hours
+modified > -7.days
+modified > -1.week
+modified > -3.months
 ```
 
 ### Absolute Time
-Format: `"YYYY-MM-DD"` (quotes required)
+Format: `YYYY-MM-DD`
 
 ```
-modified > "2024-01-01"
-created < "2023-12-31"
+modified > 2024-01-01
+created < 2023-12-31
 ```
 
 ### Special Keywords
 ```
-modified >= "today"
-modified < "yesterday"
+modified >= today
+modified < yesterday
 ```
 
 ## Case Sensitivity
@@ -120,9 +120,9 @@ modified < "yesterday"
 **IMPORTANT**: All string comparisons in detect are case-sensitive. This affects:
 
 - Name/path matching: `path.name == "README.md"` won't match "readme.md"
-- Extension matching: `path.suffix == "MD"` won't match ".md" files
-- Contains operator: `path.name contains "Test"` won't match "test"
-- Content searches: `contents contains "TODO"` won't match "todo"
+- Extension matching: `path.extension == MD` won't match ".md" files
+- Contains operator: `path.name contains Test` won't match "test"
+- Content searches: `contents contains TODO` won't match "todo"
 
 For case-insensitive matching with regex:
 ```
@@ -144,28 +144,28 @@ contents ~= "AKIA[0-9A-Z]{16}"
 contents contains "BEGIN RSA PRIVATE KEY"
 
 # Hardcoded passwords in code
-path.suffix in [js, py, java] && contents ~= "password\s*=\s*[\"'][^\"']+[\"']"
+path.extension in [js, py, java] && contents ~= "password\s*=\s*[\"'][^\"']+[\"']"
 ```
 
 ### Code Analysis
 ```
 # Large files with TODO comments
-path.suffix in [js, py, rs] && size > 100000 && contents ~= "//\s*TODO|#\s*TODO"
+path.extension in [js, py, rs] && size > 100000 && contents ~= "//\s*TODO|#\s*TODO"
 
 # Python files with multiple classes
-path.suffix == py && !path.parent contains __pycache__ && contents ~= "class\s+\w+"
+path.extension == py && !path.parent contains __pycache__ && contents ~= "class\s+\w+"
 
 # JavaScript files importing React
-path.suffix in [js, jsx] && !path.parent contains node_modules && contents ~= "import.*React|from.*react"
+path.extension in [js, jsx] && !path.parent contains node_modules && contents ~= "import.*React|from.*react"
 ```
 
 ### Project Maintenance
 ```
 # Stale test files
-path.name contains test && modified < "-90.days"
+path.name contains test && modified < -90.days
 
 # Config files that might need review
-(path.name ~= "config|settings" || path.suffix in [yml, yaml, json]) && modified < "-180.days"
+(path.name ~= "config|settings" || path.extension in [yml, yaml, json]) && modified < -180.days
 
 # Large generated files
 size > 1000000 && (path.name contains generated || path.parent contains "/dist/")
@@ -178,34 +178,34 @@ Filters are evaluated left-to-right with short-circuiting:
 
 ```
 # FAST: Path/name filters eliminate files immediately
-path.suffix == js && !path.parent contains node_modules && contents contains TODO
+path.extension == js && !path.parent contains node_modules && contents contains TODO
 
 # SLOW: Searches all file contents before filtering
-contents contains TODO && path.suffix == js && !path.parent contains node_modules
+contents contains TODO && path.extension == js && !path.parent contains node_modules
 ```
 
 ### Three Tiers of Performance
 ```
 # Tier 1 (instant): Path/name/extension checks
-path.name contains test && path.suffix == py
+path.name contains test && path.extension == py
 
 # Tier 2 (fast): Metadata checks  
-path.suffix == log && size > 100000000 && modified < "-30.days"
+path.extension == log && size > 100000000 && modified < -30.days
 
 # Tier 3 (slow): Content searches
-path.suffix == rs && size < 10000 && contents contains "fn main"
+path.extension == rs && size < 10000 && contents contains "fn main"
 ```
 
 ### Real-World Performance Patterns
 ```
 # Skip build artifacts first
-path.suffix == py && !path.parent contains "build/" && !path.parent contains ".egg" && contents contains import
+path.extension == py && !path.parent contains "build/" && !path.parent contains ".egg" && contents contains import
 
 # Target specific files before content search
-path.name ~= "webpack\.config" && modified > "-7.days" && contents contains "devServer"
+path.name ~= "webpack\.config" && modified > -7.days && contents contains devServer
 
 # Combine metadata to narrow search space
-path.suffix in [yml, yaml] && size < 50000 && contents contains "version:"
+path.extension in [yml, yaml] && size < 50000 && contents contains "version:"
 ```
 
 ### Limit Scope
@@ -225,19 +225,19 @@ name ~= "*.rs"
 name ~= "\.rs$"
 
 # RIGHT: Or just use extension selector
-path.suffix == rs
+path.extension == rs
 ```
 
 ### Quote Usage
 ```
 # Quotes needed for:
 - Strings with spaces: name == "my file.txt"
-- Temporal expressions: modified > "-7.days"
 - Regex with spaces: contents ~= "class \w+"
 
 # Quotes optional for:
 - Simple values: type == file
-- Single words: path.suffix == rs
+- Single words: path.extension == rs
+- Temporal expressions: modified > -7.days
 ```
 
 ### Content Search Limitations

@@ -16,10 +16,10 @@ escapable = { "n" | "\\" | "\""}
 program         =   { SOI ~ expr ~ EOI }
   expr          =   { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
     infix       =  _{ and | or }
-      and       =   { "&&" | "and" } // logical and (symbol or word)
-      or        =   { "||" | "or" }  // logical or (symbol or word)
+      and       =   { "&&" | ^"and" } // logical and (symbol or case-insensitive word)
+      or        =   { "||" | ^"or" }  // logical or (symbol or case-insensitive word)
     prefix      =  _{ neg }
-      neg       =   { "!" | "not" }  // Negation (symbol or word)
+      neg       =   { "!" | ^"not" }  // Negation (symbol or case-insensitive word)
     primary     =  _{ typed_predicate | "(" ~ expr ~ ")" }
 
 
@@ -126,7 +126,8 @@ temporal_predicate = {
   temporal_ne = { ne ~ temporal_value }
   temporal_comparison = { (gteq | lteq | gt | lt) ~ temporal_value }
   
-  temporal_value = { relaxed_time_value | time_value | quoted_string | time_keyword }
+  temporal_value = { absolute_date | relaxed_time_value | time_value | quoted_string | time_keyword }
+  absolute_date = ${ ASCII_DIGIT{4} ~ "-" ~ ASCII_DIGIT{2} ~ "-" ~ ASCII_DIGIT{2} }  // YYYY-MM-DD format
   relaxed_time_value = ${ "-"? ~ ASCII_DIGIT+ ~ time_unit }  // Optional minus, no period required
   time_value = ${ "-" ~ ASCII_DIGIT+ ~ "." ~ time_unit }     // Legacy format for compatibility
   time_keyword = { "now" | "today" | "yesterday" }

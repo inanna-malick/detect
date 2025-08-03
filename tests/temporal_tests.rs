@@ -134,6 +134,39 @@ async fn test_absolute_date() {
     assert!(!new_files.contains(&"old.txt".to_string()));
 }
 
+#[tokio::test]
+async fn test_absolute_date_unquoted() {
+    let tmp_dir = TempDir::new("detect-temporal-absolute-unquoted").unwrap();
+    let old_file = tmp_dir.path().join("old.txt");
+    let new_file = tmp_dir.path().join("new.txt");
+
+    // Create files
+    std::fs::write(&old_file, "old").unwrap();
+    std::fs::write(&new_file, "new").unwrap();
+
+    // Set old file's mtime to 2020
+    let old_time = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1577836800); // 2020-01-01
+    fs::File::open(&old_file)
+        .unwrap()
+        .set_modified(old_time)
+        .unwrap();
+
+    // Test unquoted absolute date
+    let mut new_files = Vec::new();
+    detect::parse_and_run_fs(
+        Logger::root(Discard, o!()),
+        tmp_dir.path(),
+        false,
+        "modified > 2021-01-01".to_owned(), // Unquoted date
+        |p| new_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
+    )
+    .await
+    .unwrap();
+
+    assert!(new_files.contains(&"new.txt".to_string()));
+    assert!(!new_files.contains(&"old.txt".to_string()));
+}
+
 // ===== Additional temporal tests for gaps =====
 
 #[tokio::test]

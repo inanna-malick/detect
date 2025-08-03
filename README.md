@@ -3,12 +3,12 @@
 A fast, powerful tool for finding files by name, content, and metadata using an expressive query language.
 
 ```shell
-➜  detect 'path.suffix == rs && contents ~= async'
+➜  detect 'path.extension == rs && contents ~= async'
 ./src/main.rs
 ./src/lib.rs
 ./src/eval/fs.rs
 
-➜  detect 'size > 50000 && modified > "-7.days" && contents contains TODO'
+➜  detect 'size > 50000 && modified > -7.days && contents contains TODO'
 ./target/debug/build/main.rs
 ./docs/planning.md
 ```
@@ -26,7 +26,7 @@ detect 'path.name == README.md'
 detect 'contents contains TODO'
 
 # Complex queries
-detect 'path.suffix == ts && contents ~= @Injectable && !path.full contains test'
+detect 'path.extension == ts && contents ~= @Injectable && !path.full contains test'
 ```
 
 ## Key Features
@@ -45,19 +45,19 @@ Every query follows: `selector operator value`
 
 ```bash
 # Find TypeScript files with decorators
-path.suffix == ts && contents ~= @(Component|Injectable|Directive)
+path.extension == ts && contents ~= @(Component|Injectable|Directive)
 
 # Security audit
-path.suffix in [env, json, yml] && contents ~= (password|secret|api_key)
+path.extension in [env, json, yml] && contents ~= (password|secret|api_key)
 
 # Large files without documentation
 size > 10000 && !contents contains TODO && !contents contains @doc
 
 # Recent changes
-modified > "-7.days" && (contents contains FIXME || contents contains TODO)
+modified > -7.days && (contents contains FIXME || contents contains TODO)
 
 # Complex grouping with parentheses
-(path.suffix == js || path.suffix == ts) && (contents contains "import" || contents contains "require") && size > 1000
+(path.extension == js || path.extension == ts) && (contents contains import || contents contains require) && size > 1000
 ```
 
 ### Operators  
@@ -68,7 +68,7 @@ Any operator works with any selector of compatible type:
 - **Boolean**: `&&`, `||`, `!`, `()`
 
 ### Selectors
-- **String type**: `path.stem`, `path.name`, `path.parent`, `path.full`, `path.suffix`, `contents`
+- **String type**: `path.stem`, `path.name`, `path.parent`, `path.full`, `path.extension`, `contents`
 - **Number type**: `size`
 - **Time type**: `modified`, `created`, `accessed`
 - **Enum type**: `type` (file/dir/symlink)
@@ -102,7 +102,7 @@ find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 With detect:
 ```bash
 # New way  
-detect 'path.suffix == ts && size > 5000 && modified > "-7.days" && contents contains TODO'
+detect 'path.extension == ts && size > 5000 && modified > -7.days && contents contains TODO'
 ```
 
 More readable, more powerful, and often faster.

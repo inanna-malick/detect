@@ -209,7 +209,7 @@ impl ParseError {
                      • path.parent - directory containing file\n\
                      • path.name - filename with extension\n\
                      • path.stem - filename without extension\n\
-                     • path.suffix - file extension\n\
+                     • path.extension - file extension\n\
                      • type - file, dir, or symlink\n\
                      • contents - search file contents\n\
                      • size - file size (supports KB/MB/GB)\n\

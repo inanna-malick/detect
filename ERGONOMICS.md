@@ -31,8 +31,8 @@ Multiple ways to express time:
 - `modified > 2w`
 
 **Legacy syntax (still supported):**
-- `modified > "-7.days"`
-- `created < "-30.minutes"`
+- `modified > -7.days`
+- `created < -30.minutes`
 
 **Keywords:**
 - `modified > yesterday`
@@ -111,24 +111,36 @@ name ~= js
 ### Glob pattern correction
 The `*` wildcard is automatically converted to `.*` for convenience.
 
-## 6. Word-Form Boolean Operators ✅
+## 6. Case-Insensitive Word-Form Boolean Operators ✅
 
-Choose your style - symbols or words:
+Choose your style - symbols or words, any case:
 
 **Equivalent expressions:**
-- `name == foo && size > 100` 
+- `name == foo && size > 100`
 - `name == foo and size > 100`
+- `name == foo AND size > 100`
+- `name == foo And size > 100`
 
 - `name == foo || name == bar`
 - `name == foo or name == bar`
+- `name == foo OR name == bar`
 
 - `!type == dir`
 - `not type == dir`
+- `NOT type == dir`
+- `Not type == dir`
 
-**Mix and match:**
+**All case variants work:**
 ```bash
+# These are all equivalent:
 name == README and not type == dir && size > 1kb
+name == README AND NOT type == dir && size > 1kb
+name == README And Not type == dir && size > 1kb
+name == README aNd nOt type == dir && size > 1kb
 ```
+
+**SQL familiarity:**
+Users coming from SQL can use uppercase `AND`, `OR`, `NOT` as expected.
 
 ## 7. Natural Error Messages
 

@@ -30,7 +30,7 @@ Every query follows: selector operator value
 - `path.name` - complete filename with extension
 - `path.parent` - directory path only
 - `path.full` (or `path`) - complete path including filename
-- `path.suffix` - extension without dot
+- `path.extension` - extension without dot
 
 **Metadata**
 - `size` or `filesize` - bytes
@@ -50,10 +50,10 @@ Every query follows: selector operator value
 ```
 path.name == README.md
 path.stem == README
-path.suffix == rs
+path.extension == rs
 size > 1000000
 contents contains TODO
-modified > "-7.days"
+modified > -7.days
 ```
 
 **Complex Patterns**
@@ -69,18 +69,18 @@ contents ~= @(Injectable|Component)
 !path.full contains test
 
 # Combined conditions
-path.suffix == ts && size > 5000 && contents contains async && !path.parent contains test
+path.extension == ts && size > 5000 && contents contains async && !path.parent contains test
 ```
 
 **Time Queries**
 ```
-modified > "-30.minutes"    # Relative
-created > "2024-01-01"      # Absolute
+modified > -30.minutes    # Relative
+created > 2024-01-01      # Absolute
 ```
 
 **Set Membership**
 ```
-path.suffix in [js, ts, jsx]
+path.extension in [js, ts, jsx]
 path.stem in [index, main, app]
 ```
 
@@ -95,7 +95,7 @@ contents ~= @\w+                     # Any decorator
 
 **Security Scans**
 ```
-path.suffix in [env, json, yml] && contents ~= (password|secret|api_key)
+path.extension in [env, json, yml] && contents ~= (password|secret|api_key)
 contents ~= (BEGIN|END).*(PRIVATE|KEY)
 ```
 
@@ -105,7 +105,7 @@ contents ~= (BEGIN|END).*(PRIVATE|KEY)
 size > 10000 && contents ~= (async|await|Promise)
 
 # Stale tests
-path.name contains test && modified < "-90.days"
+path.name contains test && modified < -90.days
 
 # Files without tests
 path.name ~= \.service\.ts$ && !contents contains test
@@ -113,8 +113,8 @@ path.name ~= \.service\.ts$ && !contents contains test
 
 **Smart Exclusions**
 ```
-path.suffix == js && !path.parent contains node_modules && contents contains TODO
-path.suffix == py && !path.parent contains __pycache__ && contents contains import
+path.extension == js && !path.parent contains node_modules && contents contains TODO
+path.extension == py && !path.parent contains __pycache__ && contents contains import
 ```
 
 ## NOTES
@@ -122,6 +122,6 @@ path.suffix == py && !path.parent contains __pycache__ && contents contains impo
 - All string comparisons are case-sensitive
 - Regex uses Rust syntax (escape dots: `\.`)
 - Size is in bytes
-- Quotes required for: times, regex with spaces, values with special chars
+- Quotes required for: regex with spaces, values with special chars
 
 Need more? Use the detect_help tool.
