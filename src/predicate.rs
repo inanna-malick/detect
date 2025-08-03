@@ -107,14 +107,20 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
         let num_str = &stripped[..idx];
         let unit = &stripped[idx..];
         
-        if let Ok(number) = num_str.parse::<i64>() {
-            if !unit.is_empty() {
-                let duration = parse_duration(number, unit, s)?;
-                return if is_negative {
-                    Ok(Local::now() - duration)
-                } else {
-                    Ok(Local::now() + duration)
-                };
+        // Check if this looks like a date (has dashes after digits) rather than duration
+        // Dates look like: 2024-01-01, not like: 7days
+        if !unit.starts_with('-') {
+            if let Ok(number) = num_str.parse::<i64>() {
+                if !unit.is_empty() {
+                    // Try to parse as duration unit
+                    if let Ok(duration) = parse_duration(number, unit, s) {
+                        return if is_negative {
+                            Ok(Local::now() - duration)
+                        } else {
+                            Ok(Local::now() + duration)
+                        };
+                    }
+                }
             }
         }
     }

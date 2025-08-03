@@ -998,7 +998,7 @@ async fn test_temporal_syntax_variations() {
     
     // Test currently working syntax (baseline)
     Case {
-        expr: "modified > \"-1.days\"",
+        expr: "modified > \"-1.days\" && type == file",
         expected: &["recent.txt"],
         files: vec![f("recent.txt", "recent")],
     }
@@ -1010,6 +1010,103 @@ async fn test_temporal_syntax_variations() {
     // "modified > -7days" - no quotes
     // "modified > 7.days" - no quotes
     // Let's test what actually works
+}
+
+#[tokio::test]
+async fn test_flexible_set_syntax() {
+    // Document and test the flexibility of set syntax
+    
+    // Test spacing variations - all should work identically
+    Case {
+        expr: "extension in [js,ts,jsx]",  // No spaces
+        expected: &["app.js", "test.ts", "component.jsx"],
+        files: vec![
+            f("app.js", ""),
+            f("test.ts", ""),
+            f("component.jsx", ""),
+            f("style.css", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    Case {
+        expr: "extension in [js, ts, jsx]",  // With spaces
+        expected: &["app.js", "test.ts", "component.jsx"],
+        files: vec![
+            f("app.js", ""),
+            f("test.ts", ""),
+            f("component.jsx", ""),
+            f("style.css", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    Case {
+        expr: "extension in [ js , ts , jsx ]",  // Extra spaces
+        expected: &["app.js", "test.ts", "component.jsx"],
+        files: vec![
+            f("app.js", ""),
+            f("test.ts", ""),
+            f("component.jsx", ""),
+            f("style.css", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test quote variations - all optional and mixable
+    Case {
+        expr: r#"name in [README, "LICENSE", 'Makefile']"#,  // Mixed quotes
+        expected: &["README", "LICENSE", "Makefile"],
+        files: vec![
+            f("README", ""),
+            f("LICENSE", ""),
+            f("Makefile", ""),
+            f("package.json", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test special characters in sets
+    Case {
+        expr: r#"name in [.gitignore, .eslintrc.json, babel.config.js]"#,
+        expected: &[".gitignore", ".eslintrc.json", "babel.config.js"],
+        files: vec![
+            f(".gitignore", ""),
+            f(".eslintrc.json", ""),
+            f("babel.config.js", ""),
+            f("app.js", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test empty set (matches nothing)
+    Case {
+        expr: "extension in []",
+        expected: &[],
+        files: vec![
+            f("app.js", ""),
+            f("test.ts", ""),
+        ],
+    }
+    .run()
+    .await;
+    
+    // Test single item set
+    Case {
+        expr: "extension in [md]",
+        expected: &["README.md"],
+        files: vec![
+            f("README.md", ""),
+            f("app.js", ""),
+        ],
+    }
+    .run()
+    .await;
 }
 
 #[tokio::test]
