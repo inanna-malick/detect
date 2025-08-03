@@ -4,6 +4,7 @@ use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
 use std::fs::FileType;
 use std::ops::{RangeFrom, RangeTo};
+use std::os::unix::fs::FileTypeExt;
 use std::os::unix::prelude::MetadataExt;
 use std::sync::Arc;
 use std::{
@@ -17,6 +18,72 @@ use crate::expr::short_circuit::ShortCircuit;
 use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
 use crate::util::Done;
 use chrono::{DateTime, Duration, Local, NaiveDate};
+
+/// File type enumeration for type predicates
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DetectFileType {
+    File,
+    Directory,
+    Symlink,
+    Socket,
+    Fifo,
+    BlockDevice,
+    CharDevice,
+}
+
+impl DetectFileType {
+    /// Primary string representation for this file type
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DetectFileType::File => "file",
+            DetectFileType::Directory => "dir",
+            DetectFileType::Symlink => "symlink",
+            DetectFileType::Socket => "socket",
+            DetectFileType::Fifo => "fifo",
+            DetectFileType::BlockDevice => "block",
+            DetectFileType::CharDevice => "char",
+        }
+    }
+
+    /// All aliases that match this file type
+    pub fn aliases(&self) -> &'static [&'static str] {
+        match self {
+            DetectFileType::File => &["file"],
+            DetectFileType::Directory => &["dir", "directory"],
+            DetectFileType::Symlink => &["symlink", "link"],
+            DetectFileType::Socket => &["socket", "sock"],
+            DetectFileType::Fifo => &["fifo", "pipe"],
+            DetectFileType::BlockDevice => &["block", "blockdev"],
+            DetectFileType::CharDevice => &["char", "chardev"],
+        }
+    }
+
+    /// Check if a string matches any alias for this file type
+    pub fn matches(&self, s: &str) -> bool {
+        self.aliases().iter().any(|&alias| alias == s)
+    }
+
+    /// Create from std::fs::FileType
+    pub fn from_fs_type(ft: &FileType) -> Option<Self> {
+        if ft.is_file() {
+            Some(DetectFileType::File)
+        } else if ft.is_dir() {
+            Some(DetectFileType::Directory)
+        } else if ft.is_symlink() {
+            Some(DetectFileType::Symlink)
+        } else if ft.is_socket() {
+            Some(DetectFileType::Socket)
+        } else if ft.is_fifo() {
+            Some(DetectFileType::Fifo)
+        } else if ft.is_block_device() {
+            Some(DetectFileType::BlockDevice)
+        } else if ft.is_char_device() {
+            Some(DetectFileType::CharDevice)
+        } else {
+            None
+        }
+    }
+}
 
 /// Check for common regex patterns that might be mistakes
 fn check_regex_patterns(pattern: &str) -> Option<String> {
@@ -484,13 +551,14 @@ impl TimeMatcher {
             TimeMatcher::Before(dt) => file_datetime < *dt,
             TimeMatcher::After(dt) => file_datetime > *dt,
             TimeMatcher::Equals(dt) => {
-                // For equality, we'll consider same day
-                // FIXME: choose granularity, somewhow
+                // For date-only comparisons (e.g., "2024-01-01"), we compare just the date
+                // For datetime comparisons, we'd compare with time granularity
+                // Since we currently only parse dates as YYYY-MM-DD (setting time to 00:00:00),
+                // we compare date portions for equality
                 file_datetime.date_naive() == dt.date_naive()
             }
             TimeMatcher::NotEquals(dt) => {
-                // FIXME: choose granularity, somewhow - maybe find lowest value (day/minute/etc that isn't all 0's)
-                // For equality, we'll consider same day
+                // Same logic as Equals but inverted
                 file_datetime.date_naive() != dt.date_naive()
             }
         }
@@ -1069,20 +1137,10 @@ impl MetadataPredicate {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
             MetadataPredicate::Type(matcher) => {
-                use std::os::unix::fs::FileTypeExt;
                 let ft: FileType = metadata.file_type();
-                if ft.is_socket() {
-                    matcher.is_match("sock") || matcher.is_match("socket")
-                } else if ft.is_fifo() {
-                    matcher.is_match("fifo")
-                } else if ft.is_block_device() {
-                    matcher.is_match("block")
-                } else if ft.is_char_device() {
-                    matcher.is_match("char")
-                } else if ft.is_dir() {
-                    matcher.is_match("dir") || matcher.is_match("directory")
-                } else if ft.is_file() {
-                    matcher.is_match("file")
+                // Use the new DetectFileType enum for cleaner type checking
+                if let Some(detect_type) = DetectFileType::from_fs_type(&ft) {
+                    detect_type.aliases().iter().any(|&alias| matcher.is_match(alias))
                 } else {
                     false
                 }
@@ -1119,7 +1177,8 @@ impl MetadataPredicate {
                 false
             }
             MetadataPredicate::Type(matcher) => {
-                matcher.is_match("dir") || matcher.is_match("directory")
+                // Check if matcher matches directory type
+                DetectFileType::Directory.aliases().iter().any(|&alias| matcher.is_match(alias))
             }
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
@@ -1134,7 +1193,10 @@ impl MetadataPredicate {
     pub fn is_match_git_blob(&self, entry: &Blob) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
-            MetadataPredicate::Type(matcher) => matcher.is_match("file"),
+            MetadataPredicate::Type(matcher) => {
+                // Check if matcher matches file type
+                DetectFileType::File.aliases().iter().any(|&alias| matcher.is_match(alias))
+            }
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
             | MetadataPredicate::Accessed(_)

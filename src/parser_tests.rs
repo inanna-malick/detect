@@ -665,6 +665,52 @@ mod tests {
         let mixed = parse_expr("name == foo and size > 100 || not type == dir");
         assert!(mixed.is_ok(), "Mixed word and symbol forms should work");
     }
+
+    #[test]
+    fn test_case_insensitive_boolean_operators() {
+        // Test case-insensitive 'and' variants
+        let lowercase_and = parse_expr("name == foo and size > 100").unwrap();
+        let uppercase_and = parse_expr("name == foo AND size > 100").unwrap();
+        let mixed_and = parse_expr("name == foo And size > 100").unwrap();
+        let weird_and = parse_expr("name == foo aNd size > 100").unwrap();
+        
+        assert_eq!(lowercase_and, uppercase_and, "'and' and 'AND' should be equivalent");
+        assert_eq!(lowercase_and, mixed_and, "'and' and 'And' should be equivalent");
+        assert_eq!(lowercase_and, weird_and, "'and' and 'aNd' should be equivalent");
+        
+        // Test case-insensitive 'or' variants
+        let lowercase_or = parse_expr("name == foo or name == bar").unwrap();
+        let uppercase_or = parse_expr("name == foo OR name == bar").unwrap();
+        let mixed_or = parse_expr("name == foo Or name == bar").unwrap();
+        let weird_or = parse_expr("name == foo oR name == bar").unwrap();
+        
+        assert_eq!(lowercase_or, uppercase_or, "'or' and 'OR' should be equivalent");
+        assert_eq!(lowercase_or, mixed_or, "'or' and 'Or' should be equivalent");
+        assert_eq!(lowercase_or, weird_or, "'or' and 'oR' should be equivalent");
+        
+        // Test case-insensitive 'not' variants
+        let lowercase_not = parse_expr("not name == foo").unwrap();
+        let uppercase_not = parse_expr("NOT name == foo").unwrap();
+        let mixed_not = parse_expr("Not name == foo").unwrap();
+        let weird_not = parse_expr("nOt name == foo").unwrap();
+        
+        assert_eq!(lowercase_not, uppercase_not, "'not' and 'NOT' should be equivalent");
+        assert_eq!(lowercase_not, mixed_not, "'not' and 'Not' should be equivalent");
+        assert_eq!(lowercase_not, weird_not, "'not' and 'nOt' should be equivalent");
+        
+        // Test complex expression with mixed case operators
+        let mixed_case_complex = parse_expr("name == foo AND NOT (size > 100 OR type == dir)").unwrap();
+        let lowercase_complex = parse_expr("name == foo and not (size > 100 or type == dir)").unwrap();
+        assert_eq!(mixed_case_complex, lowercase_complex, "Complex mixed-case expressions should work");
+        
+        // Test all operators in one expression with different cases
+        let all_mixed = parse_expr("name == foo AND size > 100 or NOT type == dir");
+        assert!(all_mixed.is_ok(), "All case-insensitive operators should work together");
+        
+        // Test that symbols still work alongside case-insensitive words
+        let symbols_with_words = parse_expr("name == foo && size > 100 OR NOT type == dir");
+        assert!(symbols_with_words.is_ok(), "Symbols and case-insensitive words should mix");
+    }
     
     #[test]
     fn parse_operator_aliases() {

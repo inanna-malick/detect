@@ -14,7 +14,7 @@ Based on extensive beta testing and user feedback, these enhancements would sign
 
 ### 2. Limit Flag (--limit)
 - Add `--limit N` to stop after N results
-- Prevents pipe panic when using `detect ... | head` (see also: SIGPIPE handling in Critical Infrastructure Fix)
+- Prevents need for `detect ... | head` workarounds
 - Document clearly: Results may appear in different order between runs
 - Use cases:
   - Sampling: `--limit 10` gives you "any 10 matches" (useful for testing)
@@ -45,7 +45,7 @@ Based on extensive beta testing and user feedback, these enhancements would sign
 - Detect removed/renamed selectors:
   ```
   Error: Invalid selector 'suffix' at position 5
-  Query: path.suffix == txt
+  Query: path.extension == txt
               ^^^^^^
   Did you mean: path.extension
   
@@ -170,79 +170,7 @@ Based on extensive beta testing and user feedback, these enhancements would sign
 10. Config file support
 
 ## Success Metrics
-- Pipe to `head` works without panic
 - Common queries are 50% shorter (due to defaults and --exclude)
-- Output is immediately useful without path manipulation
+- Output is immediately useful without path manipulation  
 - Users can get deterministic results when needed (via --sort)
 
-## Critical Infrastructure Fix
-
-### SIGPIPE/Broken Pipe Handling
-**Fix panic when output pipe closes early**
-- **Problem**: `detect 'size > 1mb' | head -5` causes panic with "failed printing to stdout: Broken pipe"
-- **Impact**: Violates Unix CLI conventions where tools should exit gracefully on SIGPIPE
-- **VIBES Analysis**: Current `<👓🪢🌊>` → Target `<🔍🪢💧>` (Ocean→Liquid error handling)
-
-**Root Cause:**
-- Rust ignores SIGPIPE by default (since 2014, for green threads compatibility)
-- When pipe closes, Rust gets `io::ErrorKind::BrokenPipe` instead of SIGPIPE signal
-- `println!` macro panics on any write error, including broken pipes
-
-**Implementation Options:**
-
-1. **Explicit Error Handling** (Recommended - follows ripgrep pattern):
-   ```rust
-   // Replace println! with safe write
-   use std::io::{self, Write};
-   
-   fn safe_println(s: &str) -> io::Result<()> {
-       writeln!(io::stdout(), "{}", s)
-   }
-   
-   // In output handler
-   if let Err(e) = safe_println(&path.to_string_lossy()) {
-       if e.kind() == io::ErrorKind::BrokenPipe {
-           std::process::exit(0);  // Unix convention: exit success on broken pipe
-       }
-       return Err(e.into());
-   }
-   ```
-   
-2. **Reset SIGPIPE Handler** (Simple but less controlled):
-   ```rust
-   // At start of main()
-   #[cfg(unix)]
-   fn reset_sigpipe() {
-       unsafe {
-           libc::signal(libc::SIGPIPE, libc::SIG_DFL);
-       }
-   }
-   ```
-   Note: This causes immediate termination via SIGPIPE rather than graceful exit
-
-3. **Use sigpipe Crate** (Minimal change):
-   ```rust
-   // In Cargo.toml: sigpipe = "0.1"
-   // In main():
-   fn main() {
-       sigpipe::reset();
-       // rest of program
-   }
-   ```
-
-**Benefits:**
-- Enables natural Unix pipelines: `detect ... | head`, `detect ... | grep pattern | head`
-- Prevents spurious error messages in scripts
-- Aligns with behavior of grep, find, ripgrep, and other standard tools
-- No performance impact for normal operation
-
-**Testing:**
-- `detect 'size > 1kb' | head -5` should exit cleanly
-- `detect 'name == foo' | false` should handle immediate pipe closure
-- `yes | detect 'contents contains hello'` should handle input pipe closure
-- Normal errors should still return appropriate exit codes
-
-**Prior Art:**
-- ripgrep: Explicitly checks for `BrokenPipe` and exits with code 0
-- fd-find: Similar Rust tool, handles pipes gracefully
-- Standard Unix tools: All handle SIGPIPE without error messages

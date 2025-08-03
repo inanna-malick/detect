@@ -3,6 +3,7 @@ pub mod error;
 pub mod error_hints;
 mod eval;
 pub mod expr;
+pub mod output;
 pub mod parse_error;
 pub mod parser;
 pub mod predicate;

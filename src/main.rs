@@ -1,7 +1,7 @@
 use std::{env::current_dir, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
-use detect::parse_and_run_fs;
+use detect::{output::safe_stdout, parse_and_run_fs};
 use slog::{o, Drain, Level, Logger};
 
 const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");
@@ -52,13 +52,24 @@ pub async fn main() -> Result<(), anyhow::Error> {
         None => current_dir()?,
     };
 
+    // Create safe output handler that manages broken pipe errors
+    let mut output = safe_stdout();
+
     // let expr = parse_expr(&args.expr)?;
 
     // if let Some(ref_) = args.gitref {
-    //     run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
+    //     run_git(logger, &root_path, &ref_, expr, |s| {
+    //         if let Err(e) = output.writeln(s) {
+    //             eprintln!("Output error: {}", e);
+    //             std::process::exit(1);
+    //         }
+    //     })?;
     // } else {
     parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
-        println!("{}", s.to_string_lossy())
+        if let Err(e) = output.writeln(&s.to_string_lossy()) {
+            eprintln!("Output error: {}", e);
+            std::process::exit(1);
+        }
     })
     .await?;
     // }
