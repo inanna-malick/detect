@@ -368,7 +368,7 @@ async fn test_temporal_combined_with_other_predicates() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "path.suffix == rs && modified > \"-1.day\"".to_owned(),
+        "path.extension == rs && modified > \"-1.day\"".to_owned(),
         |p| recent_rust.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
