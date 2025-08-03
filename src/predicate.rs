@@ -18,6 +18,50 @@ use crate::parse_error::{PredicateParseError, TemporalError, TemporalErrorKind};
 use crate::util::Done;
 use chrono::{DateTime, Duration, Local, NaiveDate};
 
+/// Check for common regex patterns that might be mistakes
+fn check_regex_patterns(pattern: &str) -> Option<String> {
+    // Check for empty regex
+    if pattern.is_empty() {
+        return Some("Empty regex pattern will match every line in every file. Consider using a more specific pattern.".to_string());
+    }
+    
+    // Check for unescaped dots that look like file extensions
+    if pattern.starts_with('.') && !pattern.starts_with("\\.") {
+        // Check if it looks like a file extension pattern
+        let rest = &pattern[1..];
+        if rest.chars().all(|c| c.is_alphanumeric() || c == '$') {
+            return Some(format!(
+                "Pattern '{}' has an unescaped dot which matches any character. \
+                For file extensions, consider using 'path.extension == {}' or escape the dot: '\\.{}'",
+                pattern,
+                rest.trim_end_matches('$'),
+                rest
+            ));
+        }
+    }
+    
+    // Check for patterns that look like they're trying to match file extensions
+    if pattern.ends_with("js") || pattern.ends_with("ts") || pattern.ends_with("rs") 
+       || pattern.ends_with("py") || pattern.ends_with("go") {
+        if !pattern.contains('.') && !pattern.contains('\\') {
+            return Some(format!(
+                "Pattern '{}' might not match as expected. \
+                For file extensions, use 'path.extension == {}' or a proper regex like '\\.({})'",
+                pattern, pattern, pattern
+            ));
+        }
+    }
+    
+    // Check for common glob patterns that don't work in regex
+    // Note: single '*' is already handled by parse_string function
+    
+    if pattern.contains("**") {
+        return Some("Pattern '**' is not valid in regex. Use '.*' for matching any characters.".to_string());
+    }
+    
+    None
+}
+
 fn parse_duration(number: i64, unit: &str, original: &str) -> Result<Duration, TemporalError> {
     match unit {
         "seconds" | "second" | "secs" | "sec" | "s" => Ok(Duration::seconds(number)),
@@ -385,7 +429,16 @@ impl Display for StringMatcher {
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
+        // Check for common regex mistakes and provide warnings
+        if let Some(warning) = check_regex_patterns(s) {
+            eprintln!("Warning: {}", warning);
+        }
         Ok(Self::Regex(Regex::new(s)?))
+    }
+    
+    pub fn regex_with_warnings(s: &str) -> Result<(Self, Option<String>), regex::Error> {
+        let warning = check_regex_patterns(s);
+        Ok((Self::Regex(Regex::new(s)?), warning))
     }
 
     pub fn is_match(&self, s: &str) -> bool {

@@ -1210,6 +1210,50 @@ mod tests {
     }
 
     #[test]
+    fn test_regex_pattern_warnings() {
+        // Test that common regex mistakes generate appropriate warnings
+        use crate::predicate::StringMatcher;
+        
+        // Test empty regex warning
+        let result = StringMatcher::regex_with_warnings("");
+        assert!(result.is_ok());
+        let (_, warning) = result.unwrap();
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("Empty regex"));
+        
+        // Test unescaped dot for file extensions
+        let (_, warning) = StringMatcher::regex_with_warnings(".ts").unwrap();
+        assert!(warning.is_some());
+        let warning_text = warning.unwrap();
+        assert!(warning_text.contains("unescaped dot"));
+        assert!(warning_text.contains("path.extension == ts"));
+        
+        // Test file extension without dot
+        let (_, warning) = StringMatcher::regex_with_warnings("js").unwrap();
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("path.extension == js"));
+        
+        // Test glob pattern double star - this will fail regex compilation
+        // but we should still get the warning
+        let result = StringMatcher::regex_with_warnings("test**");
+        // This pattern has ** but is still valid regex (matches test followed by any number of stars)
+        assert!(result.is_ok());
+        let (_, warning) = result.unwrap();
+        assert!(warning.is_some());
+        assert!(warning.unwrap().contains("'**' is not valid in regex"));
+        
+        // Test valid patterns don't generate warnings
+        let (_, warning) = StringMatcher::regex_with_warnings("\\.ts$").unwrap();
+        assert!(warning.is_none());
+        
+        let (_, warning) = StringMatcher::regex_with_warnings("TODO.*FIXME").unwrap();
+        assert!(warning.is_none());
+        
+        // Test that * pattern is handled specially in parse_string (not in this test)
+        // The parse_string function converts * to .* automatically
+    }
+
+    #[test]
     fn test_size_decimal_parsing() {
         // Test decimal size values
         let test_cases = vec![
