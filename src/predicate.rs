@@ -298,7 +298,7 @@ fn quote_if_needed(s: &str) -> String {
     // Check if string looks like a number
     // FIXME: If it looks like a number but it's being used in a string matcher context,
     // it should be coerced to a string using the original text representation
-    let looks_like_number = !s.is_empty() && s.chars().all(|c| c.is_numeric());
+    let looks_like_number = !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
 
     // Check if string needs quoting
     let needs_quotes = s.is_empty() ||
