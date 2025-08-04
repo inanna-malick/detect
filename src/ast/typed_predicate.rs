@@ -533,7 +533,9 @@ impl TypedPredicate {
                             StringMatcher::Regex(r) => (r.as_str().to_string(), false),
                             StringMatcher::Equals(s) => (format!("^{}$", regex::escape(s)), false),
                             StringMatcher::Contains(s) => (regex::escape(s), false),
-                            StringMatcher::NotEquals(s) => (format!("^{}$", regex::escape(s)), true),
+                            StringMatcher::NotEquals(s) => {
+                                (format!("^{}$", regex::escape(s)), true)
+                            }
                             _ => {
                                 return Err(ParseError::invalid_token(
                                     "regex, equals, contains, or not-equals for contents",
@@ -541,10 +543,11 @@ impl TypedPredicate {
                                 ))
                             }
                         };
-                        let content_pred = StreamingCompiledContentPredicate::new_with_negate(pattern, negate)
-                            .map_err(|_| {
-                                ParseError::invalid_token("valid regex pattern for DFA", value)
-                            })?;
+                        let content_pred =
+                            StreamingCompiledContentPredicate::new_with_negate(pattern, negate)
+                                .map_err(|_| {
+                                    ParseError::invalid_token("valid regex pattern for DFA", value)
+                                })?;
                         DomainPredicate::contents(content_pred)
                     }
                 };

@@ -1239,10 +1239,14 @@ impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
         Self::new_with_negate(source, false)
     }
-    
+
     pub fn new_with_negate(source: String, negate: bool) -> Result<Self, PredicateParseError> {
         match DFA::new(&source) {
-            Ok(inner) => Ok(Self { inner, source, negate }),
+            Ok(inner) => Ok(Self {
+                inner,
+                source,
+                negate,
+            }),
             Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
         }
     }
@@ -1293,7 +1297,7 @@ pub struct StreamingCompiledContentPredicateRef<'a> {
     pub inner: DFA<&'a [u32]>,
     // source regex, for logging
     pub source: &'a str,
-    // true for != operations  
+    // true for != operations
     pub negate: bool,
 }
 

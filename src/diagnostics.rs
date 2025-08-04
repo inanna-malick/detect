@@ -133,7 +133,7 @@ fn suggest_selector(invalid: &str) -> Option<String> {
     let mut best_distance = usize::MAX;
 
     for &valid in VALID_SELECTORS {
-        let distance = levenshtein_distance(invalid, valid);
+        let distance = levenshtein::levenshtein(invalid, valid);
         if distance < best_distance && distance <= 2 {
             best_distance = distance;
             best_match = Some(valid);
@@ -141,31 +141,6 @@ fn suggest_selector(invalid: &str) -> Option<String> {
     }
 
     best_match.map(|s| format!("Did you mean '{}'?", s))
-}
-
-/// Simple Levenshtein distance implementation
-fn levenshtein_distance(s1: &str, s2: &str) -> usize {
-    let len1 = s1.len();
-    let len2 = s2.len();
-    let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
-
-    for i in 0..=len1 {
-        matrix[i][0] = i;
-    }
-    for j in 0..=len2 {
-        matrix[0][j] = j;
-    }
-
-    for (i, c1) in s1.chars().enumerate() {
-        for (j, c2) in s2.chars().enumerate() {
-            let cost = if c1 == c2 { 0 } else { 1 };
-            matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1)
-                .min(matrix[i + 1][j] + 1)
-                .min(matrix[i][j] + cost);
-        }
-    }
-
-    matrix[len1][len2]
 }
 
 /// Convert a Pest error to a Miette diagnostic
@@ -237,7 +212,7 @@ pub fn parse_error_to_diagnostic(
 
     match error {
         ParseError::Syntax(pest_err) => pest_to_diagnostic(pest_err, source, filename),
-        
+
         ParseError::Structure { kind, location } => {
             let span = if let Some((line, col)) = location {
                 // Convert line/col to byte position
@@ -252,7 +227,7 @@ pub fn parse_error_to_diagnostic(
             } else {
                 (0, source.len()).into()
             };
-            
+
             match kind {
                 StructureErrorKind::InvalidSelector { found } => {
                     // Special handling for removed 'suffix' selector
@@ -261,7 +236,7 @@ pub fn parse_error_to_diagnostic(
                     } else {
                         suggest_selector(found)
                     };
-                    
+
                     DetectDiagnostic::InvalidSelector {
                         src,
                         span,
@@ -276,7 +251,7 @@ pub fn parse_error_to_diagnostic(
                 }
             }
         }
-        
+
         ParseError::Predicate { source: predicate_err, .. } => {
             match predicate_err {
                 PredicateParseError::Regex(e) => {
@@ -288,7 +263,7 @@ pub fn parse_error_to_diagnostic(
                     } else {
                         Some("Escape special characters: \\., \\(, \\[".to_string())
                     };
-                    
+
                     DetectDiagnostic::RegexError {
                         src,
                         span: (0, source.len()).into(),
@@ -371,15 +346,6 @@ fn estimate_byte_position(source: &str, line: usize, col: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_levenshtein_distance() {
-        assert_eq!(levenshtein_distance("", ""), 0);
-        assert_eq!(levenshtein_distance("a", "a"), 0);
-        assert_eq!(levenshtein_distance("a", "b"), 1);
-        assert_eq!(levenshtein_distance("size", "siz"), 1);
-        assert_eq!(levenshtein_distance("stem", "name"), 4); // s->n, t->a, e->m, m->e
-    }
 
     #[test]
     fn test_suggest_selector() {

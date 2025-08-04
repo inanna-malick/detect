@@ -175,12 +175,12 @@ impl ParseError {
             location: None,
         }
     }
-    
+
     /// Create an invalid token error with location
     pub fn invalid_token_with_location(
-        expected: &'static str, 
+        expected: &'static str,
         found: impl Into<String>,
-        location: (usize, usize)
+        location: (usize, usize),
     ) -> Self {
         ParseError::Structure {
             kind: StructureErrorKind::InvalidToken {
@@ -342,7 +342,7 @@ impl fmt::Display for ParseError {
             ParseError::Syntax(e) => {
                 // Clone the error to use renamed_rules() which takes ownership
                 // This is the idiomatic pattern from the Rust community
-                let user_friendly = e.clone().renamed_rules(|rule| rule_to_user_friendly(rule));
+                let user_friendly = e.clone().renamed_rules(rule_to_user_friendly);
 
                 // Format the error with Pest's built-in formatting
                 write!(f, "{}", user_friendly)?;

@@ -22,6 +22,7 @@ clap = {version = "4.4", features = ["derive"]}
 futures = "0.3.23"
 ignore = "0.4"
 itertools = "0.10"
+levenshtein = "1.0.5"
 pest = "2.7.15"
 pest_derive = "2.7.15"
 pest-ast = "0.3.5"
