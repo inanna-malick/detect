@@ -3,45 +3,58 @@ use std::fmt;
 
 use crate::parser::pratt_parser::Rule;
 
-/// Improve Pest error messages by translating rule names to user-friendly descriptions
-fn improve_pest_error_message(error: &str) -> String {
-    // Common rule translations
-    let error = error
-        .replace("string_regex", "regex operator (~=)")
-        .replace("string_eq", "equals operator (==)")
-        .replace("string_ne", "not equals operator (!=)")
-        .replace("string_contains", "contains operator")
-        .replace("string_in", "in operator")
-        .replace("eq", "== or =")
-        .replace("ne", "!=")
-        .replace("in_", "'in'")
-        .replace("bare_string", "unquoted value")
-        .replace("quoted_string", "quoted value")
-        .replace("bare_name", "'name'")
-        .replace("bare_stem", "'stem'")
-        .replace("bare_extension", "'extension' or 'ext'")
-        .replace("bare_parent", "'parent'")
-        .replace("bare_full", "'full'")
-        .replace("string_selector", "string selector (name, path, etc.)")
-        .replace("numeric_selector", "numeric selector (size, depth)")
-        .replace(
-            "temporal_selector",
-            "time selector (modified, created, accessed)",
-        )
-        .replace("typed_predicate", "valid expression");
-
-    // If the error mentions expected rules, add a hint
-    if error.contains("expected") && error.contains("at line") {
-        // Check if it looks like a selector at the start
-        if let Some(pos) = error.find(" at line 1, column") {
-            let before = &error[..pos];
-            if before.contains("expected") && !before.contains("operator") {
-                return format!("{}\n\nHint: Did you forget to use a path prefix? Try 'path.name', 'path.extension', etc.", error);
-            }
-        }
+/// Transform Pest rule names to user-friendly descriptions
+/// This follows the idiomatic pattern using renamed_rules()
+fn rule_to_user_friendly(rule: &Rule) -> String {
+    match rule {
+        // Operators
+        Rule::string_regex => "regex operator (~=)".to_owned(),
+        Rule::string_eq => "equals operator (==)".to_owned(),
+        Rule::string_ne => "not equals operator (!=)".to_owned(),
+        Rule::string_contains => "contains operator".to_owned(),
+        Rule::string_in => "'in' operator".to_owned(),
+        Rule::eq => "== or =".to_owned(),
+        Rule::ne => "!=".to_owned(),
+        Rule::in_ => "'in'".to_owned(),
+        Rule::gt => ">".to_owned(),
+        Rule::gteq => ">=".to_owned(),
+        Rule::lt => "<".to_owned(),
+        Rule::lteq => "<=".to_owned(),
+        
+        // Values
+        Rule::bare_string => "unquoted value".to_owned(),
+        Rule::quoted_string => "quoted string".to_owned(),
+        Rule::string_value => "string value".to_owned(),
+        Rule::numeric_value => "numeric value".to_owned(),
+        Rule::temporal_value => "time value".to_owned(),
+        Rule::set_literal => "set [item1, item2, ...]".to_owned(),
+        
+        // Path selectors
+        Rule::bare_name => "'name'".to_owned(),
+        Rule::bare_stem => "'stem'".to_owned(),
+        Rule::bare_extension => "'extension' or 'ext'".to_owned(),
+        Rule::bare_parent => "'parent'".to_owned(),
+        Rule::bare_full => "'full' or 'path'".to_owned(),
+        Rule::path_selector => "path selector (path.name, path.stem, etc.)".to_owned(),
+        
+        // Other selectors
+        Rule::string_selector => "string selector (name, path, contents, type)".to_owned(),
+        Rule::numeric_selector => "numeric selector (size, depth)".to_owned(),
+        Rule::temporal_selector => "time selector (modified, created, accessed)".to_owned(),
+        
+        // Predicates
+        Rule::typed_predicate => "valid expression".to_owned(),
+        Rule::string_predicate => "string comparison".to_owned(),
+        Rule::numeric_predicate => "numeric comparison".to_owned(),
+        Rule::temporal_predicate => "time comparison".to_owned(),
+        
+        // Special
+        Rule::EOI => "end of expression".to_owned(),
+        Rule::WHITESPACE => "whitespace".to_owned(),
+        
+        // Default: use lowercase version of the rule name
+        _ => format!("{:?}", rule).to_lowercase().replace('_', " "),
     }
-
-    error
 }
 
 #[derive(Debug)]
@@ -216,19 +229,51 @@ impl ParseError {
     /// Get contextual hint for fixing the error
     pub fn hint(&self) -> Option<String> {
         match self {
+            ParseError::Syntax(_e) => {
+                // Syntax errors get their hints added in the Display impl
+                // via renamed_rules() and contextual analysis
+                None
+            }
             ParseError::Predicate {
                 selector,
                 operator,
                 source,
                 ..
             } => match source {
-                PredicateParseError::Regex(_) => Some(
-                    "Regex syntax error. Common issues:\n\
-                         • Use .* instead of * for wildcard\n\
-                         • Escape special characters: \\., \\(, \\[\n\
-                         • Check regex syntax at regex101.com"
-                        .to_string(),
-                ),
+                PredicateParseError::Regex(e) => {
+                    let err_str = e.to_string();
+                    if err_str.contains("repetition operator") || err_str.contains("quantifier") {
+                        Some(
+                            "Regex error: Invalid use of * quantifier.\n\n\
+                             Common fixes:\n\
+                             • Use .* for 'any characters' (not just *)\n\
+                             • Use \\* to match literal asterisk\n\
+                             • Pattern '*.txt' should be '.*\\.txt'\n\n\
+                             Examples:\n\
+                             • contents ~= \".*TODO.*\"   # Find TODO anywhere\n\
+                             • path.name ~= \"test.*\"     # Files starting with 'test'"
+                                .to_string(),
+                        )
+                    } else if err_str.contains("unclosed") || err_str.contains("unmatched") {
+                        Some(
+                            "Regex error: Unclosed group or character class.\n\n\
+                             Common fixes:\n\
+                             • Close character classes: [a-z] not [a-z\n\
+                             • Close groups: (abc) not (abc\n\
+                             • Escape brackets: \\[ and \\] for literal brackets\n\n\
+                             Test your regex at: https://regex101.com/"
+                                .to_string(),
+                        )
+                    } else {
+                        Some(
+                            "Regex syntax error. Common issues:\n\
+                                 • Use .* instead of * for wildcard\n\
+                                 • Escape special characters: \\., \\(, \\[\n\
+                                 • Check regex syntax at regex101.com"
+                                .to_string(),
+                        )
+                    }
+                }
                 PredicateParseError::Temporal(_) => Some(format!(
                     "Time format examples:\n\
                          • Relative: -7.days, -1.hour, -30.minutes\n\
@@ -245,6 +290,16 @@ impl ParseError {
                 }
                 _ => None,
             },
+            ParseError::Structure {
+                kind: StructureErrorKind::InvalidSelector { found },
+                ..
+            } if found == "suffix" => Some(
+                "'suffix' has been removed. Use 'path.extension' or 'extension' instead.\n\n\
+                 Examples:\n\
+                 • path.extension == rs     # Rust files\n\
+                 • extension in [js, ts]    # JavaScript/TypeScript files"
+                    .to_string(),
+            ),
             ParseError::Structure {
                 kind: StructureErrorKind::InvalidSelector { found },
                 ..
@@ -270,10 +325,34 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::Syntax(e) => {
-                // Improve Pest's error messages by translating rule names
-                let error_str = e.to_string();
-                let improved = improve_pest_error_message(&error_str);
-                write!(f, "{}", improved)
+                // Clone the error to use renamed_rules() which takes ownership
+                // This is the idiomatic pattern from the Rust community
+                let user_friendly = e.clone().renamed_rules(|rule| rule_to_user_friendly(rule));
+                
+                // Format the error with Pest's built-in formatting
+                write!(f, "{}", user_friendly)?;
+                
+                // Add contextual hints based on the error
+                if let pest::error::ErrorVariant::ParsingError { positives, .. } = &e.variant {
+                    // Check if it looks like a bare selector without path prefix
+                    let bare_selectors = [
+                        Rule::bare_name,
+                        Rule::bare_stem,
+                        Rule::bare_extension,
+                        Rule::bare_parent,
+                    ];
+                    
+                    if positives.iter().any(|r| bare_selectors.contains(r)) {
+                        // Check if we're at the start of the expression
+                        if let pest::error::LineColLocation::Pos((1, col)) = e.line_col {
+                            if col <= 10 {
+                                write!(f, "\n\nHint: Selectors like 'name', 'stem', 'extension' should be prefixed with 'path.' (e.g., 'path.name', 'path.extension')")?;
+                            }
+                        }
+                    }
+                }
+                
+                Ok(())
             }
             ParseError::Structure { kind, .. } => {
                 write!(f, "{}", kind)

@@ -28,5 +28,10 @@ pub fn get_parse_error_hints() -> &'static str {
     - size > 1KB             # files larger than 1KB
     - type == \"file\"         # regular files only
     - contents ~= \"TODO\"     # search file contents
-    - modified > \"-7.days\"   # modified in last week"
+  • Time Examples:
+    - modified > -7.days     # modified in last week
+    - created < -30.minutes  # created over 30 min ago
+    - accessed > 2024-01-01  # accessed after date
+    - modified == today      # modified today
+    - created != yesterday   # not created yesterday"
 }
