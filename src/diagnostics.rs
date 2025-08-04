@@ -24,7 +24,7 @@ pub enum DetectDiagnostic {
         src: NamedSource<String>,
         
         /// The problematic span in the source
-        #[label("unexpected token here")]
+        #[label(primary, "unexpected token here")]
         bad_bit: SourceSpan,
         
         /// Additional help text
@@ -41,7 +41,7 @@ pub enum DetectDiagnostic {
         #[source_code]
         src: NamedSource<String>,
         
-        #[label("unknown selector")]
+        #[label(primary, "unknown selector")]
         span: SourceSpan,
         
         selector: String,
@@ -59,7 +59,7 @@ pub enum DetectDiagnostic {
         #[source_code]
         src: NamedSource<String>,
         
-        #[label("regex compilation failed here")]
+        #[label(primary, "regex compilation failed here")]
         span: SourceSpan,
         
         /// The regex error message
@@ -78,7 +78,7 @@ pub enum DetectDiagnostic {
         #[source_code]
         src: NamedSource<String>,
         
-        #[label("invalid time format")]
+        #[label(primary, "invalid time format")]
         span: SourceSpan,
         
         details: String,
@@ -96,7 +96,7 @@ pub enum DetectDiagnostic {
         #[source_code]
         src: NamedSource<String>,
         
-        #[label("invalid number")]
+        #[label(primary, "invalid number")]
         span: SourceSpan,
         
         details: String,
@@ -111,7 +111,7 @@ pub enum DetectDiagnostic {
         #[source_code]
         src: NamedSource<String>,
         
-        #[label("this selector")]
+        #[label(primary, "this selector")]
         selector_span: SourceSpan,
         
         #[label("doesn't support this operator")]
@@ -145,6 +145,7 @@ fn suggest_selector(invalid: &str) -> Option<String> {
     best_match.map(|s| format!("Did you mean '{}'?", s))
 }
 
+
 /// Simple Levenshtein distance implementation
 fn levenshtein_distance(s1: &str, s2: &str) -> usize {
     let len1 = s1.len();
@@ -177,7 +178,15 @@ pub fn pest_to_diagnostic(
     filename: Option<&str>,
 ) -> DetectDiagnostic {
     let span = match pest_err.location {
-        pest::error::InputLocation::Pos(pos) => (pos, 0).into(),
+        pest::error::InputLocation::Pos(pos) => {
+            // Simple UTF-8-aware single character span
+            let char_len = source[pos..]
+                .chars()
+                .next()
+                .map(|c| c.len_utf8())
+                .unwrap_or(1);
+            (pos, char_len).into()
+        },
         pest::error::InputLocation::Span((start, end)) => (start, end - start).into(),
     };
     
@@ -229,9 +238,15 @@ pub fn parse_error_to_diagnostic(
         
         ParseError::Structure { kind, location } => {
             let span = if let Some((line, col)) = location {
-                // Convert line/col to byte position (approximation)
+                // Convert line/col to byte position
                 let pos = estimate_byte_position(source, *line, *col);
-                (pos, 0).into()
+                // Simple UTF-8-aware single character span
+                let char_len = source[pos..]
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(1);
+                (pos, char_len).into()
             } else {
                 (0, source.len()).into()
             };
@@ -312,22 +327,43 @@ pub fn parse_error_to_diagnostic(
     }
 }
 
-/// Estimate byte position from line/column
+/// Estimate byte position from line/column (properly handles UTF-8)
 fn estimate_byte_position(source: &str, line: usize, col: usize) -> usize {
-    let mut current_line = 1;
-    let mut last_newline = 0;
+    if line == 0 || col == 0 {
+        return 0;
+    }
     
-    for (i, ch) in source.char_indices() {
-        if current_line == line {
-            return (last_newline + col.saturating_sub(1)).min(source.len());
+    let mut byte_pos = 0;
+    let mut current_line = 1;
+    let mut current_col = 1;
+    
+    for ch in source.chars() {
+        if current_line == line && current_col == col {
+            return byte_pos;
         }
+        
         if ch == '\n' {
             current_line += 1;
-            last_newline = i + 1;
+            current_col = 1;
+            byte_pos += ch.len_utf8();
+        } else {
+            current_col += 1;
+            byte_pos += ch.len_utf8();
+        }
+        
+        // If we've passed the target line
+        if current_line > line {
+            break;
         }
     }
     
-    source.len()
+    // If we're at the target line but haven't reached the column,
+    // return the current position (end of string or line)
+    if current_line == line {
+        byte_pos.min(source.len())
+    } else {
+        source.len()
+    }
 }
 
 #[cfg(test)]
@@ -340,14 +376,42 @@ mod tests {
         assert_eq!(levenshtein_distance("a", "a"), 0);
         assert_eq!(levenshtein_distance("a", "b"), 1);
         assert_eq!(levenshtein_distance("size", "siz"), 1);
-        assert_eq!(levenshtein_distance("stem", "name"), 3);
+        assert_eq!(levenshtein_distance("stem", "name"), 4); // s->n, t->a, e->m, m->e
     }
     
     #[test]
     fn test_suggest_selector() {
         assert_eq!(suggest_selector("siz"), Some("Did you mean 'size'?".to_string()));
         assert_eq!(suggest_selector("nam"), Some("Did you mean 'name'?".to_string()));
-        assert_eq!(suggest_selector("modiifed"), None); // too many edits
-        assert_eq!(suggest_selector("zzzzz"), None);
+        // "modiifed" is actually 2 edits from "modified" (remove one 'i', change 'e' to 'i')
+        assert_eq!(suggest_selector("modiifed"), Some("Did you mean 'modified'?".to_string()));
+        assert_eq!(suggest_selector("zzzzz"), None); // no close match
+    }
+    
+    #[test]
+    fn test_estimate_byte_position_utf8() {
+        // Test with ASCII
+        let ascii = "hello\nworld";
+        assert_eq!(estimate_byte_position(ascii, 1, 1), 0);
+        assert_eq!(estimate_byte_position(ascii, 1, 3), 2);
+        assert_eq!(estimate_byte_position(ascii, 2, 1), 6);
+        assert_eq!(estimate_byte_position(ascii, 2, 3), 8);
+        
+        // Test with emoji (4-byte UTF-8)
+        let emoji = "path == '👍test'";
+        assert_eq!(estimate_byte_position(emoji, 1, 1), 0);  // 'p'
+        assert_eq!(estimate_byte_position(emoji, 1, 10), 9); // '👍' starts at byte 9
+        assert_eq!(estimate_byte_position(emoji, 1, 11), 13); // 't' after emoji
+        
+        // Test with accented characters (2-byte UTF-8)
+        let accented = "café == 'naïve'";
+        assert_eq!(estimate_byte_position(accented, 1, 1), 0);  // 'c'
+        assert_eq!(estimate_byte_position(accented, 1, 4), 3);  // 'é' at byte 3
+        assert_eq!(estimate_byte_position(accented, 1, 5), 5);  // ' ' after 'é'
+        
+        // Test with mixed UTF-8
+        let mixed = "emoji👍\nnext";
+        assert_eq!(estimate_byte_position(mixed, 1, 6), 5);  // '👍' starts at byte 5
+        assert_eq!(estimate_byte_position(mixed, 2, 1), 10); // 'n' on next line
     }
 }
