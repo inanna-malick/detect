@@ -39,10 +39,6 @@ pub enum TypedPredicate {
 }
 
 impl TypedPredicate {
-    // =========================================================================
-    // Helper methods for reducing repetitive parsing patterns
-    // =========================================================================
-
     /// Parse numeric operator and value from a pair
     fn parse_numeric_op_raw(
         pair: Pair<'_, Rule>,
@@ -60,9 +56,7 @@ impl TypedPredicate {
                 Ok((NumericOp::NotEquals, inner.next()))
             }
             Rule::numeric_comparison => {
-                let op_pair = inner.next().ok_or_else(|| {
-                    ParseError::missing_token("comparison operator", "numeric_comparison")
-                })?;
+                let op_pair = inner.next().ok_or(ParseError::Internal("grammar guarantees numeric_comparison has operator"))?;
                 let op = match op_pair.as_rule() {
                     Rule::gt => NumericOp::Greater,
                     Rule::gteq => NumericOp::GreaterOrEqual,
@@ -93,9 +87,7 @@ impl TypedPredicate {
                 Ok((TemporalOp::NotEquals, inner.next()))
             }
             Rule::temporal_comparison => {
-                let op_pair = inner.next().ok_or_else(|| {
-                    ParseError::missing_token("comparison operator", "temporal_comparison")
-                })?;
+                let op_pair = inner.next().ok_or(ParseError::Internal("grammar guarantees temporal_comparison has operator"))?;
                 let op = match op_pair.as_rule() {
                     Rule::gt | Rule::gteq => TemporalOp::After,
                     Rule::lt | Rule::lteq => TemporalOp::Before,
@@ -114,9 +106,7 @@ impl TypedPredicate {
             for set_items in set_literal.into_inner() {
                 for item in set_items.into_inner() {
                     if item.as_rule() == Rule::set_item {
-                        let inner_item = item.into_inner().next().ok_or_else(|| {
-                            ParseError::missing_token("set item value", "set item")
-                        })?;
+                        let inner_item = item.into_inner().next().ok_or(ParseError::Internal("grammar guarantees set_item has value"))?;
                         let value = match inner_item.as_rule() {
                             Rule::quoted_string => Self::extract_string_value(inner_item)?,
                             Rule::set_token => inner_item.as_str().to_string(),
@@ -216,9 +206,7 @@ impl TypedPredicate {
                         first
                             .into_inner()
                             .find_map(|t| Self::path_rule_to_selector(t.as_rule()))
-                            .ok_or_else(|| {
-                                ParseError::missing_token("path component", "path_with_component")
-                            })
+                            .ok_or(ParseError::Internal("grammar guarantees path_with_component has valid component"))
                     }
                     rule => Err(ParseError::Structure {
                         kind: StructureErrorKind::UnexpectedRule { rule },
@@ -293,7 +281,7 @@ impl TypedPredicate {
     fn extract_string_value_from_pairs(mut pairs: Pairs<'_, Rule>) -> Result<String, ParseError> {
         let pair = pairs
             .next()
-            .ok_or_else(|| ParseError::missing_token("string value", "string value extraction"))?;
+            .ok_or(ParseError::Internal("grammar guarantees string value exists"))?;
         Self::extract_string_value(pair)
     }
 
@@ -303,7 +291,7 @@ impl TypedPredicate {
                 let inner = pair
                     .into_inner()
                     .next()
-                    .ok_or_else(|| ParseError::missing_token("string content", "string_value"))?;
+                    .ok_or(ParseError::Internal("grammar guarantees string_value has content"))?;
                 Self::extract_string_value(inner)
             }
             Rule::quoted_string => Self::extract_quoted_string(pair),
@@ -316,11 +304,11 @@ impl TypedPredicate {
         let quoted = pair
             .into_inner()
             .next()
-            .ok_or_else(|| ParseError::missing_token("quoted content", "quoted string"))?;
+            .ok_or(ParseError::Internal("grammar guarantees quoted_string has content"))?;
         let inner_str = quoted
             .into_inner()
             .next()
-            .ok_or_else(|| ParseError::missing_token("string content", "quoted string"))?;
+            .ok_or(ParseError::Internal("grammar guarantees quoted content has string"))?;
         Ok(inner_str.as_str().to_string())
     }
 
@@ -330,14 +318,12 @@ impl TypedPredicate {
         // Parse selector (size or depth)
         let selector_pair = inner
             .next()
-            .ok_or_else(|| ParseError::missing_token("numeric selector", "numeric_predicate"))?;
+            .ok_or(ParseError::Internal("grammar guarantees numeric_predicate has selector"))?;
 
         let selector = match selector_pair.as_rule() {
             Rule::numeric_selector => {
                 // Unwrap the numeric_selector wrapper
-                let inner = selector_pair.into_inner().next().ok_or_else(|| {
-                    ParseError::missing_token("numeric selector type", "numeric_selector")
-                })?;
+                let inner = selector_pair.into_inner().next().ok_or(ParseError::Internal("grammar guarantees numeric_selector has type"))?;
                 match inner.as_rule() {
                     Rule::meta_size | Rule::bare_size => NumericSelectorType::Size,
                     Rule::meta_depth | Rule::bare_depth => NumericSelectorType::Depth,
@@ -352,7 +338,7 @@ impl TypedPredicate {
         // Parse operator and value
         let op_value_pair = inner
             .next()
-            .ok_or_else(|| ParseError::missing_token("operator and value", "numeric_predicate"))?;
+            .ok_or(ParseError::Internal("grammar guarantees numeric_predicate has op_value"))?;
 
         let (op, value) = Self::parse_numeric_op_value(op_value_pair)?;
         Ok(TypedPredicate::Numeric {
@@ -365,7 +351,7 @@ impl TypedPredicate {
     fn parse_numeric_op_value(pair: Pair<'_, Rule>) -> Result<(NumericOp, u64), ParseError> {
         let (op, value_pair) = Self::parse_numeric_op_raw(pair)?;
         let value_pair = value_pair
-            .ok_or_else(|| ParseError::missing_token("numeric value", "numeric operator"))?;
+            .ok_or(ParseError::Internal("grammar guarantees numeric operator has value"))?;
         let value = Self::parse_numeric_value(value_pair)?;
         Ok((op, value))
     }
@@ -376,7 +362,7 @@ impl TypedPredicate {
                 let inner = pair
                     .into_inner()
                     .next()
-                    .ok_or_else(|| ParseError::missing_token("numeric content", "numeric_value"))?;
+                    .ok_or(ParseError::Internal("grammar guarantees numeric_value has content"))?;
                 Self::parse_numeric_value(inner)
             }
             Rule::size_value => crate::parser::parse_size_value_as_bytes(pair),
@@ -394,20 +380,16 @@ impl TypedPredicate {
         // Parse selector
         let selector_pair = inner
             .next()
-            .ok_or_else(|| ParseError::missing_token("temporal selector", "temporal_predicate"))?;
+            .ok_or(ParseError::Internal("grammar guarantees temporal_predicate has selector"))?;
 
         let selector = match selector_pair.as_rule() {
             Rule::temporal_selector => {
                 // Unwrap the temporal_selector wrapper
-                let inner = selector_pair.into_inner().next().ok_or_else(|| {
-                    ParseError::missing_token("temporal selector type", "temporal_selector")
-                })?;
+                let inner = selector_pair.into_inner().next().ok_or(ParseError::Internal("grammar guarantees temporal_selector has type"))?;
                 match inner.as_rule() {
                     Rule::time_with_domain => {
                         // Extract the actual time component after "time."
-                        let time_component = inner.into_inner().next().ok_or_else(|| {
-                            ParseError::missing_token("time component", "time_with_domain")
-                        })?;
+                        let time_component = inner.into_inner().next().ok_or(ParseError::Internal("grammar guarantees time_with_domain has component"))?;
                         match time_component.as_rule() {
                             Rule::modified => TemporalSelectorType::Modified,
                             Rule::created => TemporalSelectorType::Created,
@@ -417,9 +399,7 @@ impl TypedPredicate {
                     }
                     Rule::bare_time => {
                         // Handle bare time selector
-                        let time_component = inner.into_inner().next().ok_or_else(|| {
-                            ParseError::missing_token("bare time component", "bare_time")
-                        })?;
+                        let time_component = inner.into_inner().next().ok_or(ParseError::Internal("grammar guarantees bare_time has component"))?;
                         match time_component.as_rule() {
                             Rule::modified => TemporalSelectorType::Modified,
                             Rule::created => TemporalSelectorType::Created,
@@ -442,7 +422,7 @@ impl TypedPredicate {
         // Parse operator and value
         let op_value_pair = inner
             .next()
-            .ok_or_else(|| ParseError::missing_token("operator and value", "temporal_predicate"))?;
+            .ok_or(ParseError::Internal("grammar guarantees temporal_predicate has op_value"))?;
 
         let (op, value) = Self::parse_temporal_op_value(op_value_pair)?;
         Ok(TypedPredicate::Temporal {
@@ -455,7 +435,7 @@ impl TypedPredicate {
     fn parse_temporal_op_value(pair: Pair<'_, Rule>) -> Result<(TemporalOp, String), ParseError> {
         let (op, value_pair) = Self::parse_temporal_op_raw(pair)?;
         let value_pair = value_pair
-            .ok_or_else(|| ParseError::missing_token("temporal value", "temporal operator"))?;
+            .ok_or(ParseError::Internal("grammar guarantees temporal operator has value"))?;
         let value = Self::parse_temporal_value(value_pair)?;
         Ok((op, value))
     }
@@ -463,9 +443,7 @@ impl TypedPredicate {
     fn parse_temporal_value(pair: Pair<'_, Rule>) -> Result<String, ParseError> {
         match pair.as_rule() {
             Rule::temporal_value => {
-                let inner = pair.into_inner().next().ok_or_else(|| {
-                    ParseError::missing_token("temporal content", "temporal_value")
-                })?;
+                let inner = pair.into_inner().next().ok_or(ParseError::Internal("grammar guarantees temporal_value has content"))?;
                 Self::parse_temporal_value(inner)
             }
             Rule::absolute_date => Ok(pair.as_str().to_string()),

@@ -3,6 +3,11 @@ use std::{env::set_current_dir, fs::create_dir_all};
 use slog::{o, Discard, Logger};
 use tempdir::TempDir;
 
+// Test helper functions
+fn test_logger() -> Logger {
+    Logger::root(Discard, o!())
+}
+
 fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
     let (path, name) = if path.contains('/') {
         path.rsplit_once('/').unwrap()
@@ -50,7 +55,7 @@ impl<'a> Case<'a> {
         let mut out = Vec::new();
         set_current_dir(tmp_dir.path()).unwrap();
         detect::parse_and_run_fs(
-            Logger::root(Discard, o!()),
+            test_logger(),
             tmp_dir.path(),
             false,
             self.expr.to_owned(),

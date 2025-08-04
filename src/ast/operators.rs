@@ -1,9 +1,3 @@
-//! Operator types for AST expressions
-
-// ============================================================================
-// Operator Enums
-// ============================================================================
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringOp {
     Equals,

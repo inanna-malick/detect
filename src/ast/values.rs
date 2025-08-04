@@ -1,13 +1,8 @@
 //! Simple value types with pest-ast derives
-
 use pest_ast::*;
 
 use super::parse_helpers::span_to_string;
 use crate::parser::pratt_parser::Rule;
-
-// ============================================================================
-// Simple Value Types (using pest-ast derives)
-// ============================================================================
 
 #[derive(Debug, FromPest)]
 #[pest_ast(rule(Rule::bare_string))]

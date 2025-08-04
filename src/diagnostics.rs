@@ -211,7 +211,7 @@ pub fn parse_error_to_diagnostic(
     };
 
     match error {
-        ParseError::Syntax(pest_err) => pest_to_diagnostic(pest_err, source, filename),
+        ParseError::Syntax(pest_err) => pest_to_diagnostic(&pest_err.0, source, filename),
 
         ParseError::Structure { kind, location } => {
             let span = if let Some((line, col)) = location {
@@ -300,6 +300,11 @@ pub fn parse_error_to_diagnostic(
                     help_text: Some(predicate_err.to_string()),
                 }
             }
+        }
+        ParseError::Internal(msg) => DetectDiagnostic::Syntax {
+            src,
+            bad_bit: (0, source.len()).into(),
+            help_text: Some(format!("Internal error: {}", msg)),
         }
     }
 }

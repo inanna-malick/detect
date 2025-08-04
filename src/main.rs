@@ -25,9 +25,6 @@ struct Args {
     /// include gitignored files
     #[arg(short = 'i')]
     visit_gitignored: bool,
-    // /// search within git ref (commit/branch/tag)
-    // #[arg(short = 'g', long = "gitref")]
-    // gitref: Option<String>,
     /// log level (error/warn/info/debug)
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
@@ -53,19 +50,8 @@ pub async fn main() -> miette::Result<()> {
         None => current_dir().into_diagnostic()?,
     };
 
-    // Create safe output handler that manages broken pipe errors
     let mut output = safe_stdout();
 
-    // let expr = parse_expr(&args.expr)?;
-
-    // if let Some(ref_) = args.gitref {
-    //     run_git(logger, &root_path, &ref_, expr, |s| {
-    //         if let Err(e) = output.writeln(s) {
-    //             eprintln!("Output error: {}", e);
-    //             std::process::exit(1);
-    //         }
-    //     })?;
-    // } else {
     let result = parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
         if let Err(e) = output.writeln(&s.to_string_lossy()) {
             eprintln!("Output error: {}", e);
@@ -78,11 +64,9 @@ pub async fn main() -> miette::Result<()> {
     match result {
         Ok(()) => Ok(()),
         Err(detect_err) => {
-            // Try to convert to a diagnostic for rich error display
             if let Some(diagnostic) = detect_err.to_diagnostic() {
                 Err(Report::new(diagnostic))
             } else {
-                // Fall back to regular error display
                 Err(miette::Error::msg(detect_err.to_string()))
             }
         }

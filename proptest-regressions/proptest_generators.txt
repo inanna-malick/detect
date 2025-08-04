@@ -20,3 +20,5 @@ cc d99a315168932c977c1ab2ce8214143f3afbacb1d4d7daba9ac336738e2f790c # shrinks to
 cc 56e6ce1b46f947b020a08645a1519f53792ede80381a3c6fa524e32a28b9565a # shrinks to expr = And(Or(Predicate(Name(Filename(Regex(Regex(".*"))))), And(Predicate(Name(Filename(Regex(Regex(".*"))))), Predicate(Name(Extension(In([",", ""])))))), Or(Predicate(Name(Filename(Regex(Regex(".*"))))), And(Predicate(Metadata(Type(Equals("Qf_70/.Z~")))), Predicate(Name(Path(Contains("J4Z%^-y%}]O$d_(V@4.(")))))))
 cc 0d6fdbd41dfea5d55a68c0a1585f935959c90d897f304f7a24583b50ab70f97f # shrinks to pred = Name(Extension(In(["", ","])))
 cc 1a282b2808d87733e5ff537bdfec3b2d7b6294e8c27ea28bdc721555d0d0da63 # shrinks to pred = Metadata(Modified(Before(2025-08-01T13:24:11.434686-07:00)))
+cc 0fc60ded70985b6e9aee47d1234a71ec17f9850a8b480e6894e06cbf729cda96 # shrinks to expr = Not(Not(Predicate(Name(DirPath(Regex(Regex("\\w+")))))))
+cc 264124f6b1e02ec696d5e40eabce007885afafca2243bf326b5782e941882f4c # shrinks to expr = Or(Predicate(Name(BaseName(Regex(Regex(".*"))))), Not(Predicate(Metadata(Filesize(In(Left(0..)))))))

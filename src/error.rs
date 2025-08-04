@@ -1,62 +1,21 @@
-use std::fmt;
 use std::sync::Arc;
+use thiserror::Error;
 
 /// Structured error type for detect operations
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum DetectError {
     /// Parse error with the input expression and optional source
+    #[error("{error}")]
     ParseError {
         /// The original parse error
+        #[source]
         error: crate::parse_error::ParseError,
         /// The original source text for diagnostic display
         source: Option<Arc<str>>,
     },
     /// Any other error (gradual migration path)
-    Other(anyhow::Error),
-}
-
-impl fmt::Display for DetectError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DetectError::ParseError { error, source } => {
-                // Check if we should use Miette formatting
-                if let Some(src) = source {
-                    // Try to create a diagnostic and display it
-                    let _diagnostic =
-                        crate::diagnostics::parse_error_to_diagnostic(error, src, None);
-                    // For now, fall back to regular display
-                    // In main.rs we'll use miette::Report for proper rendering
-                    write!(f, "{}", error)?;
-                    if let Some(hint) = error.hint() {
-                        write!(f, "\n\n{}", hint)?;
-                    }
-                } else {
-                    // Regular display without source
-                    write!(f, "{}", error)?;
-                    if let Some(hint) = error.hint() {
-                        write!(f, "\n\n{}", hint)?;
-                    }
-                }
-                Ok(())
-            }
-            DetectError::Other(e) => write!(f, "{}", e),
-        }
-    }
-}
-
-impl std::error::Error for DetectError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            DetectError::ParseError { error, .. } => Some(error),
-            DetectError::Other(e) => e.source(),
-        }
-    }
-}
-
-impl From<anyhow::Error> for DetectError {
-    fn from(err: anyhow::Error) -> Self {
-        DetectError::Other(err)
-    }
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 // Note: We don't implement From<DetectError> for anyhow::Error because
@@ -70,6 +29,16 @@ impl From<ParseError> for DetectError {
         DetectError::ParseError {
             error: err,
             source: None,
+        }
+    }
+}
+
+impl DetectError {
+    /// Get hint for display
+    pub fn hint(&self) -> Option<String> {
+        match self {
+            DetectError::ParseError { error, .. } => error.hint(),
+            _ => None,
         }
     }
 }

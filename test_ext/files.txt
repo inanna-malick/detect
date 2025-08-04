@@ -1,3 +1,0 @@
-Testing .gitignore.d
-Testing file.2
-Testing archive.1

@@ -1,10 +1,3 @@
-//! AST types for detect expression language
-//!
-//! This module uses a hybrid approach:
-//! - Simple structures are parsed with pest-ast derives
-//! - Complex predicates are parsed manually
-//! - Expressions use PrattParser for precedence
-
 mod parse_helpers;
 
 mod values;

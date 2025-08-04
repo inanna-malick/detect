@@ -1,9 +1,3 @@
-//! Selector types for AST expressions
-
-// ============================================================================
-// Selector Enums
-// ============================================================================
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StringSelectorType {
     PathFull,

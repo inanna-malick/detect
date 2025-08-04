@@ -123,15 +123,15 @@ fn parse_typed_predicates(
             }),
         })
         .map_prefix(|op, rhs| match op.as_rule() {
-            Rule::neg => Ok(Expr::Not(Box::new(rhs?))),
+            Rule::neg => Ok(Expr::negate(rhs?)),
             rule => Err(ParseError::Structure {
                 kind: StructureErrorKind::UnexpectedRule { rule },
                 location: None,
             }),
         })
         .map_infix(|lhs, op, rhs| match op.as_rule() {
-            Rule::and => Ok(Expr::And(Box::new(lhs?), Box::new(rhs?))),
-            Rule::or => Ok(Expr::Or(Box::new(lhs?), Box::new(rhs?))),
+            Rule::and => Ok(Expr::and(lhs?, rhs?)),
+            Rule::or => Ok(Expr::or(lhs?, rhs?)),
             rule => Err(ParseError::Structure {
                 kind: StructureErrorKind::UnexpectedRule { rule },
                 location: None,
@@ -152,23 +152,11 @@ pub fn parse_expr(
         .op(Op::prefix(Rule::neg));
 
     let mut parse_tree = pratt_parser::Parser::parse(Rule::program, input)
-        .map_err(|e| ParseError::Syntax(Box::new(e)))?;
+        .map_err(|e| ParseError::Syntax(crate::parse_error::PestError(Box::new(e))))?;
 
-    let program = parse_tree.next().ok_or(ParseError::Structure {
-        kind: StructureErrorKind::MissingToken {
-            expected: "program",
-            context: "root",
-        },
-        location: None,
-    })?;
+    let program = parse_tree.next().ok_or(ParseError::Internal("grammar guarantees program exists at root"))?;
 
-    let expr_pair = program.into_inner().next().ok_or(ParseError::Structure {
-        kind: StructureErrorKind::MissingToken {
-            expected: "expression",
-            context: "program",
-        },
-        location: None,
-    })?;
+    let expr_pair = program.into_inner().next().ok_or(ParseError::Internal("grammar guarantees program contains expression"))?;
 
     let pairs = expr_pair.into_inner();
 

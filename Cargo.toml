@@ -9,9 +9,6 @@ edition = "2021"
 name = "detect"
 path = "src/main.rs"
 
-[[bin]]
-name = "detect-mcp"
-path = "src/bin/stdio_mcp.rs"
 
 [features]
 viz = ["dep:recursion-visualize"]

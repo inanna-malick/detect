@@ -1,7 +1,45 @@
 use crate::predicate::{Op, RhsValue, Selector};
 use std::fmt;
+use thiserror::Error;
 
 use crate::parser::pratt_parser::Rule;
+
+/// Wrapper for pest errors to provide custom formatting
+#[derive(Debug)]
+pub struct PestError(pub Box<pest::error::Error<Rule>>);
+
+impl fmt::Display for PestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Clone the error to use renamed_rules() which takes ownership
+        let user_friendly = self.0.clone().renamed_rules(rule_to_user_friendly);
+        write!(f, "{}", user_friendly)?;
+
+        // Add contextual hints based on the error
+        if let pest::error::ErrorVariant::ParsingError { positives, .. } = &self.0.variant {
+            let bare_selectors = [
+                Rule::bare_name,
+                Rule::bare_stem,
+                Rule::bare_extension,
+                Rule::bare_parent,
+            ];
+
+            if positives.iter().any(|r| bare_selectors.contains(r)) {
+                if let pest::error::LineColLocation::Pos((1, col)) = self.0.line_col {
+                    if col <= 10 {
+                        write!(f, "\n\nHint: Selectors like 'name', 'stem', 'extension' should be prefixed with 'path.' (e.g., 'path.name', 'path.extension')")?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for PestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&*self.0)
+    }
+}
 
 /// Transform Pest rule names to user-friendly descriptions
 /// This follows the idiomatic pattern using renamed_rules()
@@ -57,105 +95,104 @@ fn rule_to_user_friendly(rule: &Rule) -> String {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParseError {
     /// Pest grammar/syntax error - preserves location info
-    Syntax(Box<pest::error::Error<Rule>>),
+    #[error(transparent)]
+    Syntax(#[from] PestError),
 
     /// Structural errors during AST construction
+    #[error("{kind}")]
     Structure {
         kind: StructureErrorKind,
         location: Option<(usize, usize)>,
     },
 
     /// Errors from predicate parsing
+    #[error("Invalid {source} for {selector} {operator} {value}")]
     Predicate {
         selector: Selector,
         operator: Op,
         value: RhsValue,
+        #[source]
         source: PredicateParseError,
     },
+
+    /// Internal parser error - indicates grammar invariant violation
+    #[error("Internal parser error: {0}")]
+    Internal(&'static str),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum StructureErrorKind {
-    InvalidSelector {
-        found: String,
-    },
-    MissingToken {
-        expected: &'static str,
-        context: &'static str,
-    },
-    UnexpectedRule {
-        rule: Rule,
-    },
+    #[error("Invalid selector: {found}")]
+    InvalidSelector { found: String },
+    #[error("Unexpected rule: {rule:?}")]
+    UnexpectedRule { rule: Rule },
+    #[error("Expected {expected}, found '{found}'")]
     InvalidToken {
         expected: &'static str,
         found: String,
     },
-    ExpectedRule {
-        expected: Rule,
-        found: Rule,
-    },
-    ExpectedOneOf {
-        expected: &'static [Rule],
-        found: Rule,
-    },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum PredicateParseError {
     /// Regex compilation failed
-    Regex(regex::Error),
+    #[error("Invalid regex pattern")]
+    Regex(#[from] regex::Error),
 
     /// Numeric parsing failed
-    Numeric(std::num::ParseIntError),
+    #[error("Invalid number")]
+    Numeric(#[from] std::num::ParseIntError),
 
     /// Temporal parsing failed
-    Temporal(TemporalError),
+    #[error("Invalid time value")]
+    Temporal(#[from] TemporalError),
 
     /// DFA compilation failed
+    #[error("DFA compilation failed: {0}")]
     Dfa(String), // aho_corasick errors don't implement Error trait well
 
     /// Operator not compatible with selector
+    #[error("Incompatible operation: {reason}")]
     IncompatibleOperation { reason: &'static str },
 
     /// Value type not compatible with selector/operator
+    #[error("Expected {expected}, found {found}")]
     IncompatibleValue {
         expected: &'static str,
         found: String,
     },
 
     /// JSON parsing for set literals
-    SetParse(serde_json::Error),
+    #[error("Invalid set literal")]
+    SetParse(#[from] serde_json::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("Temporal parse error for '{input}': {kind}")]
 pub struct TemporalError {
     pub input: String,
     pub kind: TemporalErrorKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum TemporalErrorKind {
+    #[error("Invalid format")]
     InvalidFormat,
+    #[error("Unknown time unit: {0}")]
     UnknownUnit(String),
-    ParseInt(std::num::ParseIntError),
-    InvalidDate(chrono::ParseError),
+    #[error("Invalid number")]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error("Invalid date")]
+    InvalidDate(#[from] chrono::ParseError),
 }
 
 impl ParseError {
     // =========================================================================
     // Builder methods for consistent error construction
     // =========================================================================
-
-    /// Create a missing token error
-    pub fn missing_token(expected: &'static str, context: &'static str) -> Self {
-        ParseError::Structure {
-            kind: StructureErrorKind::MissingToken { expected, context },
-            location: None,
-        }
-    }
 
     /// Create an unexpected rule error
     pub fn unexpected_rule(rule: Rule, location: Option<(usize, usize)>) -> Self {
@@ -201,22 +238,6 @@ impl ParseError {
         }
     }
 
-    /// Create an expected rule error
-    pub fn expected_rule(expected: Rule, found: Rule) -> Self {
-        ParseError::Structure {
-            kind: StructureErrorKind::ExpectedRule { expected, found },
-            location: None,
-        }
-    }
-
-    /// Create an expected one of rules error
-    pub fn expected_one_of(expected: &'static [Rule], found: Rule) -> Self {
-        ParseError::Structure {
-            kind: StructureErrorKind::ExpectedOneOf { expected, found },
-            location: None,
-        }
-    }
-
     /// Add location information to an error
     pub fn with_location(mut self, location: (usize, usize)) -> Self {
         if let ParseError::Structure {
@@ -232,7 +253,7 @@ impl ParseError {
     /// Get location info if available
     pub fn location(&self) -> Option<(usize, usize)> {
         match self {
-            ParseError::Syntax(e) => match e.line_col {
+            ParseError::Syntax(e) => match e.0.line_col {
                 pest::error::LineColLocation::Pos((line, col)) => Some((line, col)),
                 pest::error::LineColLocation::Span((line, col), _) => Some((line, col)),
             },
@@ -336,93 +357,6 @@ impl ParseError {
     }
 }
 
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::Syntax(e) => {
-                // Clone the error to use renamed_rules() which takes ownership
-                // This is the idiomatic pattern from the Rust community
-                let user_friendly = e.clone().renamed_rules(rule_to_user_friendly);
-
-                // Format the error with Pest's built-in formatting
-                write!(f, "{}", user_friendly)?;
-
-                // Add contextual hints based on the error
-                if let pest::error::ErrorVariant::ParsingError { positives, .. } = &e.variant {
-                    // Check if it looks like a bare selector without path prefix
-                    let bare_selectors = [
-                        Rule::bare_name,
-                        Rule::bare_stem,
-                        Rule::bare_extension,
-                        Rule::bare_parent,
-                    ];
-
-                    if positives.iter().any(|r| bare_selectors.contains(r)) {
-                        // Check if we're at the start of the expression
-                        if let pest::error::LineColLocation::Pos((1, col)) = e.line_col {
-                            if col <= 10 {
-                                write!(f, "\n\nHint: Selectors like 'name', 'stem', 'extension' should be prefixed with 'path.' (e.g., 'path.name', 'path.extension')")?;
-                            }
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-            ParseError::Structure { kind, .. } => {
-                write!(f, "{}", kind)
-            }
-            ParseError::Predicate {
-                selector,
-                operator,
-                value,
-                source,
-            } => {
-                write!(
-                    f,
-                    "Invalid {} for @{:?} {:?} {:?}: {}",
-                    source.value_description(),
-                    selector,
-                    operator,
-                    value,
-                    source
-                )
-            }
-        }
-    }
-}
-
-impl fmt::Display for StructureErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StructureErrorKind::InvalidSelector { found } => {
-                write!(f, "Invalid selector: @{}", found)
-            }
-            StructureErrorKind::MissingToken { expected, context } => {
-                write!(f, "Expected {} in {}", expected, context)
-            }
-            StructureErrorKind::UnexpectedRule { rule } => {
-                write!(f, "Unexpected grammar rule: {:?}", rule)
-            }
-            StructureErrorKind::InvalidToken { expected, found } => {
-                write!(f, "Invalid token: expected {}, found '{}'", expected, found)
-            }
-            StructureErrorKind::ExpectedRule { expected, found } => {
-                write!(f, "Expected {:?}, found {:?}", expected, found)
-            }
-            StructureErrorKind::ExpectedOneOf { expected, found } => {
-                let rules: Vec<String> = expected.iter().map(|r| format!("{:?}", r)).collect();
-                write!(
-                    f,
-                    "Expected one of [{}], found {:?}",
-                    rules.join(", "),
-                    found
-                )
-            }
-        }
-    }
-}
-
 impl PredicateParseError {
     pub fn value_description(&self) -> &'static str {
         match self {
@@ -434,95 +368,5 @@ impl PredicateParseError {
             PredicateParseError::IncompatibleValue { .. } => "value type",
             PredicateParseError::SetParse(_) => "set literal",
         }
-    }
-}
-
-impl fmt::Display for PredicateParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PredicateParseError::Regex(e) => write!(f, "{}", e),
-            PredicateParseError::Numeric(e) => write!(f, "{}", e),
-            PredicateParseError::Temporal(e) => write!(f, "{}", e),
-            PredicateParseError::Dfa(e) => write!(f, "DFA compilation failed: {}", e),
-            PredicateParseError::IncompatibleOperation { reason } => write!(f, "{}", reason),
-            PredicateParseError::IncompatibleValue { expected, found } => {
-                write!(f, "Type mismatch: expected {}, found {}", expected, found)
-            }
-            PredicateParseError::SetParse(e) => write!(f, "Invalid set literal: {}", e),
-        }
-    }
-}
-
-impl fmt::Display for TemporalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.kind)
-    }
-}
-
-impl fmt::Display for TemporalErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TemporalErrorKind::InvalidFormat => write!(f, "Invalid time format"),
-            TemporalErrorKind::UnknownUnit(unit) => write!(f, "Unknown time unit: '{}'", unit),
-            TemporalErrorKind::ParseInt(e) => write!(f, "Invalid number: {}", e),
-            TemporalErrorKind::InvalidDate(e) => write!(f, "Invalid date: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            ParseError::Syntax(e) => Some(e),
-            ParseError::Predicate { source, .. } => Some(source),
-            _ => None,
-        }
-    }
-}
-
-impl std::error::Error for PredicateParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            PredicateParseError::Regex(e) => Some(e),
-            PredicateParseError::Numeric(e) => Some(e),
-            PredicateParseError::Temporal(e) => Some(e),
-            PredicateParseError::SetParse(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl std::error::Error for TemporalError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match &self.kind {
-            TemporalErrorKind::ParseInt(e) => Some(e),
-            TemporalErrorKind::InvalidDate(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-// Conversion from underlying error types
-impl From<regex::Error> for PredicateParseError {
-    fn from(e: regex::Error) -> Self {
-        PredicateParseError::Regex(e)
-    }
-}
-
-impl From<std::num::ParseIntError> for PredicateParseError {
-    fn from(e: std::num::ParseIntError) -> Self {
-        PredicateParseError::Numeric(e)
-    }
-}
-
-impl From<serde_json::Error> for PredicateParseError {
-    fn from(e: serde_json::Error) -> Self {
-        PredicateParseError::SetParse(e)
-    }
-}
-
-impl From<TemporalError> for PredicateParseError {
-    fn from(e: TemporalError) -> Self {
-        PredicateParseError::Temporal(e)
     }
 }

@@ -14,13 +14,10 @@ use self::short_circuit::ShortCircuit;
 /// Filesystem entity matcher expression with boolean logic and predicates
 #[derive(Debug, PartialEq, Eq)]
 pub enum Expr<Predicate> {
-    // boolean operators
     Not(Box<Self>),
     And(Box<Self>, Box<Self>),
     Or(Box<Self>, Box<Self>),
-    // predicates
     Predicate(Predicate),
-    // literal boolean values
     Literal(bool),
 }
 
@@ -29,7 +26,6 @@ impl<P: Display> Display for Expr<P> {
         match self {
             Expr::Not(e) => {
                 write!(f, "!")?;
-                // Add parentheses for complex expressions
                 match e.as_ref() {
                     Expr::And(_, _) | Expr::Or(_, _) => {
                         write!(f, "(")?;
@@ -40,29 +36,18 @@ impl<P: Display> Display for Expr<P> {
                 }
             }
             Expr::And(a, b) => {
-                // Add parentheses for Or expressions to preserve precedence
-                match a.as_ref() {
-                    Expr::Or(_, _) => {
-                        write!(f, "(")?;
-                        a.fmt(f)?;
-                        write!(f, ")")?;
-                    }
-                    _ => a.fmt(f)?,
-                }
+                write!(f, "(")?;
+                a.fmt(f)?;
                 write!(f, " && ")?;
-                match b.as_ref() {
-                    Expr::Or(_, _) => {
-                        write!(f, "(")?;
-                        b.fmt(f)?;
-                        write!(f, ")")
-                    }
-                    _ => b.fmt(f),
-                }
+                b.fmt(f)?;
+                write!(f, ")")
             }
             Expr::Or(a, b) => {
+                write!(f, "(")?;
                 a.fmt(f)?;
                 write!(f, " || ")?;
-                b.fmt(f)
+                b.fmt(f)?;
+                write!(f, ")")
             }
             Expr::Predicate(p) => p.fmt(f),
             Expr::Literal(x) => x.fmt(f),
@@ -79,6 +64,108 @@ impl<A, B, C> Expr<Predicate<A, B, C>> {
     }
     pub fn content_predicate(x: C) -> Self {
         Self::Predicate(Predicate::Content(x))
+    }
+}
+
+// Concrete helper constructors for the parser test types
+impl Expr<crate::predicate::Predicate<crate::predicate::NamePredicate, crate::predicate::MetadataPredicate, crate::predicate::StreamingCompiledContentPredicate>> {
+    // Name predicate helpers - most common patterns
+    pub fn name_eq(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::file_eq(s))
+    }
+
+    pub fn name_ne(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::ne(s)))
+    }
+
+    pub fn name_contains(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::contains(s)))
+    }
+
+    pub fn name_regex(s: &str) -> Result<Self, regex::Error> {
+        Ok(Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::regex(s)?)))
+    }
+
+    pub fn name_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::in_set(items)))
+    }
+
+    // Stem (BaseName) helpers
+    pub fn stem_eq(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::stem_eq(s))
+    }
+
+    pub fn stem_contains(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::BaseName(crate::predicate::StringMatcher::contains(s)))
+    }
+
+    // Extension helpers
+    pub fn ext_eq(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::ext_eq(s))
+    }
+
+    pub fn ext_contains(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::Extension(crate::predicate::StringMatcher::contains(s)))
+    }
+
+    pub fn ext_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::ext_in(items))
+    }
+
+    // Parent directory (DirPath) helpers
+    pub fn parent_eq(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::DirPath(crate::predicate::StringMatcher::eq(s)))
+    }
+
+    pub fn parent_contains(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::DirPath(crate::predicate::StringMatcher::contains(s)))
+    }
+
+    // Full path helpers
+    pub fn full_path_eq(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::path_eq(s))
+    }
+
+    pub fn full_path_contains(s: &str) -> Self {
+        Self::name_predicate(crate::predicate::NamePredicate::FullPath(crate::predicate::StringMatcher::contains(s)))
+    }
+
+    // Metadata helpers
+    pub fn type_eq(s: &str) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Type(crate::predicate::StringMatcher::eq(s)))
+    }
+
+    pub fn size_eq(bytes: u64) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::Equals(bytes)))
+    }
+
+    pub fn size_ne(bytes: u64) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::NotEquals(bytes)))
+    }
+
+    pub fn size_gt(bytes: u64) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Left((bytes + 1)..))))
+    }
+
+    pub fn size_gte(bytes: u64) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Left(bytes..))))
+    }
+
+    pub fn size_lt(bytes: u64) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Right(..bytes))))
+    }
+
+    pub fn size_lte(bytes: u64) -> Self {
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Right(..(bytes + 1)))))
+    }
+
+    // Content helpers
+    pub fn content_contains(pattern: &str) -> Result<Self, crate::parse_error::PredicateParseError> {
+        Ok(Self::content_predicate(crate::predicate::StreamingCompiledContentPredicate::new(regex::escape(pattern))?))
+    }
+
+    pub fn content_regex(pattern: &str) -> Result<Self, crate::parse_error::PredicateParseError> {
+        Ok(Self::content_predicate(crate::predicate::StreamingCompiledContentPredicate::new(pattern.to_string())?))
     }
 }
 
@@ -145,16 +232,16 @@ impl<P: Clone> Expr<P> {
             ExprFrame::And(_, Expr::Literal(false)) => Expr::Literal(false),
             ExprFrame::And(x, Expr::Literal(true)) => x,
             ExprFrame::And(Expr::Literal(true), x) => x,
-            ExprFrame::And(a, b) => Expr::And(Box::new(a), Box::new(b)),
+            ExprFrame::And(a, b) => Expr::and(a, b),
             // reduce Or expressions
             ExprFrame::Or(Expr::Literal(true), _) => Expr::Literal(true),
             ExprFrame::Or(_, Expr::Literal(true)) => Expr::Literal(true),
             ExprFrame::Or(x, Expr::Literal(false)) => x,
             ExprFrame::Or(Expr::Literal(false), x) => x,
-            ExprFrame::Or(a, b) => Expr::Or(Box::new(a), Box::new(b)),
+            ExprFrame::Or(a, b) => Expr::or(a, b),
             // reduce Not expressions
             ExprFrame::Not(Expr::Literal(k)) => Expr::Literal(!k),
-            ExprFrame::Not(x) => Expr::Not(Box::new(x)),
+            ExprFrame::Not(x) => Expr::negate(x),
             // Literal expressions are unchanged
             ExprFrame::Literal(x) => Expr::Literal(x),
         })

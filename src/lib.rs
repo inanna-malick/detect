@@ -20,75 +20,11 @@ use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use error::DetectError;
-use expr::{Expr, MetadataPredicate, NamePredicate};
-use git2::{Repository, RepositoryOpenFlags, TreeWalkResult};
+use expr::{MetadataPredicate, NamePredicate};
 use ignore::WalkBuilder;
 use parser::parse_expr;
-use predicate::{Predicate, StreamingCompiledContentPredicate};
-use slog::{debug, error, info, warn, Logger};
-
-pub fn run_git<F: FnMut(&str)>(
-    logger: Logger,
-    root: &Path,
-    ref_: &str,
-    expr: Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
-    mut on_match: F,
-) -> Result<(), anyhow::Error> {
-    let repository = Repository::open_ext(
-        root,
-        RepositoryOpenFlags::empty(),
-        &[] as &[&std::ffi::OsStr],
-    )?;
-
-    let ref_ = repository.revparse_single(ref_).context("ref not found")?;
-    let commit = ref_
-        .as_commit()
-        .ok_or(anyhow::Error::msg("non-commit ref target"))?;
-
-    let tree = repository.find_tree(commit.tree_id())?;
-
-    let expr = expr.map_predicate_ref(|p| match p {
-        Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
-        Predicate::Metadata(m) => Predicate::Metadata(Arc::clone(m)),
-        Predicate::Content(c) => Predicate::Content(c.as_ref()),
-    });
-
-    tree.walk(git2::TreeWalkMode::PreOrder, |parent_path, entry| {
-        let start = Instant::now();
-
-        let Some(name) = entry.name() else {
-            warn!(logger, "entry without name? weird, skip and continue"; "parent_path" => parent_path);
-            return TreeWalkResult::Skip
-        };
-        let path = format!("{}{}", parent_path, name);
-
-        debug!(logger, "walk"; "path" => &path);
-
-        match eval::git::eval(&logger, &expr, &repository, &path, entry).context(format!(
-            "failed to eval for ${} ${}",
-            entry.name().unwrap_or("[unnamed]"),
-            entry.id()
-        )) {
-            Ok(is_match) => {
-                let duration = start.elapsed();
-
-                debug!(logger, "visited entity"; "duration" => #?duration, "result" => is_match);
-
-                if is_match {
-                    on_match(&path);
-                }
-
-                TreeWalkResult::Ok
-            }
-            Err(e) => {
-                error!(logger, "failed reading git entry, aborting tree walk"; "err" => #?e);
-                TreeWalkResult::Abort
-            }
-        }
-    })?;
-
-    Ok(())
-}
+use predicate::Predicate;
+use slog::{debug, info, Logger};
 
 pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     logger: Logger,
@@ -97,7 +33,6 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     expr: String,
     mut on_match: F,
 ) -> Result<(), DetectError> {
-    // Store the expression for error reporting
     let expr_source = std::sync::Arc::from(expr.as_str());
 
     match parse_expr(&expr) {
@@ -137,9 +72,6 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             Ok(())
         }
-        Err(err) => {
-            // Create error with source text for diagnostics
-            Err(DetectError::parse_with_source(err, expr_source))
-        }
+        Err(err) => Err(DetectError::parse_with_source(err, expr_source)),
     }
 }

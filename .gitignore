@@ -1,2 +1,6 @@
 /target
 /Cargo.lock
+/tmp
+/test_*
+NEXT*.md
+.claude/*

@@ -14,7 +14,7 @@ pub(super) trait ParseIterExt<'i> {
 impl<'i> ParseIterExt<'i> for Pairs<'i, Rule> {
     fn expect_next(&mut self, context: &'static str) -> Result<Pair<'i, Rule>, ParseError> {
         self.next()
-            .ok_or_else(|| ParseError::missing_token("token", context))
+            .ok_or(ParseError::Internal(context))
     }
 }
 

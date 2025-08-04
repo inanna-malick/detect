@@ -85,16 +85,12 @@ impl DetectFileType {
     }
 }
 
-/// Check for common regex patterns that might be mistakes
 fn check_regex_patterns(pattern: &str) -> Option<String> {
-    // Check for empty regex
     if pattern.is_empty() {
         return Some("Empty regex pattern will match every line in every file. Consider using a more specific pattern.".to_string());
     }
 
-    // Check for unescaped dots that look like file extensions
     if pattern.starts_with('.') && !pattern.starts_with("\\.") {
-        // Check if it looks like a file extension pattern
         let rest = &pattern[1..];
         if rest.chars().all(|c| c.is_alphanumeric() || c == '$') {
             return Some(format!(
@@ -107,7 +103,6 @@ fn check_regex_patterns(pattern: &str) -> Option<String> {
         }
     }
 
-    // Check for patterns that look like they're trying to match file extensions
     if (pattern.ends_with("js")
         || pattern.ends_with("ts")
         || pattern.ends_with("rs")
@@ -122,9 +117,6 @@ fn check_regex_patterns(pattern: &str) -> Option<String> {
             pattern, pattern, pattern
         ));
     }
-
-    // Check for common glob patterns that don't work in regex
-    // Note: single '*' is already handled by parse_string function
 
     if pattern.contains("**") {
         return Some(
@@ -150,18 +142,12 @@ fn parse_duration(number: i64, unit: &str, original: &str) -> Result<Duration, T
 }
 
 pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
-    // Handle relative time formats (both new and legacy)
-    // New format: -7days, 7days, 30minutes
-    // Legacy format: -7.days
-
-    // Try parsing as relative time (with or without minus)
     let (is_negative, stripped) = if let Some(rest) = s.strip_prefix('-') {
         (true, rest)
     } else {
         (false, s)
     };
 
-    // First try legacy format with period
     if let Some((num_str, unit)) = stripped.split_once('.') {
         if let Ok(number) = num_str.parse::<i64>() {
             let duration = parse_duration(number, unit, s)?;
@@ -173,19 +159,14 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
         }
     }
 
-    // Try new format without period (e.g., "7days", "30m")
-    // Find where the digits end and the unit begins
     let digit_end = stripped.find(|c: char| !c.is_ascii_digit());
     if let Some(idx) = digit_end {
         let num_str = &stripped[..idx];
         let unit = &stripped[idx..];
 
-        // Check if this looks like a date (has dashes after digits) rather than duration
-        // Dates look like: 2024-01-01, not like: 7days
         if !unit.starts_with('-') {
             if let Ok(number) = num_str.parse::<i64>() {
                 if !unit.is_empty() {
-                    // Try to parse as duration unit
                     if let Ok(duration) = parse_duration(number, unit, s) {
                         return if is_negative {
                             Ok(Local::now() - duration)
@@ -198,61 +179,63 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
         }
     }
 
-    // Handle special keywords
     match s {
         "now" => return Ok(Local::now()),
         "today" => {
             let today = Local::now().date_naive();
-            return Ok(today
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(Local)
-                .unwrap());
+            if let Some(time) = today.and_hms_opt(0, 0, 0) {
+                if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
+                    return Ok(local_time);
+                }
+            }
+            return Err(TemporalError {
+                input: s.to_string(),
+                kind: TemporalErrorKind::UnknownUnit("invalid time".to_string()),
+            });
         }
         "yesterday" => {
             let yesterday = Local::now().date_naive() - Duration::days(1);
-            return Ok(yesterday
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(Local)
-                .unwrap());
+            if let Some(time) = yesterday.and_hms_opt(0, 0, 0) {
+                if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
+                    return Ok(local_time);
+                }
+            }
+            return Err(TemporalError {
+                input: s.to_string(),
+                kind: TemporalErrorKind::UnknownUnit("invalid time".to_string()),
+            });
         }
         _ => {}
     }
 
-    // Try parsing as absolute date/datetime
     match NaiveDate::parse_from_str(s, "%Y-%m-%d") {
         Ok(date) => {
-            return Ok(date
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(Local)
-                .unwrap())
+            if let Some(time) = date.and_hms_opt(0, 0, 0) {
+                if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
+                    return Ok(local_time);
+                }
+            }
+            return Err(TemporalError {
+                input: s.to_string(),
+                kind: TemporalErrorKind::UnknownUnit("invalid date".to_string()),
+            });
         }
-        Err(_) => {
-            // Try other formats before failing
-        }
+        Err(_) => {}
     }
 
-    // Try parsing as ISO datetime
     match DateTime::parse_from_rfc3339(s) {
         Ok(dt) => Ok(dt.with_timezone(&Local)),
-        Err(e) => {
-            // If all parsing attempts fail, return the last error
-            Err(TemporalError {
-                input: s.to_string(),
-                kind: TemporalErrorKind::InvalidDate(e),
-            })
-        }
+        Err(e) => Err(TemporalError {
+            input: s.to_string(),
+            kind: TemporalErrorKind::InvalidDate(e),
+        }),
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RhsValue {
-    // String values for name, path, ext, type selectors
     String(String),
 
-    // Plain numeric value (bytes)
     Number(u64),
 
     // Size with unit (converted to bytes)
@@ -276,10 +259,7 @@ pub enum TimeUnit {
     Months,
 }
 
-// Helper function to quote strings when needed
 fn quote_if_needed(s: &str) -> String {
-    // Check if string could be parsed as a size value
-    // This checks if the string could be ambiguously parsed as a size
     let could_be_size_prefix = s
         .chars()
         .take_while(|c| c.is_numeric() || *c == '.')
@@ -295,23 +275,21 @@ fn quote_if_needed(s: &str) -> String {
             .map(|c| matches!(c, 'k' | 'm' | 'g' | 't' | 'K' | 'M' | 'G' | 'T'))
             .unwrap_or(false);
 
-    // Check if string looks like a number
-    // FIXME: If it looks like a number but it's being used in a string matcher context,
-    // it should be coerced to a string using the original text representation
     let looks_like_number = !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
 
-    // Check if string needs quoting
-    let needs_quotes = s.is_empty() ||
-        could_be_size_prefix ||
-        looks_like_number ||
-        s.contains(' ') ||
-        s.contains('"') ||
-        s.contains('\\') || // TODO/FIXME: is this needed?
-        s.contains('{') || // TODO/FIXME: is this needed?
-        s.contains('}') || // TODO/FIXME: is this needed?
-        s.contains(')') ||
-        s.contains('(') ||
-        !s.chars().all(|c| c.is_alphanumeric() || "_./+-@#$%^&*~()|?".contains(c));
+    let needs_quotes = s.is_empty()
+        || could_be_size_prefix
+        || looks_like_number
+        || s.contains(' ')
+        || s.contains('"')
+        || s.contains('\\')
+        || s.contains('{')
+        || s.contains('}')
+        || s.contains(')')
+        || s.contains('(')
+        || !s
+            .chars()
+            .all(|c| c.is_alphanumeric() || "_./+-@#$%^&*~()|?".contains(c));
 
     if needs_quotes {
         let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
@@ -410,26 +388,18 @@ impl RawPredicate {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Selector {
-    // NAME:
-    BaseName,  // filename without extension (e.g. "report" from "report.txt")
-    FileName,  // complete filename with extension (e.g. "report.txt")
-    DirPath,   // directory path only (e.g. "src/services")
-    FullPath,  // complete path including filename (e.g. "src/services/report.txt")
-    Extension, // file extension without dot (e.g. "txt")
-    // METADATA
+    BaseName,
+    FileName, // complete filename with extension (e.g. "report.txt")
+    DirPath,  // directory path only (e.g. "src/services")
+    FullPath, // complete path including filename (e.g. "src/services/report.txt")
+    Extension,
     EntityType,
     Size,
-    Depth, // directory depth from base path
-    // TEMPORAL
+    Depth,
     Modified,
     Created,
     Accessed,
-    // TODO: more
-    // CONTENTS
-    // FIXME: figure out a better Display impl if/when more selectors added
     Contents,
-    // Encoding, TODO, eventually?
-    // later - parse contents as json,toml,etc - can run selectors against that
 }
 
 impl Display for Selector {
@@ -482,7 +452,6 @@ impl Display for StringMatcher {
         match self {
             StringMatcher::Regex(r) => {
                 let pattern = r.as_str();
-                // Always quote regex patterns to handle special characters and empty patterns
                 write!(
                     f,
                     "~= \"{}\"",
@@ -508,7 +477,6 @@ impl Display for StringMatcher {
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
-        // Check for common regex mistakes and provide warnings
         if let Some(warning) = check_regex_patterns(s) {
             eprintln!("Warning: {}", warning);
         }
@@ -518,6 +486,23 @@ impl StringMatcher {
     pub fn regex_with_warnings(s: &str) -> Result<(Self, Option<String>), regex::Error> {
         let warning = check_regex_patterns(s);
         Ok((Self::Regex(Regex::new(s)?), warning))
+    }
+
+    // Helper constructors for tests and programmatic usage
+    pub fn eq(s: &str) -> Self {
+        Self::Equals(s.to_string())
+    }
+
+    pub fn ne(s: &str) -> Self {
+        Self::NotEquals(s.to_string())
+    }
+
+    pub fn contains(s: &str) -> Self {
+        Self::Contains(s.to_string())
+    }
+
+    pub fn in_set<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Self {
+        Self::In(items.into_iter().map(|s| s.as_ref().to_string()).collect())
     }
 
     pub fn is_match(&self, s: &str) -> bool {
@@ -556,17 +541,8 @@ impl TimeMatcher {
         match self {
             TimeMatcher::Before(dt) => file_datetime < *dt,
             TimeMatcher::After(dt) => file_datetime > *dt,
-            TimeMatcher::Equals(dt) => {
-                // For date-only comparisons (e.g., "2024-01-01"), we compare just the date
-                // For datetime comparisons, we'd compare with time granularity
-                // Since we currently only parse dates as YYYY-MM-DD (setting time to 00:00:00),
-                // we compare date portions for equality
-                file_datetime.date_naive() == dt.date_naive()
-            }
-            TimeMatcher::NotEquals(dt) => {
-                // Same logic as Equals but inverted
-                file_datetime.date_naive() != dt.date_naive()
-            }
+            TimeMatcher::Equals(dt) => file_datetime.date_naive() == dt.date_naive(),
+            TimeMatcher::NotEquals(dt) => file_datetime.date_naive() != dt.date_naive(),
         }
     }
 }
@@ -577,6 +553,7 @@ impl PartialEq for TimeMatcher {
             (TimeMatcher::Before(a), TimeMatcher::Before(b)) => a == b,
             (TimeMatcher::After(a), TimeMatcher::After(b)) => a == b,
             (TimeMatcher::Equals(a), TimeMatcher::Equals(b)) => a == b,
+            (TimeMatcher::NotEquals(a), TimeMatcher::NotEquals(b)) => a == b,
             _ => false,
         }
     }
@@ -622,30 +599,26 @@ impl Display for Op {
 
 pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateParseError> {
     match rhs {
-        RhsValue::String(s) => {
-            Ok(match op {
-                Op::Matches => {
-                    // Special case for '*' which users commonly expect to work
-                    let pattern = if s == "*" { ".*" } else { s };
-                    StringMatcher::Regex(Regex::new(pattern)?)
-                },
-                Op::Equality => StringMatcher::Equals(s.clone()),
-                Op::NotEqual => StringMatcher::NotEquals(s.clone()),
-                Op::Contains => StringMatcher::Contains(s.clone()),
-                Op::In => {
-                    let mut set = HashSet::new();
-                    set.insert(s.clone());
-                    StringMatcher::In(set)
-                }
-                Op::NumericComparison(_) => {
-                    return Err(PredicateParseError::IncompatibleOperation {
-                        reason: "Numeric comparison operators (>, <, >=, <=) cannot be used with string values",
-                    })
-                }
-            })
-        }
+        RhsValue::String(s) => Ok(match op {
+            Op::Matches => {
+                let pattern = if s == "*" { ".*" } else { s };
+                StringMatcher::Regex(Regex::new(pattern)?)
+            }
+            Op::Equality => StringMatcher::Equals(s.clone()),
+            Op::NotEqual => StringMatcher::NotEquals(s.clone()),
+            Op::Contains => StringMatcher::Contains(s.clone()),
+            Op::In => {
+                let mut set = HashSet::new();
+                set.insert(s.clone());
+                StringMatcher::In(set)
+            }
+            Op::NumericComparison(_) => return Err(PredicateParseError::IncompatibleOperation {
+                reason:
+                    "Numeric comparison operators (>, <, >=, <=) cannot be used with string values",
+            }),
+        }),
         RhsValue::Set(items) => match op {
-            Op::In => Ok(StringMatcher::In(items.iter().cloned().collect())),
+            Op::In => Ok(StringMatcher::In(items.clone().into_iter().collect())),
             _ => Err(PredicateParseError::IncompatibleOperation {
                 reason: "Set values can only be used with 'in' operator",
             }),
@@ -751,7 +724,6 @@ pub fn parse_numerical(op: &Op, rhs: &RhsValue) -> Result<NumberMatcher, Predica
 pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateParseError> {
     let s = match rhs {
         RhsValue::String(s) => s,
-        // TODO: Handle RhsValue::RelativeTime and RhsValue::AbsoluteTime
         _ => {
             return Err(PredicateParseError::IncompatibleValue {
                 expected: "time value",
@@ -763,16 +735,12 @@ pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateP
 
     match op {
         Op::Equality => Ok(TimeMatcher::Equals(parsed_time)),
-        Op::NotEqual => Ok(TimeMatcher::Equals(parsed_time)),
+        Op::NotEqual => Ok(TimeMatcher::NotEquals(parsed_time)),
         Op::NumericComparison(op) => Ok(match op {
             NumericalOp::Greater | NumericalOp::GreaterOrEqual => TimeMatcher::After(parsed_time),
             NumericalOp::Less | NumericalOp::LessOrEqual => TimeMatcher::Before(parsed_time),
         }),
-        Op::In => {
-            // For now, 'in' with temporal values only supports single values
-            // Could be extended to support sets of times
-            Ok(TimeMatcher::Equals(parsed_time))
-        }
+        Op::In => Ok(TimeMatcher::Equals(parsed_time)),
         Op::Matches => Err(PredicateParseError::IncompatibleOperation {
             reason: "Regex operator ~= cannot be used with temporal values",
         }),
@@ -784,10 +752,10 @@ pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateP
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NumericalOp {
-    Greater,        // '>'
-    GreaterOrEqual, // >=
-    LessOrEqual,    // <=
-    Less,           // <
+    Greater,
+    GreaterOrEqual,
+    LessOrEqual,
+    Less,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -925,6 +893,27 @@ pub enum NamePredicate {
 }
 
 impl NamePredicate {
+    // Helper constructors for common patterns
+    pub fn file_eq(name: &str) -> Self {
+        Self::FileName(StringMatcher::eq(name))
+    }
+
+    pub fn stem_eq(name: &str) -> Self {
+        Self::BaseName(StringMatcher::eq(name))
+    }
+
+    pub fn ext_eq(ext: &str) -> Self {
+        Self::Extension(StringMatcher::eq(ext))
+    }
+
+    pub fn ext_in<I: IntoIterator<Item = S>, S: AsRef<str>>(exts: I) -> Self {
+        Self::Extension(StringMatcher::in_set(exts))
+    }
+
+    pub fn path_eq(path: &str) -> Self {
+        Self::FullPath(StringMatcher::eq(path))
+    }
+
     pub fn is_match(&self, path: &Path) -> bool {
         self.is_match_with_base(path, None)
     }
@@ -1088,17 +1077,17 @@ impl Display for NumberMatcher {
                 // whether it was > or >= from the Bound representation
                 match bound {
                     Bound::Left(range) => {
-                        // For now, just use > for all left bounds
-                        write!(f, "> {}", range.start)
+                        // Use >= to preserve exact bound
+                        write!(f, ">= {}", range.start)
                     }
                     Bound::Right(range) => {
-                        // For now, just use < for all right bounds
+                        // Use < for right bounds (exclusive upper bound)
                         write!(f, "< {}", range.end)
                     }
                     Bound::Full(range) => {
-                        // This could represent complex queries, just use > for simplicity
-                        // Since Full ranges are rare in our usage
-                        write!(f, "> {}", range.start)
+                        // For full ranges, we can't represent them exactly with a single operator
+                        // Just use >= for the lower bound (lossy but predictable)
+                        write!(f, ">= {}", range.start)
                     }
                 }
             }
@@ -1108,17 +1097,6 @@ impl Display for NumberMatcher {
     }
 }
 
-impl Display for Bound {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // The Bound is used within NumberMatcher which already handles the operator
-        // This should never be called directly for query generation
-        match self {
-            Bound::Full(range) => write!(f, "{}..{}", range.start, range.end),
-            Bound::Left(range) => write!(f, "{}..", range.start),
-            Bound::Right(range) => write!(f, "..{}", range.end),
-        }
-    }
-}
 
 impl Display for TimeMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1160,21 +1138,17 @@ impl MetadataPredicate {
             MetadataPredicate::Created(matcher) => matcher.is_match(metadata.ctime()),
             MetadataPredicate::Accessed(matcher) => matcher.is_match(metadata.atime()),
             MetadataPredicate::Depth(matcher) => {
-                // Calculate depth based on path components
                 if let Some(path) = path {
                     let depth = if let Some(base) = base_path {
-                        // Calculate relative depth from base
                         match path.strip_prefix(base) {
                             Ok(relative) => relative.components().count() as u64,
                             Err(_) => path.components().count() as u64,
                         }
                     } else {
-                        // Use absolute depth
                         path.components().count() as u64
                     };
                     matcher.is_match(depth)
                 } else {
-                    // No path provided, can't calculate depth
                     false
                 }
             }
@@ -1183,55 +1157,36 @@ impl MetadataPredicate {
 
     pub fn is_match_git_tree(&self) -> bool {
         match self {
-            MetadataPredicate::Filesize(_) => {
-                // it's not a file
-                false
-            }
-            MetadataPredicate::Type(matcher) => {
-                // Check if matcher matches directory type
-                DetectFileType::Directory
-                    .aliases()
-                    .iter()
-                    .any(|&alias| matcher.is_match(alias))
-            }
+            MetadataPredicate::Filesize(_) => false,
+            MetadataPredicate::Type(matcher) => DetectFileType::Directory
+                .aliases()
+                .iter()
+                .any(|&alias| matcher.is_match(alias)),
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
             | MetadataPredicate::Accessed(_)
-            | MetadataPredicate::Depth(_) => {
-                // Git trees don't have timestamps or depth info without path
-                false
-            }
+            | MetadataPredicate::Depth(_) => false,
         }
     }
 
     pub fn is_match_git_blob(&self, entry: &Blob) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
-            MetadataPredicate::Type(matcher) => {
-                // Check if matcher matches file type
-                DetectFileType::File
-                    .aliases()
-                    .iter()
-                    .any(|&alias| matcher.is_match(alias))
-            }
+            MetadataPredicate::Type(matcher) => DetectFileType::File
+                .aliases()
+                .iter()
+                .any(|&alias| matcher.is_match(alias)),
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
             | MetadataPredicate::Accessed(_)
-            | MetadataPredicate::Depth(_) => {
-                // Git blobs don't have timestamps or depth info without path
-                false
-            }
+            | MetadataPredicate::Depth(_) => false,
         }
     }
 }
 
-// predicates that scan the entire file
 pub struct StreamingCompiledContentPredicate {
-    // compiled automaton
     inner: DFA<Vec<u32>>,
-    // source regex, for logging
     source: String,
-    // true for != operations
     negate: bool,
 }
 
@@ -1262,7 +1217,6 @@ impl StreamingCompiledContentPredicate {
 
 impl PartialEq for StreamingCompiledContentPredicate {
     fn eq(&self, other: &Self) -> bool {
-        // compare source regexes and negate flag
         self.source == other.source && self.negate == other.negate
     }
 }
@@ -1277,39 +1231,36 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
     }
 }
 
+/// Helper function for formatting content predicates
+fn format_content_predicate(
+    f: &mut std::fmt::Formatter<'_>,
+    negate: bool,
+    source: &str,
+) -> std::fmt::Result {
+    let op = if negate { "!~" } else { "~=" };
+    write!(
+        f,
+        "contents {} \"{}\"",
+        op,
+        source.replace('\\', "\\\\").replace('"', "\\\"")
+    )
+}
+
 impl Display for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Always quote regex patterns to handle special characters and empty patterns
-        let op = if self.negate { "!~" } else { "~=" };
-        write!(
-            f,
-            "contents {} \"{}\"",
-            op,
-            self.source.replace('\\', "\\\\").replace('"', "\\\"")
-        )
+        format_content_predicate(f, self.negate, &self.source)
     }
 }
 
-// predicates that scan the entire file
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    // compiled automaton
     pub inner: DFA<&'a [u32]>,
-    // source regex, for logging
     pub source: &'a str,
-    // true for != operations
     pub negate: bool,
 }
 
 impl Display for StreamingCompiledContentPredicateRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Always quote regex patterns to handle special characters and empty patterns
-        let op = if self.negate { "!~" } else { "~=" };
-        write!(
-            f,
-            "contents {} \"{}\"",
-            op,
-            self.source.replace('\\', "\\\\").replace('"', "\\\"")
-        )
+        format_content_predicate(f, self.negate, self.source)
     }
 }
