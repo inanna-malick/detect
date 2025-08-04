@@ -99,7 +99,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 ) -> Result<(), DetectError> {
     // Store the expression for error reporting
     let expr_source = std::sync::Arc::from(expr.as_str());
-    
+
     match parse_expr(&expr) {
         Ok(parsed_expr) => {
             let walker = WalkBuilder::new(root)

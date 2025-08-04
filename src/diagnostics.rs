@@ -1,5 +1,5 @@
 //! Enhanced diagnostic error reporting using Miette
-//! 
+//!
 //! This module provides beautiful, compiler-quality error messages with context,
 //! transforming Pest's basic errors into rich diagnostic output.
 
@@ -14,109 +14,96 @@ use crate::parser::pratt_parser::Rule;
 pub enum DetectDiagnostic {
     /// Syntax errors from the Pest parser
     #[error("Syntax error in expression")]
-    #[diagnostic(
-        code(detect::syntax),
-        url(docsrs)
-    )]
+    #[diagnostic(code(detect::syntax), url(docsrs))]
     Syntax {
         /// The source code being parsed
         #[source_code]
         src: NamedSource<String>,
-        
+
         /// The problematic span in the source
         #[label(primary, "unexpected token here")]
         bad_bit: SourceSpan,
-        
+
         /// Additional help text
         #[help]
         help_text: Option<String>,
     },
-    
+
     /// Invalid selector errors with helpful suggestions
     #[error("Invalid selector '{selector}'")]
-    #[diagnostic(
-        code(detect::invalid_selector)
-    )]
+    #[diagnostic(code(detect::invalid_selector))]
     InvalidSelector {
         #[source_code]
         src: NamedSource<String>,
-        
+
         #[label(primary, "unknown selector")]
         span: SourceSpan,
-        
+
         selector: String,
-        
+
         #[help]
         suggestion: Option<String>,
     },
-    
+
     /// Regex compilation errors with detailed explanations
     #[error("Invalid regex pattern")]
-    #[diagnostic(
-        code(detect::regex)
-    )]
+    #[diagnostic(code(detect::regex))]
     RegexError {
         #[source_code]
         src: NamedSource<String>,
-        
+
         #[label(primary, "regex compilation failed here")]
         span: SourceSpan,
-        
+
         /// The regex error message
         details: String,
-        
+
         #[help]
         fix_suggestion: Option<String>,
     },
-    
+
     /// Temporal expression errors
     #[error("Invalid time expression")]
-    #[diagnostic(
-        code(detect::temporal)
-    )]
+    #[diagnostic(code(detect::temporal))]
     TemporalError {
         #[source_code]
         src: NamedSource<String>,
-        
+
         #[label(primary, "invalid time format")]
         span: SourceSpan,
-        
+
         details: String,
-        
+
         #[help]
         examples: Option<String>,
     },
-    
+
     /// Numeric value errors
     #[error("Invalid numeric value")]
-    #[diagnostic(
-        code(detect::numeric)
-    )]
+    #[diagnostic(code(detect::numeric))]
     NumericError {
         #[source_code]
         src: NamedSource<String>,
-        
+
         #[label(primary, "invalid number")]
         span: SourceSpan,
-        
+
         details: String,
     },
-    
+
     /// Operator mismatch errors
     #[error("Incompatible operator for selector")]
-    #[diagnostic(
-        code(detect::operator_mismatch)
-    )]
+    #[diagnostic(code(detect::operator_mismatch))]
     OperatorMismatch {
         #[source_code]
         src: NamedSource<String>,
-        
+
         #[label(primary, "this selector")]
         selector_span: SourceSpan,
-        
+
         #[label("doesn't support this operator")]
         operator_span: SourceSpan,
-        
+
         details: String,
     },
 }
@@ -124,16 +111,27 @@ pub enum DetectDiagnostic {
 /// Helper to add "did you mean?" suggestions for selectors
 fn suggest_selector(invalid: &str) -> Option<String> {
     const VALID_SELECTORS: &[&str] = &[
-        "path", "path.name", "path.extension", "path.stem", "path.parent",
-        "name", "extension", "stem", "parent",
-        "size", "type", "contents", 
-        "modified", "created", "accessed",
+        "path",
+        "path.name",
+        "path.extension",
+        "path.stem",
+        "path.parent",
+        "name",
+        "extension",
+        "stem",
+        "parent",
+        "size",
+        "type",
+        "contents",
+        "modified",
+        "created",
+        "accessed",
     ];
-    
+
     // Simple edit distance check
     let mut best_match = None;
     let mut best_distance = usize::MAX;
-    
+
     for &valid in VALID_SELECTORS {
         let distance = levenshtein_distance(invalid, valid);
         if distance < best_distance && distance <= 2 {
@@ -141,24 +139,23 @@ fn suggest_selector(invalid: &str) -> Option<String> {
             best_match = Some(valid);
         }
     }
-    
+
     best_match.map(|s| format!("Did you mean '{}'?", s))
 }
-
 
 /// Simple Levenshtein distance implementation
 fn levenshtein_distance(s1: &str, s2: &str) -> usize {
     let len1 = s1.len();
     let len2 = s2.len();
     let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
-    
+
     for i in 0..=len1 {
         matrix[i][0] = i;
     }
     for j in 0..=len2 {
         matrix[0][j] = j;
     }
-    
+
     for (i, c1) in s1.chars().enumerate() {
         for (j, c2) in s2.chars().enumerate() {
             let cost = if c1 == c2 { 0 } else { 1 };
@@ -167,7 +164,7 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
                 .min(matrix[i][j] + cost);
         }
     }
-    
+
     matrix[len1][len2]
 }
 
@@ -186,22 +183,27 @@ pub fn pest_to_diagnostic(
                 .map(|c| c.len_utf8())
                 .unwrap_or(1);
             (pos, char_len).into()
-        },
+        }
         pest::error::InputLocation::Span((start, end)) => (start, end - start).into(),
     };
-    
+
     let src = if let Some(name) = filename {
         NamedSource::new(name, source.to_string())
     } else {
         NamedSource::new("expression", source.to_string())
     };
-    
+
     // Try to provide more specific error types based on the error
-    let help_text = if let pest::error::ErrorVariant::ParsingError { positives, .. } = &pest_err.variant {
+    let help_text = if let pest::error::ErrorVariant::ParsingError { positives, .. } =
+        &pest_err.variant
+    {
         // Check for common patterns and provide helpful hints
-        if positives.iter().any(|r| matches!(r, 
-            Rule::bare_name | Rule::bare_stem | Rule::bare_extension | Rule::bare_parent
-        )) {
+        if positives.iter().any(|r| {
+            matches!(
+                r,
+                Rule::bare_name | Rule::bare_stem | Rule::bare_extension | Rule::bare_parent
+            )
+        }) {
             Some("Selectors like 'name', 'stem', 'extension' should be prefixed with 'path.' (e.g., 'path.name')".to_string())
         } else if positives.iter().any(|r| matches!(r, Rule::string_value)) {
             Some("String values can be quoted (\"value\") or unquoted (value) if they don't contain special characters".to_string())
@@ -213,7 +215,7 @@ pub fn pest_to_diagnostic(
     } else {
         None
     };
-    
+
     DetectDiagnostic::Syntax {
         src,
         bad_bit: span,
@@ -232,7 +234,7 @@ pub fn parse_error_to_diagnostic(
     } else {
         NamedSource::new("expression", source.to_string())
     };
-    
+
     match error {
         ParseError::Syntax(pest_err) => pest_to_diagnostic(pest_err, source, filename),
         
@@ -332,16 +334,16 @@ fn estimate_byte_position(source: &str, line: usize, col: usize) -> usize {
     if line == 0 || col == 0 {
         return 0;
     }
-    
+
     let mut byte_pos = 0;
     let mut current_line = 1;
     let mut current_col = 1;
-    
+
     for ch in source.chars() {
         if current_line == line && current_col == col {
             return byte_pos;
         }
-        
+
         if ch == '\n' {
             current_line += 1;
             current_col = 1;
@@ -350,13 +352,13 @@ fn estimate_byte_position(source: &str, line: usize, col: usize) -> usize {
             current_col += 1;
             byte_pos += ch.len_utf8();
         }
-        
+
         // If we've passed the target line
         if current_line > line {
             break;
         }
     }
-    
+
     // If we're at the target line but haven't reached the column,
     // return the current position (end of string or line)
     if current_line == line {
@@ -369,7 +371,7 @@ fn estimate_byte_position(source: &str, line: usize, col: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_levenshtein_distance() {
         assert_eq!(levenshtein_distance("", ""), 0);
@@ -378,16 +380,25 @@ mod tests {
         assert_eq!(levenshtein_distance("size", "siz"), 1);
         assert_eq!(levenshtein_distance("stem", "name"), 4); // s->n, t->a, e->m, m->e
     }
-    
+
     #[test]
     fn test_suggest_selector() {
-        assert_eq!(suggest_selector("siz"), Some("Did you mean 'size'?".to_string()));
-        assert_eq!(suggest_selector("nam"), Some("Did you mean 'name'?".to_string()));
+        assert_eq!(
+            suggest_selector("siz"),
+            Some("Did you mean 'size'?".to_string())
+        );
+        assert_eq!(
+            suggest_selector("nam"),
+            Some("Did you mean 'name'?".to_string())
+        );
         // "modiifed" is actually 2 edits from "modified" (remove one 'i', change 'e' to 'i')
-        assert_eq!(suggest_selector("modiifed"), Some("Did you mean 'modified'?".to_string()));
+        assert_eq!(
+            suggest_selector("modiifed"),
+            Some("Did you mean 'modified'?".to_string())
+        );
         assert_eq!(suggest_selector("zzzzz"), None); // no close match
     }
-    
+
     #[test]
     fn test_estimate_byte_position_utf8() {
         // Test with ASCII
@@ -396,22 +407,22 @@ mod tests {
         assert_eq!(estimate_byte_position(ascii, 1, 3), 2);
         assert_eq!(estimate_byte_position(ascii, 2, 1), 6);
         assert_eq!(estimate_byte_position(ascii, 2, 3), 8);
-        
+
         // Test with emoji (4-byte UTF-8)
         let emoji = "path == '👍test'";
-        assert_eq!(estimate_byte_position(emoji, 1, 1), 0);  // 'p'
+        assert_eq!(estimate_byte_position(emoji, 1, 1), 0); // 'p'
         assert_eq!(estimate_byte_position(emoji, 1, 10), 9); // '👍' starts at byte 9
         assert_eq!(estimate_byte_position(emoji, 1, 11), 13); // 't' after emoji
-        
+
         // Test with accented characters (2-byte UTF-8)
         let accented = "café == 'naïve'";
-        assert_eq!(estimate_byte_position(accented, 1, 1), 0);  // 'c'
-        assert_eq!(estimate_byte_position(accented, 1, 4), 3);  // 'é' at byte 3
-        assert_eq!(estimate_byte_position(accented, 1, 5), 5);  // ' ' after 'é'
-        
+        assert_eq!(estimate_byte_position(accented, 1, 1), 0); // 'c'
+        assert_eq!(estimate_byte_position(accented, 1, 4), 3); // 'é' at byte 3
+        assert_eq!(estimate_byte_position(accented, 1, 5), 5); // ' ' after 'é'
+
         // Test with mixed UTF-8
         let mixed = "emoji👍\nnext";
-        assert_eq!(estimate_byte_position(mixed, 1, 6), 5);  // '👍' starts at byte 5
+        assert_eq!(estimate_byte_position(mixed, 1, 6), 5); // '👍' starts at byte 5
         assert_eq!(estimate_byte_position(mixed, 2, 1), 10); // 'n' on next line
     }
 }

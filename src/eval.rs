@@ -42,11 +42,13 @@ pub async fn run_contents_predicate_stream(
                         next_state = dfa.inner.next_state(next_state, *byte);
 
                         if dfa.inner.is_match_state(next_state) {
-                            break ShortCircuit::Known(true);
+                            // Apply negation if needed
+                            break ShortCircuit::Known(!dfa.negate);
                         }
 
                         if dfa.inner.is_dead_state(next_state) {
-                            break ShortCircuit::Known(false);
+                            // For negated patterns, dead state means no match, which is success
+                            break ShortCircuit::Known(dfa.negate);
                         }
                     } else {
                         break ShortCircuit::Unknown(Predicate::Content((dfa, next_state)));
@@ -59,14 +61,12 @@ pub async fn run_contents_predicate_stream(
 
     let e = e.reduce_predicate_and_short_circuit(|p| match p {
         Predicate::Content((dfa, state)) => {
-            let dfa = dfa.inner;
-            let next_state = dfa.next_eoi_state(state);
+            let next_state = dfa.inner.next_eoi_state(state);
 
-            if dfa.is_match_state(next_state) {
-                ShortCircuit::Known(true)
-            } else {
-                ShortCircuit::Known(false)
-            }
+            // Check for match at end of input
+            let matched = dfa.inner.is_match_state(next_state);
+            // Apply negation if needed
+            ShortCircuit::Known(matched != dfa.negate)
         }
         _ => unreachable!(),
     });
@@ -105,11 +105,13 @@ pub fn run_contents_predicate(
                         next_state = dfa.inner.next_state(next_state, *byte);
 
                         if dfa.inner.is_match_state(next_state) {
-                            break ShortCircuit::Known(true);
+                            // Apply negation if needed
+                            break ShortCircuit::Known(!dfa.negate);
                         }
 
                         if dfa.inner.is_dead_state(next_state) {
-                            break ShortCircuit::Known(false);
+                            // For negated patterns, dead state means no match, which is success
+                            break ShortCircuit::Known(dfa.negate);
                         }
                     } else {
                         break ShortCircuit::Unknown(Predicate::Content((dfa, next_state)));
@@ -122,14 +124,12 @@ pub fn run_contents_predicate(
 
     let e = e.reduce_predicate_and_short_circuit(|p| match p {
         Predicate::Content((dfa, state)) => {
-            let dfa = dfa.inner;
-            let next_state = dfa.next_eoi_state(state);
+            let next_state = dfa.inner.next_eoi_state(state);
 
-            if dfa.is_match_state(next_state) {
-                ShortCircuit::Known(true)
-            } else {
-                ShortCircuit::Known(false)
-            }
+            // Check for match at end of input
+            let matched = dfa.inner.is_match_state(next_state);
+            // Apply negation if needed
+            ShortCircuit::Known(matched != dfa.negate)
         }
         _ => unreachable!(),
     });

@@ -679,6 +679,7 @@ pub fn parse_string_dfa(
                 Ok(inner) => StreamingCompiledContentPredicate {
                     inner,
                     source: regex,
+                    negate: false,
                 },
                 Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
@@ -689,6 +690,7 @@ pub fn parse_string_dfa(
                 Ok(inner) => StreamingCompiledContentPredicate {
                     inner,
                     source: regex,
+                    negate: false,
                 },
                 Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
             }
@@ -1229,12 +1231,18 @@ pub struct StreamingCompiledContentPredicate {
     inner: DFA<Vec<u32>>,
     // source regex, for logging
     source: String,
+    // true for != operations
+    negate: bool,
 }
 
 impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
+        Self::new_with_negate(source, false)
+    }
+    
+    pub fn new_with_negate(source: String, negate: bool) -> Result<Self, PredicateParseError> {
         match DFA::new(&source) {
-            Ok(inner) => Ok(Self { inner, source }),
+            Ok(inner) => Ok(Self { inner, source, negate }),
             Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
         }
     }
@@ -1243,14 +1251,15 @@ impl StreamingCompiledContentPredicate {
         StreamingCompiledContentPredicateRef {
             inner: self.inner.as_ref(),
             source: &self.source,
+            negate: self.negate,
         }
     }
 }
 
 impl PartialEq for StreamingCompiledContentPredicate {
     fn eq(&self, other: &Self) -> bool {
-        // compare source regexes only
-        self.source == other.source
+        // compare source regexes and negate flag
+        self.source == other.source && self.negate == other.negate
     }
 }
 
@@ -1259,6 +1268,7 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
         f.debug_struct("CompiledContentPredicate")
             .field("inner", &"_")
             .field("source", &self.source)
+            .field("negate", &self.negate)
             .finish()
     }
 }
@@ -1266,9 +1276,11 @@ impl std::fmt::Debug for StreamingCompiledContentPredicate {
 impl Display for StreamingCompiledContentPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Always quote regex patterns to handle special characters and empty patterns
+        let op = if self.negate { "!~" } else { "~=" };
         write!(
             f,
-            "contents ~= \"{}\"",
+            "contents {} \"{}\"",
+            op,
             self.source.replace('\\', "\\\\").replace('"', "\\\"")
         )
     }
@@ -1281,14 +1293,18 @@ pub struct StreamingCompiledContentPredicateRef<'a> {
     pub inner: DFA<&'a [u32]>,
     // source regex, for logging
     pub source: &'a str,
+    // true for != operations  
+    pub negate: bool,
 }
 
 impl Display for StreamingCompiledContentPredicateRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Always quote regex patterns to handle special characters and empty patterns
+        let op = if self.negate { "!~" } else { "~=" };
         write!(
             f,
-            "contents ~= \"{}\"",
+            "contents {} \"{}\"",
+            op,
             self.source.replace('\\', "\\\\").replace('"', "\\\"")
         )
     }

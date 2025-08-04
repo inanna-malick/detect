@@ -529,18 +529,19 @@ impl TypedPredicate {
                         DomainPredicate::meta(MetadataPredicate::Type(string_matcher))
                     }
                     StringSelectorType::Contents => {
-                        let pattern = match &string_matcher {
-                            StringMatcher::Regex(r) => r.as_str().to_string(),
-                            StringMatcher::Equals(s) => format!("^{}$", regex::escape(s)),
-                            StringMatcher::Contains(s) => regex::escape(s),
+                        let (pattern, negate) = match &string_matcher {
+                            StringMatcher::Regex(r) => (r.as_str().to_string(), false),
+                            StringMatcher::Equals(s) => (format!("^{}$", regex::escape(s)), false),
+                            StringMatcher::Contains(s) => (regex::escape(s), false),
+                            StringMatcher::NotEquals(s) => (format!("^{}$", regex::escape(s)), true),
                             _ => {
                                 return Err(ParseError::invalid_token(
-                                    "regex, equals, or contains for contents",
+                                    "regex, equals, contains, or not-equals for contents",
                                     format!("{:?}", string_matcher),
                                 ))
                             }
                         };
-                        let content_pred = StreamingCompiledContentPredicate::new(pattern)
+                        let content_pred = StreamingCompiledContentPredicate::new_with_negate(pattern, negate)
                             .map_err(|_| {
                                 ParseError::invalid_token("valid regex pattern for DFA", value)
                             })?;

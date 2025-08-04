@@ -20,7 +20,7 @@ fn rule_to_user_friendly(rule: &Rule) -> String {
         Rule::gteq => ">=".to_owned(),
         Rule::lt => "<".to_owned(),
         Rule::lteq => "<=".to_owned(),
-        
+
         // Values
         Rule::bare_string => "unquoted value".to_owned(),
         Rule::quoted_string => "quoted string".to_owned(),
@@ -28,7 +28,7 @@ fn rule_to_user_friendly(rule: &Rule) -> String {
         Rule::numeric_value => "numeric value".to_owned(),
         Rule::temporal_value => "time value".to_owned(),
         Rule::set_literal => "set [item1, item2, ...]".to_owned(),
-        
+
         // Path selectors
         Rule::bare_name => "'name'".to_owned(),
         Rule::bare_stem => "'stem'".to_owned(),
@@ -36,22 +36,22 @@ fn rule_to_user_friendly(rule: &Rule) -> String {
         Rule::bare_parent => "'parent'".to_owned(),
         Rule::bare_full => "'full' or 'path'".to_owned(),
         Rule::path_selector => "path selector (path.name, path.stem, etc.)".to_owned(),
-        
+
         // Other selectors
         Rule::string_selector => "string selector (name, path, contents, type)".to_owned(),
         Rule::numeric_selector => "numeric selector (size, depth)".to_owned(),
         Rule::temporal_selector => "time selector (modified, created, accessed)".to_owned(),
-        
+
         // Predicates
         Rule::typed_predicate => "valid expression".to_owned(),
         Rule::string_predicate => "string comparison".to_owned(),
         Rule::numeric_predicate => "numeric comparison".to_owned(),
         Rule::temporal_predicate => "time comparison".to_owned(),
-        
+
         // Special
         Rule::EOI => "end of expression".to_owned(),
         Rule::WHITESPACE => "whitespace".to_owned(),
-        
+
         // Default: use lowercase version of the rule name
         _ => format!("{:?}", rule).to_lowercase().replace('_', " "),
     }
@@ -173,6 +173,21 @@ impl ParseError {
                 found: found.into(),
             },
             location: None,
+        }
+    }
+    
+    /// Create an invalid token error with location
+    pub fn invalid_token_with_location(
+        expected: &'static str, 
+        found: impl Into<String>,
+        location: (usize, usize)
+    ) -> Self {
+        ParseError::Structure {
+            kind: StructureErrorKind::InvalidToken {
+                expected,
+                found: found.into(),
+            },
+            location: Some(location),
         }
     }
 
@@ -328,10 +343,10 @@ impl fmt::Display for ParseError {
                 // Clone the error to use renamed_rules() which takes ownership
                 // This is the idiomatic pattern from the Rust community
                 let user_friendly = e.clone().renamed_rules(|rule| rule_to_user_friendly(rule));
-                
+
                 // Format the error with Pest's built-in formatting
                 write!(f, "{}", user_friendly)?;
-                
+
                 // Add contextual hints based on the error
                 if let pest::error::ErrorVariant::ParsingError { positives, .. } = &e.variant {
                     // Check if it looks like a bare selector without path prefix
@@ -341,7 +356,7 @@ impl fmt::Display for ParseError {
                         Rule::bare_extension,
                         Rule::bare_parent,
                     ];
-                    
+
                     if positives.iter().any(|r| bare_selectors.contains(r)) {
                         // Check if we're at the start of the expression
                         if let pest::error::LineColLocation::Pos((1, col)) = e.line_col {
@@ -351,7 +366,7 @@ impl fmt::Display for ParseError {
                         }
                     }
                 }
-                
+
                 Ok(())
             }
             ParseError::Structure { kind, .. } => {

@@ -73,7 +73,7 @@ pub async fn main() -> miette::Result<()> {
         }
     })
     .await;
-    
+
     // Convert DetectError to Miette diagnostic if possible
     match result {
         Ok(()) => Ok(()),

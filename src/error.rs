@@ -22,11 +22,8 @@ impl fmt::Display for DetectError {
                 // Check if we should use Miette formatting
                 if let Some(src) = source {
                     // Try to create a diagnostic and display it
-                    let _diagnostic = crate::diagnostics::parse_error_to_diagnostic(
-                        error,
-                        src,
-                        None,
-                    );
+                    let _diagnostic =
+                        crate::diagnostics::parse_error_to_diagnostic(error, src, None);
                     // For now, fall back to regular display
                     // In main.rs we'll use miette::Report for proper rendering
                     write!(f, "{}", error)?;
@@ -80,12 +77,16 @@ impl From<ParseError> for DetectError {
 impl DetectError {
     /// Attach source text to a parse error for diagnostic display
     pub fn with_source(mut self, source: impl Into<Arc<str>>) -> Self {
-        if let DetectError::ParseError { source: ref mut src, .. } = self {
+        if let DetectError::ParseError {
+            source: ref mut src,
+            ..
+        } = self
+        {
             *src = Some(source.into());
         }
         self
     }
-    
+
     /// Create a parse error with source text
     pub fn parse_with_source(error: ParseError, source: impl Into<Arc<str>>) -> Self {
         DetectError::ParseError {
@@ -93,17 +94,16 @@ impl DetectError {
             source: Some(source.into()),
         }
     }
-    
+
     /// Convert to a Miette diagnostic if this is a parse error with source
     pub fn to_diagnostic(&self) -> Option<crate::diagnostics::DetectDiagnostic> {
         match self {
-            DetectError::ParseError { error, source: Some(src) } => {
-                Some(crate::diagnostics::parse_error_to_diagnostic(
-                    error,
-                    src,
-                    None,
-                ))
-            }
+            DetectError::ParseError {
+                error,
+                source: Some(src),
+            } => Some(crate::diagnostics::parse_error_to_diagnostic(
+                error, src, None,
+            )),
             _ => None,
         }
     }
