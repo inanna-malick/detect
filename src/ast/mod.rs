@@ -8,13 +8,13 @@
 mod parse_helpers;
 
 mod values;
-pub use values::{BareString, BareNumber, TimeKeyword};
+pub use values::{BareNumber, BareString, TimeKeyword};
 
 mod operators;
-pub use operators::{StringOp, NumericOp, TemporalOp};
+pub use operators::{NumericOp, StringOp, TemporalOp};
 
 mod selectors;
-pub use selectors::{StringSelectorType, NumericSelectorType, TemporalSelectorType};
+pub use selectors::{NumericSelectorType, StringSelectorType, TemporalSelectorType};
 
 mod typed_predicate;
 pub use typed_predicate::TypedPredicate;

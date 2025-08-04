@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 fn test_sigpipe_handling_with_head() {
     // Create a command that will generate more output than head will consume
     let mut child = Command::new("./target/release/detect")
-        .args(&["size >= 0", "."]) // This should match many files
+        .args(["size >= 0", "."]) // This should match many files
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to start detect");
@@ -16,7 +16,7 @@ fn test_sigpipe_handling_with_head() {
     let detect_stdout = child.stdout.take().expect("Failed to get stdout");
 
     let head_output = Command::new("head")
-        .args(&["-1"])
+        .args(["-1"])
         .stdin(detect_stdout)
         .output()
         .expect("Failed to run head");
@@ -40,7 +40,7 @@ fn test_sigpipe_handling_with_head() {
     // head should have produced exactly one line of output
     let output_lines: Vec<_> = head_output.stdout.split(|&b| b == b'\n').collect();
     assert!(
-        output_lines.len() >= 1 && !output_lines[0].is_empty(),
+        !output_lines.is_empty() && !output_lines[0].is_empty(),
         "head should produce at least one non-empty line"
     );
 }
@@ -49,7 +49,7 @@ fn test_sigpipe_handling_with_head() {
 #[test]
 fn test_normal_output_still_works() {
     let output = Command::new("./target/release/detect")
-        .args(&["name == Cargo.toml", "."])
+        .args(["name == Cargo.toml", "."])
         .output()
         .expect("Failed to run detect");
 

@@ -2,8 +2,8 @@
 
 use pest_ast::*;
 
-use crate::parser::pratt_parser::Rule;
 use super::parse_helpers::span_to_string;
+use crate::parser::pratt_parser::Rule;
 
 // ============================================================================
 // Simple Value Types (using pest-ast derives)

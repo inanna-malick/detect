@@ -22,7 +22,7 @@ mod tests {
                 StringMatcher::Equals("README.md".to_owned())
             ))))
         );
-        
+
         // Test bare stem shorthand
         let expr = parse_expr("stem == README").unwrap();
         assert_eq!(
@@ -31,7 +31,7 @@ mod tests {
                 StringMatcher::Equals("README".to_owned())
             ))))
         );
-        
+
         // Test bare extension shorthand
         let expr = parse_expr("extension == md").unwrap();
         assert_eq!(
@@ -40,7 +40,7 @@ mod tests {
                 StringMatcher::Equals("md".to_owned())
             ))))
         );
-        
+
         // Test short form 'ext'
         let expr = parse_expr("ext == rs").unwrap();
         assert_eq!(
@@ -49,7 +49,7 @@ mod tests {
                 StringMatcher::Equals("rs".to_owned())
             ))))
         );
-        
+
         // Test bare parent shorthand
         let expr = parse_expr("parent == src").unwrap();
         assert_eq!(
@@ -58,7 +58,7 @@ mod tests {
                 StringMatcher::Equals("src".to_owned())
             ))))
         );
-        
+
         // Test bare full shorthand
         let expr = parse_expr(r#"full == "/home/user/file.txt""#).unwrap();
         assert_eq!(
@@ -73,21 +73,21 @@ mod tests {
     fn test_content_selector_forms() {
         // All forms should compile to the same content predicate
         let expected = Expr::Predicate(Predicate::Content(
-            StreamingCompiledContentPredicate::new(regex::escape("TODO")).unwrap()
+            StreamingCompiledContentPredicate::new(regex::escape("TODO")).unwrap(),
         ));
-        
+
         // Test canonical form: content.text
         let expr = parse_expr(r#"content.text contains "TODO""#).unwrap();
         assert_eq!(expr, expected);
-        
+
         // Test bare shorthand: text
         let expr = parse_expr(r#"text contains "TODO""#).unwrap();
         assert_eq!(expr, expected);
-        
+
         // Test legacy form: contents (for backward compat)
         let expr = parse_expr(r#"contents contains "TODO""#).unwrap();
         assert_eq!(expr, expected);
-        
+
         // Test legacy form: content (for backward compat)
         let expr = parse_expr(r#"content contains "TODO""#).unwrap();
         assert_eq!(expr, expected);
@@ -260,29 +260,29 @@ mod tests {
         // Test canonical form: meta.size
         let result = parse_expr("meta.size > 1000");
         assert!(result.is_ok(), "Failed to parse meta.size");
-        
+
         // Test canonical form: meta.type
         let result = parse_expr(r#"meta.type == "file""#);
         assert!(result.is_ok(), "Failed to parse meta.type");
-        
+
         // Test canonical form: meta.depth
         let result = parse_expr("meta.depth > 2");
         assert!(result.is_ok(), "Failed to parse meta.depth");
-        
+
         // Test bare forms still work
         let result = parse_expr("size > 1000");
         assert!(result.is_ok(), "Failed to parse bare size");
-        
+
         // Verify both forms produce the same result
         let canonical_size = parse_expr("meta.size == 1000").unwrap();
         let bare_size = parse_expr("size == 1000").unwrap();
         assert_eq!(canonical_size, bare_size, "Size forms should be equivalent");
-        
+
         let canonical_type = parse_expr(r#"meta.type == "file""#).unwrap();
         let bare_type = parse_expr(r#"type == "file""#).unwrap();
         assert_eq!(canonical_type, bare_type, "Type forms should be equivalent");
     }
-    
+
     #[test]
     fn parse_size_comparisons() {
         let cases = vec![
@@ -332,30 +332,31 @@ mod tests {
 
     #[test]
     fn test_time_domain_support() {
-        use crate::predicate::TimeMatcher;
-        
         // Test canonical form: time.modified
         let result = parse_expr(r#"time.modified > "-7.days""#);
         assert!(result.is_ok(), "Failed to parse time.modified");
-        
+
         // Test canonical form: time.created
         let result = parse_expr(r#"time.created < "2024-01-01""#);
         assert!(result.is_ok(), "Failed to parse time.created");
-        
+
         // Test canonical form: time.accessed
         let result = parse_expr(r#"time.accessed > "-30.minutes""#);
         assert!(result.is_ok(), "Failed to parse time.accessed");
-        
+
         // Test bare forms still work
         let result = parse_expr(r#"modified > "-7.days""#);
         assert!(result.is_ok(), "Failed to parse bare modified");
-        
+
         // Verify both forms produce the same result
         let canonical = parse_expr(r#"time.modified == "2024-01-01""#).unwrap();
         let bare = parse_expr(r#"modified == "2024-01-01""#).unwrap();
-        assert_eq!(canonical, bare, "Canonical and bare forms should be equivalent");
+        assert_eq!(
+            canonical, bare,
+            "Canonical and bare forms should be equivalent"
+        );
     }
-    
+
     #[test]
     fn parse_temporal_selectors() {
         // Just verify they parse to the correct variant
@@ -645,22 +646,25 @@ mod tests {
         let word_and = parse_expr("name == foo and size > 100").unwrap();
         let symbol_and = parse_expr("name == foo && size > 100").unwrap();
         assert_eq!(word_and, symbol_and, "'and' and '&&' should be equivalent");
-        
+
         // Test 'or' word form
         let word_or = parse_expr("name == foo or name == bar").unwrap();
         let symbol_or = parse_expr("name == foo || name == bar").unwrap();
         assert_eq!(word_or, symbol_or, "'or' and '||' should be equivalent");
-        
+
         // Test 'not' word form
         let word_not = parse_expr("not name == foo").unwrap();
         let symbol_not = parse_expr("!name == foo").unwrap();
         assert_eq!(word_not, symbol_not, "'not' and '!' should be equivalent");
-        
+
         // Test complex expression with word forms
         let complex_word = parse_expr("name == foo and not (size > 100 or type == dir)").unwrap();
         let complex_symbol = parse_expr("name == foo && !(size > 100 || type == dir)").unwrap();
-        assert_eq!(complex_word, complex_symbol, "Complex expressions should work with word forms");
-        
+        assert_eq!(
+            complex_word, complex_symbol,
+            "Complex expressions should work with word forms"
+        );
+
         // Test mixed forms (word and symbol)
         let mixed = parse_expr("name == foo and size > 100 || not type == dir");
         assert!(mixed.is_ok(), "Mixed word and symbol forms should work");
@@ -673,45 +677,77 @@ mod tests {
         let uppercase_and = parse_expr("name == foo AND size > 100").unwrap();
         let mixed_and = parse_expr("name == foo And size > 100").unwrap();
         let weird_and = parse_expr("name == foo aNd size > 100").unwrap();
-        
-        assert_eq!(lowercase_and, uppercase_and, "'and' and 'AND' should be equivalent");
-        assert_eq!(lowercase_and, mixed_and, "'and' and 'And' should be equivalent");
-        assert_eq!(lowercase_and, weird_and, "'and' and 'aNd' should be equivalent");
-        
+
+        assert_eq!(
+            lowercase_and, uppercase_and,
+            "'and' and 'AND' should be equivalent"
+        );
+        assert_eq!(
+            lowercase_and, mixed_and,
+            "'and' and 'And' should be equivalent"
+        );
+        assert_eq!(
+            lowercase_and, weird_and,
+            "'and' and 'aNd' should be equivalent"
+        );
+
         // Test case-insensitive 'or' variants
         let lowercase_or = parse_expr("name == foo or name == bar").unwrap();
         let uppercase_or = parse_expr("name == foo OR name == bar").unwrap();
         let mixed_or = parse_expr("name == foo Or name == bar").unwrap();
         let weird_or = parse_expr("name == foo oR name == bar").unwrap();
-        
-        assert_eq!(lowercase_or, uppercase_or, "'or' and 'OR' should be equivalent");
+
+        assert_eq!(
+            lowercase_or, uppercase_or,
+            "'or' and 'OR' should be equivalent"
+        );
         assert_eq!(lowercase_or, mixed_or, "'or' and 'Or' should be equivalent");
         assert_eq!(lowercase_or, weird_or, "'or' and 'oR' should be equivalent");
-        
+
         // Test case-insensitive 'not' variants
         let lowercase_not = parse_expr("not name == foo").unwrap();
         let uppercase_not = parse_expr("NOT name == foo").unwrap();
         let mixed_not = parse_expr("Not name == foo").unwrap();
         let weird_not = parse_expr("nOt name == foo").unwrap();
-        
-        assert_eq!(lowercase_not, uppercase_not, "'not' and 'NOT' should be equivalent");
-        assert_eq!(lowercase_not, mixed_not, "'not' and 'Not' should be equivalent");
-        assert_eq!(lowercase_not, weird_not, "'not' and 'nOt' should be equivalent");
-        
+
+        assert_eq!(
+            lowercase_not, uppercase_not,
+            "'not' and 'NOT' should be equivalent"
+        );
+        assert_eq!(
+            lowercase_not, mixed_not,
+            "'not' and 'Not' should be equivalent"
+        );
+        assert_eq!(
+            lowercase_not, weird_not,
+            "'not' and 'nOt' should be equivalent"
+        );
+
         // Test complex expression with mixed case operators
-        let mixed_case_complex = parse_expr("name == foo AND NOT (size > 100 OR type == dir)").unwrap();
-        let lowercase_complex = parse_expr("name == foo and not (size > 100 or type == dir)").unwrap();
-        assert_eq!(mixed_case_complex, lowercase_complex, "Complex mixed-case expressions should work");
-        
+        let mixed_case_complex =
+            parse_expr("name == foo AND NOT (size > 100 OR type == dir)").unwrap();
+        let lowercase_complex =
+            parse_expr("name == foo and not (size > 100 or type == dir)").unwrap();
+        assert_eq!(
+            mixed_case_complex, lowercase_complex,
+            "Complex mixed-case expressions should work"
+        );
+
         // Test all operators in one expression with different cases
         let all_mixed = parse_expr("name == foo AND size > 100 or NOT type == dir");
-        assert!(all_mixed.is_ok(), "All case-insensitive operators should work together");
-        
+        assert!(
+            all_mixed.is_ok(),
+            "All case-insensitive operators should work together"
+        );
+
         // Test that symbols still work alongside case-insensitive words
         let symbols_with_words = parse_expr("name == foo && size > 100 OR NOT type == dir");
-        assert!(symbols_with_words.is_ok(), "Symbols and case-insensitive words should mix");
+        assert!(
+            symbols_with_words.is_ok(),
+            "Symbols and case-insensitive words should mix"
+        );
     }
-    
+
     #[test]
     fn parse_operator_aliases() {
         // = vs ==
@@ -889,7 +925,8 @@ mod tests {
     #[test]
     fn test_compound_in_expression_parsing() {
         // Test the exact expression from the failing integration test
-        let expr = parse_expr(r#"path.extension in [js, ts] && path.name in [index, main]"#).unwrap();
+        let expr =
+            parse_expr(r#"path.extension in [js, ts] && path.name in [index, main]"#).unwrap();
 
         let expected = Expr::And(
             Box::new(Expr::Predicate(Predicate::Name(Arc::new(
@@ -975,7 +1012,8 @@ mod tests {
     #[test]
     fn test_complex_negation_parsing() {
         // Test the exact expression from the beta tester's bug report
-        let parsed = parse_expr(r#"path.extension == "rs" && !(path.name contains "test")"#).unwrap();
+        let parsed =
+            parse_expr(r#"path.extension == "rs" && !(path.name contains "test")"#).unwrap();
 
         let left = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
             StringMatcher::Equals("rs".to_string()),
@@ -992,7 +1030,8 @@ mod tests {
     #[test]
     fn test_negation_with_contains_in_compound() {
         // Test the exact problematic case: path.extension == "rs" && !(path.name contains "lib")
-        let parsed = parse_expr(r#"path.extension == "rs" && !(path.name contains "lib")"#).unwrap();
+        let parsed =
+            parse_expr(r#"path.extension == "rs" && !(path.name contains "lib")"#).unwrap();
 
         // Build expected AST
         let ext_pred = Expr::Predicate(Predicate::Name(Arc::new(NamePredicate::Extension(
@@ -1220,33 +1259,66 @@ mod tests {
         // Test that we want more relaxed temporal syntax
         // Currently requires quotes and periods: "-7.days"
         // We want to support: 7days, -7days, "7 days", etc.
-        
+
         // Test what currently works
-        assert!(parse_expr("modified > \"-7.days\"").is_ok(), "Current syntax should work");
-        assert!(parse_expr("created < \"-30.minutes\"").is_ok(), "Current syntax should work");
-        
+        assert!(
+            parse_expr("modified > \"-7.days\"").is_ok(),
+            "Current syntax should work"
+        );
+        assert!(
+            parse_expr("created < \"-30.minutes\"").is_ok(),
+            "Current syntax should work"
+        );
+
         // Test what we WANT to work - these will fail initially
-        assert!(parse_expr("modified > -7days").is_ok(), "Should support: -7days (no quotes, no period)");
-        assert!(parse_expr("modified > 7days").is_ok(), "Should support: 7days (no quotes, no period, no minus)");
-        assert!(parse_expr("created < 30minutes").is_ok(), "Should support: 30minutes (no quotes, no period)");
-        assert!(parse_expr("accessed > -1hour").is_ok(), "Should support: -1hour (singular, no quotes)");
-        assert!(parse_expr("modified > -2weeks").is_ok(), "Should support: -2weeks (no quotes, no period)");
-        assert!(parse_expr("modified > -7d").is_ok(), "Should support: -7d (short form)");
-        assert!(parse_expr("created < 30m").is_ok(), "Should support: 30m (short form minutes)");
-        assert!(parse_expr("accessed > 1h").is_ok(), "Should support: 1h (short form hours)");
+        assert!(
+            parse_expr("modified > -7days").is_ok(),
+            "Should support: -7days (no quotes, no period)"
+        );
+        assert!(
+            parse_expr("modified > 7days").is_ok(),
+            "Should support: 7days (no quotes, no period, no minus)"
+        );
+        assert!(
+            parse_expr("created < 30minutes").is_ok(),
+            "Should support: 30minutes (no quotes, no period)"
+        );
+        assert!(
+            parse_expr("accessed > -1hour").is_ok(),
+            "Should support: -1hour (singular, no quotes)"
+        );
+        assert!(
+            parse_expr("modified > -2weeks").is_ok(),
+            "Should support: -2weeks (no quotes, no period)"
+        );
+        assert!(
+            parse_expr("modified > -7d").is_ok(),
+            "Should support: -7d (short form)"
+        );
+        assert!(
+            parse_expr("created < 30m").is_ok(),
+            "Should support: 30m (short form minutes)"
+        );
+        assert!(
+            parse_expr("accessed > 1h").is_ok(),
+            "Should support: 1h (short form hours)"
+        );
     }
 
     #[test]
     fn test_filename_alias() {
         // Test that 'filename' works as an alias for 'path.name'
-        
+
         // These should produce identical results
         let path_name_expr = parse_expr("path.name == test.rs").unwrap();
         let filename_expr = parse_expr("filename == test.rs").unwrap();
-        
+
         // They should be equivalent
-        assert_eq!(path_name_expr, filename_expr, "'filename' should be equivalent to 'path.name'");
-        
+        assert_eq!(
+            path_name_expr, filename_expr,
+            "'filename' should be equivalent to 'path.name'"
+        );
+
         // Test various operators with filename
         assert!(parse_expr("filename == README.md").is_ok());
         assert!(parse_expr("filename contains test").is_ok());
@@ -1259,26 +1331,26 @@ mod tests {
     fn test_regex_pattern_warnings() {
         // Test that common regex mistakes generate appropriate warnings
         use crate::predicate::StringMatcher;
-        
+
         // Test empty regex warning
         let result = StringMatcher::regex_with_warnings("");
         assert!(result.is_ok());
         let (_, warning) = result.unwrap();
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("Empty regex"));
-        
+
         // Test unescaped dot for file extensions
         let (_, warning) = StringMatcher::regex_with_warnings(".ts").unwrap();
         assert!(warning.is_some());
         let warning_text = warning.unwrap();
         assert!(warning_text.contains("unescaped dot"));
         assert!(warning_text.contains("path.extension == ts"));
-        
+
         // Test file extension without dot
         let (_, warning) = StringMatcher::regex_with_warnings("js").unwrap();
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("path.extension == js"));
-        
+
         // Test glob pattern double star - this will fail regex compilation
         // but we should still get the warning
         let result = StringMatcher::regex_with_warnings("test**");
@@ -1287,14 +1359,14 @@ mod tests {
         let (_, warning) = result.unwrap();
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("'**' is not valid in regex"));
-        
+
         // Test valid patterns don't generate warnings
         let (_, warning) = StringMatcher::regex_with_warnings("\\.ts$").unwrap();
         assert!(warning.is_none());
-        
+
         let (_, warning) = StringMatcher::regex_with_warnings("TODO.*FIXME").unwrap();
         assert!(warning.is_none());
-        
+
         // Test that * pattern is handled specially in parse_string (not in this test)
         // The parse_string function converts * to .* automatically
     }
@@ -1571,7 +1643,8 @@ mod tests {
         }
 
         // Test complex path queries
-        let parsed = parse_expr(r#"path.parent contains "src" && path.extension == ".rs""#).unwrap();
+        let parsed =
+            parse_expr(r#"path.parent contains "src" && path.extension == ".rs""#).unwrap();
         if let Expr::And(left, right) = parsed {
             if let Expr::Predicate(Predicate::Name(left_pred)) = left.as_ref() {
                 assert!(matches!(left_pred.as_ref(), NamePredicate::DirPath(_)));

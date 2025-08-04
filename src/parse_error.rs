@@ -24,9 +24,12 @@ fn improve_pest_error_message(error: &str) -> String {
         .replace("bare_full", "'full'")
         .replace("string_selector", "string selector (name, path, etc.)")
         .replace("numeric_selector", "numeric selector (size, depth)")
-        .replace("temporal_selector", "time selector (modified, created, accessed)")
+        .replace(
+            "temporal_selector",
+            "time selector (modified, created, accessed)",
+        )
         .replace("typed_predicate", "valid expression");
-    
+
     // If the error mentions expected rules, add a hint
     if error.contains("expected") && error.contains("at line") {
         // Check if it looks like a selector at the start
@@ -37,7 +40,7 @@ fn improve_pest_error_message(error: &str) -> String {
             }
         }
     }
-    
+
     error
 }
 
@@ -132,7 +135,7 @@ impl ParseError {
     // =========================================================================
     // Builder methods for consistent error construction
     // =========================================================================
-    
+
     /// Create a missing token error
     pub fn missing_token(expected: &'static str, context: &'static str) -> Self {
         ParseError::Structure {
@@ -140,7 +143,7 @@ impl ParseError {
             location: None,
         }
     }
-    
+
     /// Create an unexpected rule error
     pub fn unexpected_rule(rule: Rule, location: Option<(usize, usize)>) -> Self {
         ParseError::Structure {
@@ -148,7 +151,7 @@ impl ParseError {
             location,
         }
     }
-    
+
     /// Create an invalid token error
     pub fn invalid_token(expected: &'static str, found: impl Into<String>) -> Self {
         ParseError::Structure {
@@ -159,7 +162,7 @@ impl ParseError {
             location: None,
         }
     }
-    
+
     /// Create an invalid selector error
     pub fn invalid_selector(found: impl Into<String>) -> Self {
         ParseError::Structure {
@@ -169,7 +172,7 @@ impl ParseError {
             location: None,
         }
     }
-    
+
     /// Create an expected rule error
     pub fn expected_rule(expected: Rule, found: Rule) -> Self {
         ParseError::Structure {
@@ -177,7 +180,7 @@ impl ParseError {
             location: None,
         }
     }
-    
+
     /// Create an expected one of rules error
     pub fn expected_one_of(expected: &'static [Rule], found: Rule) -> Self {
         ParseError::Structure {
@@ -185,15 +188,19 @@ impl ParseError {
             location: None,
         }
     }
-    
+
     /// Add location information to an error
     pub fn with_location(mut self, location: (usize, usize)) -> Self {
-        if let ParseError::Structure { location: ref mut loc, .. } = self {
+        if let ParseError::Structure {
+            location: ref mut loc,
+            ..
+        } = self
+        {
             *loc = Some(location);
         }
         self
     }
-    
+
     /// Get location info if available
     pub fn location(&self) -> Option<(usize, usize)> {
         match self {

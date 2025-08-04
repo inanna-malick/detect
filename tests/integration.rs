@@ -679,7 +679,7 @@ async fn test_content_selector_forms() {
     }
     .run()
     .await;
-    
+
     // Test bare text shorthand
     Case {
         expr: r#"text contains "FIXME""#,
@@ -692,7 +692,7 @@ async fn test_content_selector_forms() {
     }
     .run()
     .await;
-    
+
     // Test legacy contents form still works
     Case {
         expr: r#"contents contains "HACK""#,
@@ -710,27 +710,21 @@ async fn test_content_selector_forms() {
 async fn test_time_domain_forms() {
     // Note: These tests can't actually test time-based queries since we can't control
     // file timestamps in a temp dir. We just verify the queries parse and run.
-    
+
     // Test canonical form parses and runs
     Case {
         expr: r#"time.modified > "-100.days" && type == file"#,
-        expected: &["file1.txt", "file2.txt"],  // All files match since they're newly created
-        files: vec![
-            f("file1.txt", "content"),
-            f("file2.txt", "content"),
-        ],
+        expected: &["file1.txt", "file2.txt"], // All files match since they're newly created
+        files: vec![f("file1.txt", "content"), f("file2.txt", "content")],
     }
     .run()
     .await;
-    
+
     // Test bare form still works
     Case {
         expr: r#"modified > "-100.days" && type == file"#,
         expected: &["file1.txt", "file2.txt"],
-        files: vec![
-            f("file1.txt", "content"),
-            f("file2.txt", "content"),
-        ],
+        files: vec![f("file1.txt", "content"), f("file2.txt", "content")],
     }
     .run()
     .await;
@@ -749,11 +743,11 @@ async fn test_meta_domain_forms() {
     }
     .run()
     .await;
-    
+
     // Test meta.type canonical form
     Case {
         expr: r#"meta.type == "file""#,
-        expected: &["file1.txt", "file2.txt", "dir/nested.txt"],  // All files, not dirs
+        expected: &["file1.txt", "file2.txt", "dir/nested.txt"], // All files, not dirs
         files: vec![
             f("file1.txt", "content"),
             f("file2.txt", "content"),
@@ -762,7 +756,7 @@ async fn test_meta_domain_forms() {
     }
     .run()
     .await;
-    
+
     // Test bare forms still work
     Case {
         expr: "size < 10 && type == file",
@@ -790,7 +784,7 @@ async fn test_word_form_boolean_operators() {
     }
     .run()
     .await;
-    
+
     // Test 'or' word form
     Case {
         expr: r#"extension == rs or extension == py"#,
@@ -803,7 +797,7 @@ async fn test_word_form_boolean_operators() {
     }
     .run()
     .await;
-    
+
     // Test 'not' word form
     Case {
         expr: r#"type == file and not name contains test"#,
@@ -817,7 +811,7 @@ async fn test_word_form_boolean_operators() {
     }
     .run()
     .await;
-    
+
     // Test complex expression with word forms
     Case {
         expr: r#"(name contains lib or name contains main) and not extension == txt"#,
@@ -905,43 +899,34 @@ async fn test_size_units_case_insensitive() {
     // Create files with specific sizes for testing
     let kb_size = "x".repeat(1025); // Just over 1KB
     let mb_size = "x".repeat(1024 * 1024 + 1); // Just over 1MB
-    
+
     // Test lowercase kb
     Case {
         expr: "size > 1kb",
         expected: &["large.txt"],
-        files: vec![
-            f("large.txt", &kb_size),
-            f("small.txt", "tiny"),
-        ],
+        files: vec![f("large.txt", &kb_size), f("small.txt", "tiny")],
     }
     .run()
     .await;
-    
+
     // Test uppercase KB
     Case {
         expr: "size > 1KB",
         expected: &["large.txt"],
-        files: vec![
-            f("large.txt", &kb_size),
-            f("small.txt", "tiny"),
-        ],
+        files: vec![f("large.txt", &kb_size), f("small.txt", "tiny")],
     }
     .run()
     .await;
-    
+
     // Test mixed case Kb
     Case {
         expr: "size > 1Kb",
         expected: &["large.txt"],
-        files: vec![
-            f("large.txt", &kb_size),
-            f("small.txt", "tiny"),
-        ],
+        files: vec![f("large.txt", &kb_size), f("small.txt", "tiny")],
     }
     .run()
     .await;
-    
+
     // Test lowercase mb
     Case {
         expr: "size > 1mb",
@@ -954,7 +939,7 @@ async fn test_size_units_case_insensitive() {
     }
     .run()
     .await;
-    
+
     // Test uppercase MB - THIS IS THE KEY TEST
     Case {
         expr: "size > 1MB",
@@ -967,7 +952,7 @@ async fn test_size_units_case_insensitive() {
     }
     .run()
     .await;
-    
+
     // Test single letter M
     Case {
         expr: "size > 1M",
@@ -984,18 +969,17 @@ async fn test_size_units_case_insensitive() {
 
 #[tokio::test]
 async fn test_temporal_syntax_variations() {
-    use std::time::{SystemTime, UNIX_EPOCH};
     use std::fs;
     use tempdir::TempDir;
-    
+
     // This test will check various temporal syntax options
     // Currently quotes and periods are required: "-7.days"
     // We want to support: 7days, -7days, "7 days", etc.
-    
+
     let temp_dir = TempDir::new("detect_test").unwrap();
     let recent_file = temp_dir.path().join("recent.txt");
     fs::write(&recent_file, "recent").unwrap();
-    
+
     // Test currently working syntax (baseline)
     Case {
         expr: "modified > \"-1.days\" && type == file",
@@ -1004,7 +988,7 @@ async fn test_temporal_syntax_variations() {
     }
     .run()
     .await;
-    
+
     // These should work but currently don't:
     // "modified > 7days" - no quotes or period
     // "modified > -7days" - no quotes
@@ -1015,10 +999,10 @@ async fn test_temporal_syntax_variations() {
 #[tokio::test]
 async fn test_flexible_set_syntax() {
     // Document and test the flexibility of set syntax
-    
+
     // Test spacing variations - all should work identically
     Case {
-        expr: "extension in [js,ts,jsx]",  // No spaces
+        expr: "extension in [js,ts,jsx]", // No spaces
         expected: &["app.js", "test.ts", "component.jsx"],
         files: vec![
             f("app.js", ""),
@@ -1029,9 +1013,9 @@ async fn test_flexible_set_syntax() {
     }
     .run()
     .await;
-    
+
     Case {
-        expr: "extension in [js, ts, jsx]",  // With spaces
+        expr: "extension in [js, ts, jsx]", // With spaces
         expected: &["app.js", "test.ts", "component.jsx"],
         files: vec![
             f("app.js", ""),
@@ -1042,9 +1026,9 @@ async fn test_flexible_set_syntax() {
     }
     .run()
     .await;
-    
+
     Case {
-        expr: "extension in [ js , ts , jsx ]",  // Extra spaces
+        expr: "extension in [ js , ts , jsx ]", // Extra spaces
         expected: &["app.js", "test.ts", "component.jsx"],
         files: vec![
             f("app.js", ""),
@@ -1055,10 +1039,10 @@ async fn test_flexible_set_syntax() {
     }
     .run()
     .await;
-    
+
     // Test quote variations - all optional and mixable
     Case {
-        expr: r#"name in [README, "LICENSE", 'Makefile']"#,  // Mixed quotes
+        expr: r#"name in [README, "LICENSE", 'Makefile']"#, // Mixed quotes
         expected: &["README", "LICENSE", "Makefile"],
         files: vec![
             f("README", ""),
@@ -1069,7 +1053,7 @@ async fn test_flexible_set_syntax() {
     }
     .run()
     .await;
-    
+
     // Test special characters in sets
     Case {
         expr: r#"name in [.gitignore, .eslintrc.json, babel.config.js]"#,
@@ -1083,27 +1067,21 @@ async fn test_flexible_set_syntax() {
     }
     .run()
     .await;
-    
+
     // Test empty set (matches nothing)
     Case {
         expr: "extension in []",
         expected: &[],
-        files: vec![
-            f("app.js", ""),
-            f("test.ts", ""),
-        ],
+        files: vec![f("app.js", ""), f("test.ts", "")],
     }
     .run()
     .await;
-    
+
     // Test single item set
     Case {
         expr: "extension in [md]",
         expected: &["README.md"],
-        files: vec![
-            f("README.md", ""),
-            f("app.js", ""),
-        ],
+        files: vec![f("README.md", ""), f("app.js", "")],
     }
     .run()
     .await;

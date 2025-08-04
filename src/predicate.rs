@@ -60,7 +60,7 @@ impl DetectFileType {
 
     /// Check if a string matches any alias for this file type
     pub fn matches(&self, s: &str) -> bool {
-        self.aliases().iter().any(|&alias| alias == s)
+        self.aliases().contains(&s)
     }
 
     /// Create from std::fs::FileType
@@ -91,7 +91,7 @@ fn check_regex_patterns(pattern: &str) -> Option<String> {
     if pattern.is_empty() {
         return Some("Empty regex pattern will match every line in every file. Consider using a more specific pattern.".to_string());
     }
-    
+
     // Check for unescaped dots that look like file extensions
     if pattern.starts_with('.') && !pattern.starts_with("\\.") {
         // Check if it looks like a file extension pattern
@@ -106,26 +106,32 @@ fn check_regex_patterns(pattern: &str) -> Option<String> {
             ));
         }
     }
-    
+
     // Check for patterns that look like they're trying to match file extensions
-    if pattern.ends_with("js") || pattern.ends_with("ts") || pattern.ends_with("rs") 
-       || pattern.ends_with("py") || pattern.ends_with("go") {
-        if !pattern.contains('.') && !pattern.contains('\\') {
-            return Some(format!(
-                "Pattern '{}' might not match as expected. \
-                For file extensions, use 'path.extension == {}' or a proper regex like '\\.({})'",
-                pattern, pattern, pattern
-            ));
-        }
+    if (pattern.ends_with("js")
+        || pattern.ends_with("ts")
+        || pattern.ends_with("rs")
+        || pattern.ends_with("py")
+        || pattern.ends_with("go"))
+        && !pattern.contains('.')
+        && !pattern.contains('\\')
+    {
+        return Some(format!(
+            "Pattern '{}' might not match as expected. \
+            For file extensions, use 'path.extension == {}' or a proper regex like '\\.({})'",
+            pattern, pattern, pattern
+        ));
     }
-    
+
     // Check for common glob patterns that don't work in regex
     // Note: single '*' is already handled by parse_string function
-    
+
     if pattern.contains("**") {
-        return Some("Pattern '**' is not valid in regex. Use '.*' for matching any characters.".to_string());
+        return Some(
+            "Pattern '**' is not valid in regex. Use '.*' for matching any characters.".to_string(),
+        );
     }
-    
+
     None
 }
 
@@ -147,14 +153,14 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
     // Handle relative time formats (both new and legacy)
     // New format: -7days, 7days, 30minutes
     // Legacy format: -7.days
-    
+
     // Try parsing as relative time (with or without minus)
     let (is_negative, stripped) = if let Some(rest) = s.strip_prefix('-') {
         (true, rest)
     } else {
         (false, s)
     };
-    
+
     // First try legacy format with period
     if let Some((num_str, unit)) = stripped.split_once('.') {
         if let Ok(number) = num_str.parse::<i64>() {
@@ -166,14 +172,14 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
             };
         }
     }
-    
+
     // Try new format without period (e.g., "7days", "30m")
     // Find where the digits end and the unit begins
     let digit_end = stripped.find(|c: char| !c.is_ascii_digit());
     if let Some(idx) = digit_end {
         let num_str = &stripped[..idx];
         let unit = &stripped[idx..];
-        
+
         // Check if this looks like a date (has dashes after digits) rather than duration
         // Dates look like: 2024-01-01, not like: 7days
         if !unit.starts_with('-') {
@@ -508,7 +514,7 @@ impl StringMatcher {
         }
         Ok(Self::Regex(Regex::new(s)?))
     }
-    
+
     pub fn regex_with_warnings(s: &str) -> Result<(Self, Option<String>), regex::Error> {
         let warning = check_regex_patterns(s);
         Ok((Self::Regex(Regex::new(s)?), warning))
@@ -1140,7 +1146,10 @@ impl MetadataPredicate {
                 let ft: FileType = metadata.file_type();
                 // Use the new DetectFileType enum for cleaner type checking
                 if let Some(detect_type) = DetectFileType::from_fs_type(&ft) {
-                    detect_type.aliases().iter().any(|&alias| matcher.is_match(alias))
+                    detect_type
+                        .aliases()
+                        .iter()
+                        .any(|&alias| matcher.is_match(alias))
                 } else {
                     false
                 }
@@ -1178,7 +1187,10 @@ impl MetadataPredicate {
             }
             MetadataPredicate::Type(matcher) => {
                 // Check if matcher matches directory type
-                DetectFileType::Directory.aliases().iter().any(|&alias| matcher.is_match(alias))
+                DetectFileType::Directory
+                    .aliases()
+                    .iter()
+                    .any(|&alias| matcher.is_match(alias))
             }
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
@@ -1195,7 +1207,10 @@ impl MetadataPredicate {
             MetadataPredicate::Filesize(range) => range.is_match(entry.size() as u64),
             MetadataPredicate::Type(matcher) => {
                 // Check if matcher matches file type
-                DetectFileType::File.aliases().iter().any(|&alias| matcher.is_match(alias))
+                DetectFileType::File
+                    .aliases()
+                    .iter()
+                    .any(|&alias| matcher.is_match(alias))
             }
             MetadataPredicate::Modified(_)
             | MetadataPredicate::Created(_)
