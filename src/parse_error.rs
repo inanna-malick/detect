@@ -3,6 +3,44 @@ use std::fmt;
 
 use crate::parser::pratt_parser::Rule;
 
+/// Improve Pest error messages by translating rule names to user-friendly descriptions
+fn improve_pest_error_message(error: &str) -> String {
+    // Common rule translations
+    let error = error
+        .replace("string_regex", "regex operator (~=)")
+        .replace("string_eq", "equals operator (==)")
+        .replace("string_ne", "not equals operator (!=)")
+        .replace("string_contains", "contains operator")
+        .replace("string_in", "in operator")
+        .replace("eq", "== or =")
+        .replace("ne", "!=")
+        .replace("in_", "'in'")
+        .replace("bare_string", "unquoted value")
+        .replace("quoted_string", "quoted value")
+        .replace("bare_name", "'name'")
+        .replace("bare_stem", "'stem'")
+        .replace("bare_extension", "'extension' or 'ext'")
+        .replace("bare_parent", "'parent'")
+        .replace("bare_full", "'full'")
+        .replace("string_selector", "string selector (name, path, etc.)")
+        .replace("numeric_selector", "numeric selector (size, depth)")
+        .replace("temporal_selector", "time selector (modified, created, accessed)")
+        .replace("typed_predicate", "valid expression");
+    
+    // If the error mentions expected rules, add a hint
+    if error.contains("expected") && error.contains("at line") {
+        // Check if it looks like a selector at the start
+        if let Some(pos) = error.find(" at line 1, column") {
+            let before = &error[..pos];
+            if before.contains("expected") && !before.contains("operator") {
+                return format!("{}\n\nHint: Did you forget to use a path prefix? Try 'path.name', 'path.extension', etc.", error);
+            }
+        }
+    }
+    
+    error
+}
+
 #[derive(Debug)]
 pub enum ParseError {
     /// Pest grammar/syntax error - preserves location info
@@ -225,8 +263,10 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::Syntax(e) => {
-                // Pest already has good error formatting with location markers
-                write!(f, "{}", e)
+                // Improve Pest's error messages by translating rule names
+                let error_str = e.to_string();
+                let improved = improve_pest_error_message(&error_str);
+                write!(f, "{}", improved)
             }
             ParseError::Structure { kind, .. } => {
                 write!(f, "{}", kind)
