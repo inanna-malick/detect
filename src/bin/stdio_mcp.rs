@@ -260,27 +260,30 @@ fn handle_detect_tool(params: Value) -> Result<Value> {
         Ok(()) => {}
         Err(e) => {
             match e {
-                detect::error::DetectError::ParseError {
-                    message,
-                    hint,
-                    location,
-                } => {
-                    // Build error message with location if available
-                    let mut error_msg = message.clone();
-                    if let Some((line, col)) = location {
-                        error_msg.push_str(&format!(" at line {}, column {}", line, col));
-                    }
-
-                    // Add hint if available
-                    if let Some(hint) = hint {
-                        error_msg.push_str(&format!("\n\n{}", hint));
+                detect::error::DetectError::ParseError { error, source } => {
+                    // Try to create a diagnostic if source is available
+                    if let Some(src) = source {
+                        // Create a diagnostic for structured error output
+                        let _diagnostic = detect::diagnostics::parse_error_to_diagnostic(
+                            &error,
+                            &src,
+                            Some("expression"),
+                        );
+                        // For MCP, we'll format as text for now
+                        // In the future, we could return structured diagnostic data
+                        return Err(anyhow::anyhow!("{}", error));
                     } else {
-                        // Fall back to generic hints
-                        let hints = detect::error_hints::get_parse_error_hints();
-                        error_msg.push_str(&format!("\n\n{}", hints));
+                        // Fall back to regular error display
+                        let mut error_msg = error.to_string();
+                        if let Some(hint) = error.hint() {
+                            error_msg.push_str(&format!("\n\n{}", hint));
+                        } else {
+                            // Fall back to generic hints
+                            let hints = detect::error_hints::get_parse_error_hints();
+                            error_msg.push_str(&format!("\n\n{}", hints));
+                        }
+                        return Err(anyhow::anyhow!("{}", error_msg));
                     }
-
-                    return Err(anyhow::anyhow!("{}", error_msg));
                 }
                 detect::error::DetectError::Other(err) => {
                     return Err(err);

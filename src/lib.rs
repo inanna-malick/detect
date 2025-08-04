@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod diagnostics;
 pub mod error;
 pub mod error_hints;
 mod eval;
@@ -96,6 +97,9 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     expr: String,
     mut on_match: F,
 ) -> Result<(), DetectError> {
+    // Store the expression for error reporting
+    let expr_source = std::sync::Arc::from(expr.as_str());
+    
     match parse_expr(&expr) {
         Ok(parsed_expr) => {
             let walker = WalkBuilder::new(root)
@@ -133,6 +137,9 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             Ok(())
         }
-        Err(err) => Err(err.into()),
+        Err(err) => {
+            // Create error with source text for diagnostics
+            Err(DetectError::parse_with_source(err, expr_source))
+        }
     }
 }

@@ -2,6 +2,7 @@ use std::{env::current_dir, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
 use detect::{output::safe_stdout, parse_and_run_fs};
+use miette::{IntoDiagnostic, Report};
 use slog::{o, Drain, Level, Logger};
 
 const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");
@@ -33,7 +34,7 @@ struct Args {
 }
 
 #[tokio::main]
-pub async fn main() -> Result<(), anyhow::Error> {
+pub async fn main() -> miette::Result<()> {
     let args = Args::parse();
 
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
@@ -49,7 +50,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
 
     let root_path = match args.path {
         Some(path) => path,
-        None => current_dir()?,
+        None => current_dir().into_diagnostic()?,
     };
 
     // Create safe output handler that manages broken pipe errors
@@ -65,16 +66,27 @@ pub async fn main() -> Result<(), anyhow::Error> {
     //         }
     //     })?;
     // } else {
-    parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
+    let result = parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
         if let Err(e) = output.writeln(&s.to_string_lossy()) {
             eprintln!("Output error: {}", e);
             std::process::exit(1);
         }
     })
-    .await?;
-    // }
-
-    Ok(())
+    .await;
+    
+    // Convert DetectError to Miette diagnostic if possible
+    match result {
+        Ok(()) => Ok(()),
+        Err(detect_err) => {
+            // Try to convert to a diagnostic for rich error display
+            if let Some(diagnostic) = detect_err.to_diagnostic() {
+                Err(Report::new(diagnostic))
+            } else {
+                // Fall back to regular error display
+                Err(miette::Error::msg(detect_err.to_string()))
+            }
+        }
+    }
 }
 
 /// Custom Drain logic
