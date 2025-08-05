@@ -208,19 +208,16 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, TemporalError> {
         _ => {}
     }
 
-    match NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        Ok(date) => {
-            if let Some(time) = date.and_hms_opt(0, 0, 0) {
-                if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
-                    return Ok(local_time);
-                }
+    if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        if let Some(time) = date.and_hms_opt(0, 0, 0) {
+            if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
+                return Ok(local_time);
             }
-            return Err(TemporalError {
-                input: s.to_string(),
-                kind: TemporalErrorKind::UnknownUnit("invalid date".to_string()),
-            });
         }
-        Err(_) => {}
+        return Err(TemporalError {
+            input: s.to_string(),
+            kind: TemporalErrorKind::UnknownUnit("invalid date".to_string()),
+        });
     }
 
     match DateTime::parse_from_rfc3339(s) {
@@ -1096,7 +1093,6 @@ impl Display for NumberMatcher {
         }
     }
 }
-
 
 impl Display for TimeMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

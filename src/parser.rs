@@ -154,9 +154,13 @@ pub fn parse_expr(
     let mut parse_tree = pratt_parser::Parser::parse(Rule::program, input)
         .map_err(|e| ParseError::Syntax(crate::parse_error::PestError(Box::new(e))))?;
 
-    let program = parse_tree.next().ok_or(ParseError::Internal("grammar guarantees program exists at root"))?;
+    let program = parse_tree.next().ok_or(ParseError::Internal(
+        "grammar guarantees program exists at root",
+    ))?;
 
-    let expr_pair = program.into_inner().next().ok_or(ParseError::Internal("grammar guarantees program contains expression"))?;
+    let expr_pair = program.into_inner().next().ok_or(ParseError::Internal(
+        "grammar guarantees program contains expression",
+    ))?;
 
     let pairs = expr_pair.into_inner();
 

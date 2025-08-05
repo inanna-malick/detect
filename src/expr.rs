@@ -68,26 +68,42 @@ impl<A, B, C> Expr<Predicate<A, B, C>> {
 }
 
 // Concrete helper constructors for the parser test types
-impl Expr<crate::predicate::Predicate<crate::predicate::NamePredicate, crate::predicate::MetadataPredicate, crate::predicate::StreamingCompiledContentPredicate>> {
+impl
+    Expr<
+        crate::predicate::Predicate<
+            crate::predicate::NamePredicate,
+            crate::predicate::MetadataPredicate,
+            crate::predicate::StreamingCompiledContentPredicate,
+        >,
+    >
+{
     // Name predicate helpers - most common patterns
     pub fn name_eq(s: &str) -> Self {
         Self::name_predicate(crate::predicate::NamePredicate::file_eq(s))
     }
 
     pub fn name_ne(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::ne(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::FileName(
+            crate::predicate::StringMatcher::ne(s),
+        ))
     }
 
     pub fn name_contains(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::contains(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::FileName(
+            crate::predicate::StringMatcher::contains(s),
+        ))
     }
 
     pub fn name_regex(s: &str) -> Result<Self, regex::Error> {
-        Ok(Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::regex(s)?)))
+        Ok(Self::name_predicate(
+            crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::regex(s)?),
+        ))
     }
 
     pub fn name_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::FileName(crate::predicate::StringMatcher::in_set(items)))
+        Self::name_predicate(crate::predicate::NamePredicate::FileName(
+            crate::predicate::StringMatcher::in_set(items),
+        ))
     }
 
     // Stem (BaseName) helpers
@@ -96,7 +112,9 @@ impl Expr<crate::predicate::Predicate<crate::predicate::NamePredicate, crate::pr
     }
 
     pub fn stem_contains(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::BaseName(crate::predicate::StringMatcher::contains(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::BaseName(
+            crate::predicate::StringMatcher::contains(s),
+        ))
     }
 
     // Extension helpers
@@ -105,7 +123,9 @@ impl Expr<crate::predicate::Predicate<crate::predicate::NamePredicate, crate::pr
     }
 
     pub fn ext_contains(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::Extension(crate::predicate::StringMatcher::contains(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::Extension(
+            crate::predicate::StringMatcher::contains(s),
+        ))
     }
 
     pub fn ext_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Self {
@@ -114,11 +134,15 @@ impl Expr<crate::predicate::Predicate<crate::predicate::NamePredicate, crate::pr
 
     // Parent directory (DirPath) helpers
     pub fn parent_eq(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::DirPath(crate::predicate::StringMatcher::eq(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::DirPath(
+            crate::predicate::StringMatcher::eq(s),
+        ))
     }
 
     pub fn parent_contains(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::DirPath(crate::predicate::StringMatcher::contains(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::DirPath(
+            crate::predicate::StringMatcher::contains(s),
+        ))
     }
 
     // Full path helpers
@@ -127,45 +151,67 @@ impl Expr<crate::predicate::Predicate<crate::predicate::NamePredicate, crate::pr
     }
 
     pub fn full_path_contains(s: &str) -> Self {
-        Self::name_predicate(crate::predicate::NamePredicate::FullPath(crate::predicate::StringMatcher::contains(s)))
+        Self::name_predicate(crate::predicate::NamePredicate::FullPath(
+            crate::predicate::StringMatcher::contains(s),
+        ))
     }
 
     // Metadata helpers
     pub fn type_eq(s: &str) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Type(crate::predicate::StringMatcher::eq(s)))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Type(
+            crate::predicate::StringMatcher::eq(s),
+        ))
     }
 
     pub fn size_eq(bytes: u64) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::Equals(bytes)))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(
+            crate::predicate::NumberMatcher::Equals(bytes),
+        ))
     }
 
     pub fn size_ne(bytes: u64) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::NotEquals(bytes)))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(
+            crate::predicate::NumberMatcher::NotEquals(bytes),
+        ))
     }
 
     pub fn size_gt(bytes: u64) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Left((bytes + 1)..))))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(
+            crate::predicate::NumberMatcher::In(crate::predicate::Bound::Left((bytes + 1)..)),
+        ))
     }
 
     pub fn size_gte(bytes: u64) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Left(bytes..))))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(
+            crate::predicate::NumberMatcher::In(crate::predicate::Bound::Left(bytes..)),
+        ))
     }
 
     pub fn size_lt(bytes: u64) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Right(..bytes))))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(
+            crate::predicate::NumberMatcher::In(crate::predicate::Bound::Right(..bytes)),
+        ))
     }
 
     pub fn size_lte(bytes: u64) -> Self {
-        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(crate::predicate::NumberMatcher::In(crate::predicate::Bound::Right(..(bytes + 1)))))
+        Self::meta_predicate(crate::predicate::MetadataPredicate::Filesize(
+            crate::predicate::NumberMatcher::In(crate::predicate::Bound::Right(..(bytes + 1))),
+        ))
     }
 
     // Content helpers
-    pub fn content_contains(pattern: &str) -> Result<Self, crate::parse_error::PredicateParseError> {
-        Ok(Self::content_predicate(crate::predicate::StreamingCompiledContentPredicate::new(regex::escape(pattern))?))
+    pub fn content_contains(
+        pattern: &str,
+    ) -> Result<Self, crate::parse_error::PredicateParseError> {
+        Ok(Self::content_predicate(
+            crate::predicate::StreamingCompiledContentPredicate::new(regex::escape(pattern))?,
+        ))
     }
 
     pub fn content_regex(pattern: &str) -> Result<Self, crate::parse_error::PredicateParseError> {
-        Ok(Self::content_predicate(crate::predicate::StreamingCompiledContentPredicate::new(pattern.to_string())?))
+        Ok(Self::content_predicate(
+            crate::predicate::StreamingCompiledContentPredicate::new(pattern.to_string())?,
+        ))
     }
 }
 

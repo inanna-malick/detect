@@ -117,7 +117,7 @@ mod tests {
             |inner| {
                 prop_oneof![
                     2 => inner.clone()
-                        .prop_map(|e| Expr::negate(e)),
+                        .prop_map(Expr::negate),
 
                     1 => (inner.clone(), inner.clone())
                         .prop_map(|(a, b)| Expr::and(a, b)),

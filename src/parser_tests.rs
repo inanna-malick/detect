@@ -9,8 +9,10 @@ mod tests {
     };
 
     // Helper functions for common assertion patterns
-    fn assert_metadata_predicate<F>(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>, predicate_check: F)
-    where
+    fn assert_metadata_predicate<F>(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+        predicate_check: F,
+    ) where
         F: Fn(&MetadataPredicate) -> bool,
     {
         assert!(matches!(
@@ -20,8 +22,10 @@ mod tests {
         ));
     }
 
-    fn assert_name_predicate<F>(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>, predicate_check: F)
-    where
+    fn assert_name_predicate<F>(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+        predicate_check: F,
+    ) where
         F: Fn(&NamePredicate) -> bool,
     {
         assert!(matches!(
@@ -31,35 +35,46 @@ mod tests {
         ));
     }
 
-    fn assert_content_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
-        assert!(matches!(
-            expr,
-            Expr::Predicate(Predicate::Content(_))
-        ));
+    fn assert_content_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
+        assert!(matches!(expr, Expr::Predicate(Predicate::Content(_))));
     }
 
     // Specific metadata predicate assertions
-    fn assert_modified_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
+    fn assert_modified_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
         assert_metadata_predicate(expr, |meta| matches!(meta, MetadataPredicate::Modified(_)));
     }
 
-    fn assert_created_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
+    fn assert_created_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
         assert_metadata_predicate(expr, |meta| matches!(meta, MetadataPredicate::Created(_)));
     }
 
-    fn assert_accessed_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
+    fn assert_accessed_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
         assert_metadata_predicate(expr, |meta| matches!(meta, MetadataPredicate::Accessed(_)));
     }
 
-    fn assert_filesize_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
+    fn assert_filesize_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
         assert_metadata_predicate(expr, |meta| matches!(meta, MetadataPredicate::Filesize(_)));
     }
 
-    fn assert_type_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
+    fn assert_type_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
         assert_metadata_predicate(expr, |meta| matches!(meta, MetadataPredicate::Type(_)));
     }
 
-    fn assert_filename_predicate(expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>) {
+    fn assert_filename_predicate(
+        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ) {
         assert_name_predicate(expr, |name| matches!(name, NamePredicate::FileName(_)));
     }
 
@@ -435,16 +450,31 @@ mod tests {
     fn test_size_comparison_parsing() {
         // Size comparisons can use units or bare numbers
         // Bare numbers are interpreted as bytes
-        // Verify size expressions with units parse correctly  
+        // Verify size expressions with units parse correctly
         assert_eq!(parse_expr("size > 100").unwrap(), Expr::size_gt(100));
-        assert_eq!(parse_expr("size > 100kb").unwrap(), Expr::size_gt(100 * 1024));
-        assert_eq!(parse_expr("size > 100mb").unwrap(), Expr::size_gt(100 * 1024 * 1024));
-        assert_eq!(parse_expr("size > 100gb").unwrap(), Expr::size_gt(100 * 1024 * 1024 * 1024));
-        assert_eq!(parse_expr("size > 100tb").unwrap(), Expr::size_gt(100 * 1024 * 1024 * 1024 * 1024));
+        assert_eq!(
+            parse_expr("size > 100kb").unwrap(),
+            Expr::size_gt(100 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size > 100mb").unwrap(),
+            Expr::size_gt(100 * 1024 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size > 100gb").unwrap(),
+            Expr::size_gt(100 * 1024 * 1024 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size > 100tb").unwrap(),
+            Expr::size_gt(100 * 1024 * 1024 * 1024 * 1024)
+        );
 
         // Verify filesize alias works the same way
         assert_eq!(parse_expr("filesize > 100").unwrap(), Expr::size_gt(100));
-        assert_eq!(parse_expr("filesize > 100kb").unwrap(), Expr::size_gt(100 * 1024));
+        assert_eq!(
+            parse_expr("filesize > 100kb").unwrap(),
+            Expr::size_gt(100 * 1024)
+        );
 
         // Verify what bare numbers parse to
         if let Ok(expr) = parse_expr("size > 100") {
@@ -461,7 +491,7 @@ mod tests {
     fn test_peg_ordering_aliases() {
         let expr = parse_expr("filesize > 100kb").unwrap();
         assert_filesize_predicate(&expr);
-        
+
         let expr = parse_expr("filetype == dir").unwrap();
         assert_type_predicate(&expr);
 
@@ -754,10 +784,7 @@ mod tests {
         let expr =
             parse_expr(r#"path.extension in [js, ts] && path.name in [index, main]"#).unwrap();
 
-        let expected = Expr::and(
-            Expr::ext_in(["js", "ts"]),
-            Expr::name_in(["index", "main"]),
-        );
+        let expected = Expr::and(Expr::ext_in(["js", "ts"]), Expr::name_in(["index", "main"]));
 
         assert_eq!(expr, expected);
     }
@@ -1051,31 +1078,31 @@ mod tests {
         // Test what currently works
         let expr = parse_expr("modified > \"-7.days\"").unwrap();
         assert_modified_predicate(&expr);
-        
+
         let expr = parse_expr("created < \"-30.minutes\"").unwrap();
         assert_created_predicate(&expr);
 
         // Test what we WANT to work - these will fail initially
         let expr = parse_expr("modified > -7days").unwrap();
         assert_modified_predicate(&expr);
-        
+
         let expr = parse_expr("modified > 7days").unwrap();
         assert_modified_predicate(&expr);
-        
+
         let expr = parse_expr("created < 30minutes").unwrap();
         assert_created_predicate(&expr);
-        
+
         let expr = parse_expr("accessed > -1hour").unwrap();
         assert_accessed_predicate(&expr);
         let expr = parse_expr("modified > -2weeks").unwrap();
         assert_modified_predicate(&expr);
-        
+
         let expr = parse_expr("modified > -7d").unwrap();
         assert_modified_predicate(&expr);
-        
+
         let expr = parse_expr("created < 30m").unwrap();
         assert_created_predicate(&expr);
-        
+
         let expr = parse_expr("accessed > 1h").unwrap();
         assert_accessed_predicate(&expr);
     }
@@ -1101,24 +1128,24 @@ mod tests {
             Expr::Predicate(Predicate::Name(ref name))
                 if matches!(**name, NamePredicate::FileName(_))
         ));
-        
+
         let expr = parse_expr("filename contains test").unwrap();
         assert!(matches!(
             expr,
             Expr::Predicate(Predicate::Name(ref name))
                 if matches!(**name, NamePredicate::FileName(_))
         ));
-        
+
         let expr = parse_expr("filename ~= \\.rs$").unwrap();
         assert!(matches!(
             expr,
             Expr::Predicate(Predicate::Name(ref name))
                 if matches!(**name, NamePredicate::FileName(_))
         ));
-        
+
         let expr = parse_expr("filename in [Makefile, Dockerfile]").unwrap();
         assert_filename_predicate(&expr);
-        
+
         let expr = parse_expr("filename != .gitignore").unwrap();
         assert_filename_predicate(&expr);
     }
@@ -1185,11 +1212,26 @@ mod tests {
     #[test]
     fn test_size_with_different_operators() {
         // Test size with various operators - use helpers instead of raw matchers
-        assert_eq!(parse_expr("size == 1mb").unwrap(), Expr::size_eq(1024 * 1024));
-        assert_eq!(parse_expr("size != 2gb").unwrap(), Expr::size_ne(2 * 1024 * 1024 * 1024));
-        assert_eq!(parse_expr("size < 500kb").unwrap(), Expr::size_lt(500 * 1024));
-        assert_eq!(parse_expr("size <= 1gb").unwrap(), Expr::size_lte(1024 * 1024 * 1024));
-        assert_eq!(parse_expr("size >= 100mb").unwrap(), Expr::size_gte(100 * 1024 * 1024));
+        assert_eq!(
+            parse_expr("size == 1mb").unwrap(),
+            Expr::size_eq(1024 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size != 2gb").unwrap(),
+            Expr::size_ne(2 * 1024 * 1024 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size < 500kb").unwrap(),
+            Expr::size_lt(500 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size <= 1gb").unwrap(),
+            Expr::size_lte(1024 * 1024 * 1024)
+        );
+        assert_eq!(
+            parse_expr("size >= 100mb").unwrap(),
+            Expr::size_gte(100 * 1024 * 1024)
+        );
     }
 
     #[test]
@@ -1359,12 +1401,17 @@ mod tests {
         // Test path.extension regex matching (without dots)
         let parsed = parse_expr(r#"path.extension ~= "(rs|toml)""#).unwrap();
         // Just verify it parses successfully as a name predicate
-        assert_name_predicate(&parsed, |name| matches!(name, NamePredicate::Extension(StringMatcher::Regex(_))));
+        assert_name_predicate(&parsed, |name| {
+            matches!(name, NamePredicate::Extension(StringMatcher::Regex(_)))
+        });
 
         // Test complex path queries
         let parsed =
             parse_expr(r#"path.parent contains "src" && path.extension == ".rs""#).unwrap();
-        assert_eq!(parsed, Expr::and(Expr::parent_contains("src"), Expr::ext_eq(".rs")));
+        assert_eq!(
+            parsed,
+            Expr::and(Expr::parent_contains("src"), Expr::ext_eq(".rs"))
+        );
     }
 
     #[test]
