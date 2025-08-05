@@ -1,5 +1,4 @@
 pub mod ast;
-pub mod diagnostics;
 pub mod error;
 pub mod error_hints;
 mod eval;

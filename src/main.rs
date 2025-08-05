@@ -2,7 +2,6 @@ use std::{env::current_dir, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
 use detect::{output::safe_stdout, parse_and_run_fs};
-use miette::{IntoDiagnostic, Report};
 use slog::{o, Drain, Level, Logger};
 
 const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");
@@ -31,7 +30,7 @@ struct Args {
 }
 
 #[tokio::main]
-pub async fn main() -> miette::Result<()> {
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
@@ -47,7 +46,7 @@ pub async fn main() -> miette::Result<()> {
 
     let root_path = match args.path {
         Some(path) => path,
-        None => current_dir().into_diagnostic()?,
+        None => current_dir()?,
     };
 
     let mut output = safe_stdout();
@@ -60,17 +59,11 @@ pub async fn main() -> miette::Result<()> {
     })
     .await;
 
-    // Convert DetectError to Miette diagnostic if possible
-    match result {
-        Ok(()) => Ok(()),
-        Err(detect_err) => {
-            if let Some(diagnostic) = detect_err.to_diagnostic() {
-                Err(Report::new(diagnostic))
-            } else {
-                Err(miette::Error::msg(detect_err.to_string()))
-            }
-        }
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
+    Ok(())
 }
 
 /// Custom Drain logic

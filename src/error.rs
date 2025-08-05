@@ -5,7 +5,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum DetectError {
     /// Parse error with the input expression and optional source
-    #[error("{error}")]
+    #[error("{}", .error)]
     ParseError {
         /// The original parse error
         #[source]
@@ -33,15 +33,6 @@ impl From<ParseError> for DetectError {
     }
 }
 
-impl DetectError {
-    /// Get hint for display
-    pub fn hint(&self) -> Option<String> {
-        match self {
-            DetectError::ParseError { error, .. } => error.hint(),
-            _ => None,
-        }
-    }
-}
 
 impl DetectError {
     /// Attach source text to a parse error for diagnostic display
@@ -64,16 +55,4 @@ impl DetectError {
         }
     }
 
-    /// Convert to a Miette diagnostic if this is a parse error with source
-    pub fn to_diagnostic(&self) -> Option<crate::diagnostics::DetectDiagnostic> {
-        match self {
-            DetectError::ParseError {
-                error,
-                source: Some(src),
-            } => Some(crate::diagnostics::parse_error_to_diagnostic(
-                error, src, None,
-            )),
-            _ => None,
-        }
-    }
 }
