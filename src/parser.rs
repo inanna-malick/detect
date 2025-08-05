@@ -5,7 +5,7 @@ use pest::{
 };
 
 use crate::{
-    ast::TypedPredicate,
+    ast::typed_predicate::TypedPredicate,
     expr::Expr,
     parse_error::{ParseError, StructureErrorKind},
     predicate::{Predicate, StreamingCompiledContentPredicate},

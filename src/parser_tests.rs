@@ -35,12 +35,6 @@ mod tests {
         ));
     }
 
-    fn assert_content_predicate(
-        expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
-    ) {
-        assert!(matches!(expr, Expr::Predicate(Predicate::Content(_))));
-    }
-
     // Specific metadata predicate assertions
     fn assert_modified_predicate(
         expr: &Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
