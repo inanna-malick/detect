@@ -1,38 +1,18 @@
-use std::{env::current_dir, path::PathBuf, str::FromStr};
+use std::{env::current_dir, io::Write, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
-use detect::{parse_and_run_fs, parser::parse_expr, run_git};
+use detect::parse_and_run_fs;
 use slog::{o, Drain, Level, Logger};
 
-/// operators
-/// - `a && b` a and b
-/// - `a || b`: a or b
-/// - `!a`: not a
-/// - `(a)`: parens to clarify grouping
-///
-/// ## string operators
-/// - `==`
-/// - `~=` (regex match)
-/// ## numeric operators
-/// - `>`, `>=`, `<`, `<=`
-/// - `==`
-/// ## file path selectors
-/// - name
-/// - path
-/// - extension
-/// ## metadata selectors
-/// - size
-/// - type
-/// ## file contents predicates
-/// - contents
+const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");
+
 #[derive(Parser, Debug)]
 #[command(
     name = "detect",
     author,
     version,
-    about,
-    long_about,
-    verbatim_doc_comment
+    about = "Find filesystem entities using expressions",
+    long_about = EXPR_GUIDE
 )]
 struct Args {
     /// filtering expr
@@ -41,17 +21,16 @@ struct Args {
     /// target dir
     #[clap(index = 2)]
     path: Option<PathBuf>,
+    /// include gitignored files
     #[arg(short = 'i')]
     visit_gitignored: bool,
-    /// ref for git repo in current dir or parent of current dir
-    #[arg(short = 'g', long = "gitref")]
-    gitref: Option<String>,
+    /// log level (error/warn/info/debug)
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
 }
 
 #[tokio::main]
-pub async fn main() -> Result<(), anyhow::Error> {
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
@@ -70,23 +49,25 @@ pub async fn main() -> Result<(), anyhow::Error> {
         None => current_dir()?,
     };
 
-    println!("path: {:?}", root_path);
+    let mut output = std::io::stdout();
 
-    let expr = parse_expr(&args.expr)?;
+    let result = parse_and_run_fs(logger, &root_path, !args.visit_gitignored, args.expr, |s| {
+        if let Err(e) = writeln!(output, "{}", &s.to_string_lossy()) {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                // Unix convention: exit 0 on SIGPIPE/BrokenPipe
+                std::process::exit(0);
+            } else {
+                eprintln!("Output error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    })
+    .await;
 
-    if let Some(ref_) = args.gitref {
-        run_git(logger, &root_path, &ref_, expr, |s| println!("{}", s))?;
-    } else {
-        parse_and_run_fs(
-            logger,
-            &root_path,
-            !args.visit_gitignored,
-            args.expr,
-            |s| println!("{}", s.to_string_lossy()),
-        )
-        .await?;
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
-
     Ok(())
 }
 

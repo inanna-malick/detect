@@ -3,9 +3,10 @@ pub mod short_circuit;
 
 use std::{fmt::Display, sync::Arc};
 
-use crate::expr::frame::ExprFrame;
-use crate::predicate::Predicate;
-pub(crate) use crate::predicate::{MetadataPredicate, NamePredicate};
+use crate::{
+    expr::frame::ExprFrame,
+    predicate::{self, Predicate},
+};
 use frame::MapPredicateRef;
 use recursion::CollapsibleExt;
 
@@ -13,24 +14,21 @@ use self::short_circuit::ShortCircuit;
 
 /// Filesystem entity matcher expression with boolean logic and predicates
 #[derive(Debug, PartialEq, Eq)]
-pub enum Expr<Predicate> {
-    // boolean operators
+pub enum Expr<Predicate = predicate::Predicate> {
     Not(Box<Self>),
     And(Box<Self>, Box<Self>),
     Or(Box<Self>, Box<Self>),
-    // predicates
     Predicate(Predicate),
-    // literal boolean values
     Literal(bool),
 }
 
-impl<P: Display> Display for Expr<P> {
+impl<P: std::fmt::Debug> Display for Expr<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Not(e) => f.write_str(&format!("!{}", e)),
             Expr::And(a, b) => f.write_str(&format!("{} && {}", a, b)),
             Expr::Or(a, b) => f.write_str(&format!("{} || {}", a, b)),
-            Expr::Predicate(p) => f.write_str(&p.to_string()),
+            Expr::Predicate(p) => write!(f, "{:?}", &p),
             Expr::Literal(x) => f.write_str(&x.to_string()),
         }
     }
@@ -111,16 +109,16 @@ impl<P: Clone> Expr<P> {
             ExprFrame::And(_, Expr::Literal(false)) => Expr::Literal(false),
             ExprFrame::And(x, Expr::Literal(true)) => x,
             ExprFrame::And(Expr::Literal(true), x) => x,
-            ExprFrame::And(a, b) => Expr::And(Box::new(a), Box::new(b)),
+            ExprFrame::And(a, b) => Expr::and(a, b),
             // reduce Or expressions
             ExprFrame::Or(Expr::Literal(true), _) => Expr::Literal(true),
             ExprFrame::Or(_, Expr::Literal(true)) => Expr::Literal(true),
             ExprFrame::Or(x, Expr::Literal(false)) => x,
             ExprFrame::Or(Expr::Literal(false), x) => x,
-            ExprFrame::Or(a, b) => Expr::Or(Box::new(a), Box::new(b)),
+            ExprFrame::Or(a, b) => Expr::or(a, b),
             // reduce Not expressions
             ExprFrame::Not(Expr::Literal(k)) => Expr::Literal(!k),
-            ExprFrame::Not(x) => Expr::Not(Box::new(x)),
+            ExprFrame::Not(x) => Expr::negate(x),
             // Literal expressions are unchanged
             ExprFrame::Literal(x) => Expr::Literal(x),
         })
