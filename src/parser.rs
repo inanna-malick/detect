@@ -58,7 +58,7 @@ pub fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u6
     let span = pair.as_span();
     let text = pair.as_str();
 
-    // The grammar ensures this has a number followed by a unit
+    // The grammar ensures this has a number followed by optional space and a unit
     // Find where the unit starts (first non-digit, non-dot character after initial digits)
     let mut unit_start = 0;
     let chars: Vec<char> = text.chars().collect();
@@ -81,7 +81,7 @@ pub fn parse_size_value_as_bytes(pair: pest::iterators::Pair<Rule>) -> Result<u6
     }
 
     let number_part = &text[..unit_start];
-    let unit_part = &text[unit_start..];
+    let unit_part = text[unit_start..].trim(); // Trim any spaces before the unit
 
     let value = number_part
         .parse::<f64>()

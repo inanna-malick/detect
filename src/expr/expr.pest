@@ -103,7 +103,7 @@ numeric_predicate = {
   numeric_comparison = { (gteq | lteq | gt | lt) ~ numeric_value }
   
   numeric_value = { size_value | bare_number }
-  size_value = ${ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ size_unit }
+  size_value = ${ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ " "? ~ size_unit }
   bare_number = @{ ASCII_DIGIT+ }
 
 // Temporal predicates (for time selectors)

@@ -31,7 +31,8 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 .filter_entry(|entry| {
                     // Always exclude VCS directories, regardless of gitignore settings
                     // This matches ripgrep's behavior
-                    !entry.file_name()
+                    !entry
+                        .file_name()
                         .to_str()
                         .map(|s| s == ".git" || s == ".hg" || s == ".svn")
                         .unwrap_or(false)
