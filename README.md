@@ -25,7 +25,7 @@ detect 'path.name == README.md'
 detect 'contents contains TODO'
 
 # Complex queries with boolean logic
-detect 'path.ext == ts && contents ~= @Injectable && !path.full contains test'
+detect 'path.ext == ts AND contents ~= @Injectable AND NOT path.full contains test'
 ```
 
 ## Why detect?
@@ -37,7 +37,7 @@ Traditional Unix tools require chaining multiple commands with complex syntax:
 find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 
 # New way: same query, readable syntax
-detect 'path.ext == ts && size > 5kb && modified > -7d && contents contains TODO'
+detect 'path.ext == ts AND size > 5kb AND modified > -7d AND contents contains TODO'
 ```
 
 ## Key Features
@@ -53,19 +53,19 @@ detect 'path.ext == ts && size > 5kb && modified > -7d && contents contains TODO
 
 ```bash
 # Security audit: find config files with secrets
-detect 'path.ext in [env,json,yml] && contents ~= (password|secret|api_key)'
+detect 'path.ext in [env,json,yml] AND contents ~= (password|secret|api_key)'
 
 # Code quality: large files without tests or docs
-detect 'size > 10kb && !contents contains test && !contents contains TODO'
+detect 'size > 10kb AND NOT contents contains test AND NOT contents contains TODO'
 
 # Angular components with specific decorators
-detect 'path.ext == ts && contents ~= @(Component|Injectable|Directive)'
+detect 'path.ext == ts AND contents ~= @(Component|Injectable|Directive)'
 
 # Recent changes to build files
-detect 'modified > -7d && path.name ~= (Makefile|.*\.mk|build\.)'
+detect 'modified > -7d AND path.name ~= (Makefile|.*\.mk|build\.)'
 
 # Complex boolean logic with grouping
-detect '(path.ext == js || path.ext == ts) && (contents contains import || contents contains require) && size > 1kb'
+detect '(path.ext == js OR path.ext == ts) AND (contents contains import OR contents contains require) AND size > 1kb'
 ```
 
 **Full syntax reference and advanced features**: `detect --help`

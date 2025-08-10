@@ -27,20 +27,20 @@ Operators: == != in
 Examples: file dir symlink socket fifo block char
 
 ## Boolean Logic
-Operators: && || ! ()
+Operators: AND OR NOT ()
 Usage: combine and group expressions
 
 ## Examples:
-path.ext == rs && contents ~= async     # Rust files with async
-size > 1mb && modified > -7d            # Large recent files  
-contents contains TODO && !path ~= test # TODOs outside tests
-type == file && path in [Makefile,*.mk] # Build files only
-path.name ~= \.service\.ts$ && !contents contains test
-contents ~= @(Injectable|Component) && size > 10kb
-(contents contains TODO || contents contains FIXME) && modified > -7d
+path.ext == rs AND contents ~= async     # Rust files with async
+size > 1mb AND modified > -7d            # Large recent files  
+contents contains TODO AND NOT path ~= test # TODOs outside tests
+type == file AND path in [Makefile,*.mk] # Build files only
+path.name ~= \.service\.ts$ AND NOT contents contains test
+contents ~= @(Injectable|Component) AND size > 10kb
+(contents contains TODO OR contents contains FIXME) AND modified > -7d
 
 ## Migration from find:
-find . -name "*.js" -size +1M → detect 'path.ext == js && size > 1mb'
+find . -name "*.js" -size +1M → detect 'path.ext == js AND size > 1mb'
 find . -type f -exec grep -l TODO {} \; → detect 'contents contains TODO'
 
 ## Syntax Notes:
@@ -48,5 +48,5 @@ find . -type f -exec grep -l TODO {} \; → detect 'contents contains TODO'
 - Regex: escape dots \., use anchors ^$
 - Case-sensitive string comparisons
 - Set items: comma-separated [a,b,c]
-- Boolean precedence: ! > && > ||
+- Boolean precedence: NOT > AND > OR
 - Performance: name/metadata filters before contents

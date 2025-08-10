@@ -28,6 +28,14 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
             let walker = WalkBuilder::new(root)
                 .hidden(false)
                 .git_ignore(respect_gitignore)
+                .filter_entry(|entry| {
+                    // Always exclude VCS directories, regardless of gitignore settings
+                    // This matches ripgrep's behavior
+                    !entry.file_name()
+                        .to_str()
+                        .map(|s| s == ".git" || s == ".hg" || s == ".svn")
+                        .unwrap_or(false)
+                })
                 .build();
 
             let expr = parsed_expr.map_predicate_ref(|p| match p {

@@ -19,7 +19,7 @@ program         =   { SOI ~ expr ~ EOI }
       and       =   { "&&" | ^"and" } // logical and (symbol or case-insensitive word)
       or        =   { "||" | ^"or" }  // logical or (symbol or case-insensitive word)
     prefix      =  _{ neg }
-      neg       =   { "!" | ^"not" }  // Negation (symbol or case-insensitive word)
+      neg       =   { "!" | "\\!" | ^"not" }  // Negation (symbol or case-insensitive word, also allowing escaped symbol for Claude Code ergonomics)
     primary     =  _{ typed_predicate | "(" ~ expr ~ ")" }
 
 
