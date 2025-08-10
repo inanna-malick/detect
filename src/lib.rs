@@ -4,6 +4,7 @@ pub mod parse_error;
 pub mod parser;
 pub mod predicate;
 mod util;
+pub mod mcp_server;
 
 use std::{path::Path, sync::Arc, time::Instant};
 

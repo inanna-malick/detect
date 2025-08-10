@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "detect": {
+      "command": "/Users/inannamalick/dev/detect/target/release/detect",
+      "args": ["--mcp"],
+      "env": {}
+    }
+  }
+}
