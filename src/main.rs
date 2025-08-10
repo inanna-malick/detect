@@ -48,7 +48,9 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Normal detect mode
-    let expr = args.expr.expect("Expression is required when not in MCP mode");
+    let expr = args
+        .expr
+        .expect("Expression is required when not in MCP mode");
 
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let logger = Logger::root(

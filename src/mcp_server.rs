@@ -1,12 +1,12 @@
 //! MCP server implementation for detect using manual JSON-RPC
 
+use crate::parse_and_run_fs;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use slog::{o, Drain, Logger};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
-use crate::parse_and_run_fs;
-use slog::{o, Drain, Logger};
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
@@ -44,10 +44,7 @@ pub async fn run_mcp_server() -> Result<()> {
 
     // Create a logger for detect operations
     let plain = slog_term::PlainSyncDecorator::new(std::io::stderr());
-    let detect_logger = Logger::root(
-        slog_term::FullFormat::new(plain).build().fuse(),
-        o!(),
-    );
+    let detect_logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -87,7 +84,7 @@ pub async fn run_mcp_server() -> Result<()> {
                     }
                     "tools/list" => {
                         log::debug!("Handling tools/list");
-                        
+
                         JsonRpcResponse {
                             jsonrpc: "2.0".to_string(),
                             id: req.id,
@@ -162,58 +159,70 @@ pub async fn run_mcp_server() -> Result<()> {
 
                         let result = match tool_name {
                             "detect" => {
-                                let expression = tool_args.get("expression")
-                                    .and_then(|e| e.as_str());
-                                
+                                let expression =
+                                    tool_args.get("expression").and_then(|e| e.as_str());
+
                                 if expression.is_none() {
                                     serde_json::json!({
                                         "error": "Missing 'expression' parameter"
                                     })
                                 } else {
-                                let expression = expression.unwrap().to_string();
-                                
-                                let directory = tool_args.get("directory")
-                                    .and_then(|d| d.as_str())
-                                    .map(PathBuf::from)
-                                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-                                
-                                let include_gitignored = tool_args.get("include_gitignored")
-                                    .and_then(|i| i.as_bool())
-                                    .unwrap_or(false);
-                                
-                                let max_results = tool_args.get("max_results")
-                                    .and_then(|m| m.as_u64())
-                                    .unwrap_or(20) as usize;
-                                
-                                log::info!("Running detect with expression: {} in directory: {:?}", expression, directory);
-                                
-                                // Run detect directly with await since we're in an async function
-                                let logger = detect_logger.clone();
-                                let mut results = Vec::new();
-                                let detect_result = parse_and_run_fs(
-                                    logger,
-                                    &directory,
-                                    !include_gitignored,
-                                    expression,
-                                    |path| {
-                                        if max_results == 0 || results.len() < max_results {
-                                            results.push(path.to_string_lossy().to_string());
+                                    let expression = expression.unwrap().to_string();
+
+                                    let directory = tool_args
+                                        .get("directory")
+                                        .and_then(|d| d.as_str())
+                                        .map(PathBuf::from)
+                                        .unwrap_or_else(|| {
+                                            std::env::current_dir()
+                                                .unwrap_or_else(|_| PathBuf::from("."))
+                                        });
+
+                                    let include_gitignored = tool_args
+                                        .get("include_gitignored")
+                                        .and_then(|i| i.as_bool())
+                                        .unwrap_or(false);
+
+                                    let max_results = tool_args
+                                        .get("max_results")
+                                        .and_then(|m| m.as_u64())
+                                        .unwrap_or(20)
+                                        as usize;
+
+                                    log::info!(
+                                        "Running detect with expression: {} in directory: {:?}",
+                                        expression,
+                                        directory
+                                    );
+
+                                    // Run detect directly with await since we're in an async function
+                                    let logger = detect_logger.clone();
+                                    let mut results = Vec::new();
+                                    let detect_result = parse_and_run_fs(
+                                        logger,
+                                        &directory,
+                                        !include_gitignored,
+                                        expression,
+                                        |path| {
+                                            if max_results == 0 || results.len() < max_results {
+                                                results.push(path.to_string_lossy().to_string());
+                                            }
+                                        },
+                                    )
+                                    .await;
+
+                                    match detect_result {
+                                        Ok(_) => {
+                                            serde_json::json!({
+                                                "matches": results,
+                                                "count": results.len(),
+                                                "truncated": false
+                                            })
                                         }
+                                        Err(e) => serde_json::json!({
+                                            "error": format!("Detect failed: {}", e)
+                                        }),
                                     }
-                                ).await;
-                                
-                                match detect_result {
-                                    Ok(_) => {
-                                        serde_json::json!({
-                                            "matches": results,
-                                            "count": results.len(),
-                                            "truncated": false
-                                        })
-                                    }
-                                    Err(e) => serde_json::json!({
-                                        "error": format!("Detect failed: {}", e)
-                                    })
-                                }
                                 }
                             }
                             "detect_help" => {
@@ -223,7 +232,7 @@ pub async fn run_mcp_server() -> Result<()> {
                             }
                             _ => serde_json::json!({
                                 "error": format!("Unknown tool: {}", tool_name)
-                            })
+                            }),
                         };
 
                         JsonRpcResponse {

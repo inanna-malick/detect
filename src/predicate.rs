@@ -1,4 +1,4 @@
-use regex::Regex;
+use crate::hybrid_regex::{HybridRegex, HybridRegexRef, HybridStringRegex};
 use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
 use std::fs::FileType;
@@ -206,7 +206,7 @@ pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
 #[derive(Clone, Debug)]
 pub enum StringMatcher {
-    Regex(Regex),
+    Regex(HybridStringRegex),
     Equals(String),
     NotEquals(String),
     Contains(String),
@@ -230,7 +230,7 @@ impl Eq for StringMatcher {}
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
-        Ok(Self::Regex(Regex::new(s)?))
+        Ok(Self::Regex(HybridStringRegex::new(s)?))
     }
 
     // Helper constructors for tests and programmatic usage
@@ -338,7 +338,7 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
             Ok(match op {
                 Op::Matches => {
                     let pattern = if s == "*" { ".*" } else { s };
-                    StringMatcher::Regex(Regex::new(pattern)?)
+                    StringMatcher::regex(pattern)?
                 }
                 Op::Equality => StringMatcher::Equals(s.clone()),
                 Op::NotEqual => StringMatcher::NotEquals(s.clone()),
@@ -385,23 +385,11 @@ pub fn parse_string_dfa(
         Op::Matches => StreamingCompiledContentPredicate::new(s)?,
         Op::Equality => {
             let regex = format!("^{}$", regex::escape(&s));
-            match DFA::new(&regex) {
-                Ok(inner) => StreamingCompiledContentPredicate {
-                    inner,
-                    source: regex,
-                },
-                Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
-            }
+            StreamingCompiledContentPredicate::new(regex)?
         }
         Op::Contains => {
             let regex = regex::escape(&s);
-            match DFA::new(&regex) {
-                Ok(inner) => StreamingCompiledContentPredicate {
-                    inner,
-                    source: regex,
-                },
-                Err(e) => return Err(PredicateParseError::Dfa(e.to_string())),
-            }
+            StreamingCompiledContentPredicate::new(regex)?
         }
         Op::NotEqual => {
             return Err(PredicateParseError::Incompatible(
@@ -831,15 +819,15 @@ impl MetadataPredicate {
 
 #[derive(Debug)]
 pub struct StreamingCompiledContentPredicate {
-    inner: DFA<Vec<u32>>,
+    inner: HybridRegex,
     source: String,
 }
 
 impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
-        match DFA::new(&source) {
+        match HybridRegex::new(&source) {
             Ok(inner) => Ok(Self { inner, source }),
-            Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
+            Err(e) => Err(PredicateParseError::Dfa(e)),
         }
     }
 
@@ -859,6 +847,6 @@ impl PartialEq for StreamingCompiledContentPredicate {
 
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    pub inner: DFA<&'a [u32]>,
+    pub inner: HybridRegexRef<'a>,
     pub source: &'a str,
 }
