@@ -197,6 +197,41 @@ fn test_case_insensitive_keywords() {
 }
 
 #[test]
+fn test_glob_patterns() {
+    // Test that glob patterns parse successfully
+    test_parse_ok(&[
+        "*.rs",
+        "*test*",
+        "src/*.rs",
+        "**/*.rs",
+        "*.{rs,toml}",
+        "test_*.txt",
+        "??.rs",
+        "[ab]*.txt",
+    ]);
+
+    // Test glob patterns in boolean expressions
+    test_parse_ok(&[
+        "*.rs && size > 1kb",
+        "*test* || contents contains TODO",
+        "NOT *.md",
+        "(*.rs || *.toml) && modified > -7days",
+    ]);
+}
+
+#[test]
+fn test_size_with_spaces() {
+    // Test that spaces between number and unit work
+    test_parse_ok(&[
+        "size > 10 kb",
+        "size < 1 mb",
+        "size >= 100 gb",
+        "size == 5 tb",
+        "size > 10 kb && modified > -7days",
+    ]);
+}
+
+#[test]
 fn test_type_selectors() {
     test_cases(&[
         (r#"type == "file""#, type_eq("file")),

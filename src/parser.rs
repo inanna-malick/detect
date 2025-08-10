@@ -716,6 +716,28 @@ fn parse_temporal_value(pair: pest::iterators::Pair<Rule>) -> Result<String, Par
     }
 }
 
+// Parse glob patterns like *.rs, **/*.js, *test*, etc.
+fn parse_glob_pattern(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<
+    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>,
+    ParseError,
+> {
+    let glob_str = pair.as_str();
+
+    // Compile the glob pattern using globset
+    let glob = globset::Glob::new(glob_str).map_err(|e| ParseError::Structure {
+        kind: StructureErrorKind::InvalidToken {
+            expected: "valid glob pattern",
+            found: format!("{}: {}", glob_str, e),
+        },
+        location: Some(pair.as_span().to_location()),
+    })?;
+
+    // Create a predicate that uses the glob matcher
+    Ok(Expr::name_predicate(NamePredicate::GlobPattern(glob)))
+}
+
 fn parse_typed_predicates(
     pairs: Pairs<Rule>,
     pratt: &PrattParser<Rule>,
@@ -726,6 +748,7 @@ fn parse_typed_predicates(
     pratt
         .map_primary(|primary| match primary.as_rule() {
             Rule::typed_predicate => parse_predicate_direct(primary),
+            Rule::glob_pattern => parse_glob_pattern(primary),
             Rule::expr => parse_typed_predicates(primary.into_inner(), pratt),
             rule => Err(ParseError::Structure {
                 kind: StructureErrorKind::UnexpectedRule { rule },

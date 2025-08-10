@@ -20,11 +20,17 @@ program         =   { SOI ~ expr ~ EOI }
       or        =   { "||" | ^"or" }  // logical or (symbol or case-insensitive word)
     prefix      =  _{ neg }
       neg       =   { "!" | "\\!" | ^"not" }  // Negation (symbol or case-insensitive word, also allowing escaped symbol for Claude Code ergonomics)
-    primary     =  _{ typed_predicate | "(" ~ expr ~ ")" }
+    primary     =  _{ typed_predicate | glob_pattern | "(" ~ expr ~ ")" }
 
 
 // Typed predicates - each combines selector, operator, and appropriate RHS
 typed_predicate = { string_predicate | numeric_predicate | temporal_predicate }
+
+// Glob pattern - fallback for shell-style patterns
+// Parser will validate and interpret the actual glob semantics
+glob_pattern = @{ 
+    (ASCII_ALPHANUMERIC | "*" | "/" | "." | "_" | "-" | "?" | "[" | "]" | "{" | "}" | ",")+
+}
 
 // String predicates (for name, path, content, and type selectors)
 string_predicate = {

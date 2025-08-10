@@ -605,12 +605,13 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePredicate {
-    BaseName(StringMatcher),  // filename without extension
-    FileName(StringMatcher),  // complete filename with extension
-    DirPath(StringMatcher),   // directory path only
-    FullPath(StringMatcher),  // complete path including filename
-    Extension(StringMatcher), // file extension
-    ParentDir(StringMatcher), // immediate parent directory name
+    BaseName(StringMatcher),    // filename without extension
+    FileName(StringMatcher),    // complete filename with extension
+    DirPath(StringMatcher),     // directory path only
+    FullPath(StringMatcher),    // complete path including filename
+    Extension(StringMatcher),   // file extension
+    ParentDir(StringMatcher),   // immediate parent directory name
+    GlobPattern(globset::Glob), // shell-style glob pattern
 }
 
 impl NamePredicate {
@@ -714,6 +715,24 @@ impl NamePredicate {
                     .and_then(|p| p.file_name())
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s))
+            }
+            NamePredicate::GlobPattern(glob) => {
+                // Match using glob pattern
+                // If base_path is provided, make path relative for matching
+                let path_to_match = if let Some(base) = base_path {
+                    match path.strip_prefix(base) {
+                        Ok(relative) => relative,
+                        Err(_) => path,
+                    }
+                } else {
+                    path
+                };
+
+                // Convert path to string and match against glob
+                path_to_match
+                    .to_str()
+                    .map(|s| glob.compile_matcher().is_match(s))
+                    .unwrap_or(false)
             }
         }
     }
