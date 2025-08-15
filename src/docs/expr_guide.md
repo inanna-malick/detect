@@ -35,7 +35,7 @@ path.ext == rs AND contents ~= async     # Rust files with async
 size > 1mb AND modified > -7d            # Large recent files  
 contents contains TODO AND NOT path ~= test # TODOs outside tests
 type == file AND path in [Makefile,*.mk] # Build files only
-path.name ~= \.service\.ts$ AND NOT contents contains test
+path.name ~= \.service$ AND path.ext == ts AND NOT contents contains test
 contents ~= @(Injectable|Component) AND size > 10kb
 (contents contains TODO OR contents contains FIXME) AND modified > -7d
 

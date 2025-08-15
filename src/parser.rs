@@ -463,8 +463,8 @@ fn parse_string_selector(
                         Rule::path_full => Ok(StringSelectorType::PathFull),
                         Rule::path_parent => Ok(StringSelectorType::PathParent),
                         Rule::path_parent_dir => Ok(StringSelectorType::PathParentDir),
-                        Rule::path_name => Ok(StringSelectorType::PathName),
-                        Rule::path_stem => Ok(StringSelectorType::PathStem),
+                        Rule::path_name => Ok(StringSelectorType::PathStem),
+                        Rule::path_filename => Ok(StringSelectorType::PathName),
                         Rule::path_extension => Ok(StringSelectorType::PathSuffix),
                         rule => Err(ParseError::unexpected_rule(rule, None)),
                     }
@@ -477,16 +477,16 @@ fn parse_string_selector(
                 "grammar guarantees bare_path_shorthand has content",
             ))?;
             match inner.as_rule() {
-                Rule::bare_name => Ok(StringSelectorType::PathName),
-                Rule::bare_stem => Ok(StringSelectorType::PathStem),
+                Rule::bare_name => Ok(StringSelectorType::PathStem),
+                Rule::bare_filename => Ok(StringSelectorType::PathName),
                 Rule::bare_extension => Ok(StringSelectorType::PathSuffix),
                 Rule::bare_parent => Ok(StringSelectorType::PathParent),
                 Rule::bare_full => Ok(StringSelectorType::PathFull),
                 rule => Err(ParseError::unexpected_rule(rule, None)),
             }
         }
-        Rule::bare_name => Ok(StringSelectorType::PathName),
-        Rule::bare_stem => Ok(StringSelectorType::PathStem),
+        Rule::bare_name => Ok(StringSelectorType::PathStem),
+        Rule::bare_filename => Ok(StringSelectorType::PathName),
         Rule::bare_extension => Ok(StringSelectorType::PathSuffix),
         Rule::bare_parent => Ok(StringSelectorType::PathParent),
         Rule::bare_full => Ok(StringSelectorType::PathFull),

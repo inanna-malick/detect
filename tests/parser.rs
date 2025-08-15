@@ -36,7 +36,7 @@ fn test_parse_err(cases: &[&str]) {
 fn test_path_shorthands() {
     test_cases(&[
         ("name == foo", name_eq("foo")),
-        ("filename == foo", name_eq("foo")),
+        ("filename == foo", filename_eq("foo")),
         ("path.name == foo", name_eq("foo")),
         ("stem == README", stem_eq("README")),
         ("path.stem == README", stem_eq("README")),
@@ -111,6 +111,7 @@ fn test_size_operations() {
     test_cases(&[
         ("size > 1000", size_gt(1000)),
         ("filesize > 1000", size_gt(1000)),
+        ("bytes > 1000", size_gt(1000)),
         ("size < 1000", size_lt(1000)),
         ("size >= 1000", size_gte(1000)),
         ("size <= 1000", size_lte(1000)),
@@ -126,6 +127,7 @@ fn test_size_units() {
         ("size > 1KB", size_gt(1024)),
         ("size > 1k", size_gt(1024)),
         ("size > 1K", size_gt(1024)),
+        ("bytes > 1mb", size_gt(1048576)),
         ("size > 1mb", size_gt(1048576)),
         ("size > 1MB", size_gt(1048576)),
         ("size > 1m", size_gt(1048576)),
@@ -156,6 +158,9 @@ fn test_temporal_operations() {
         "accessed == today",
         "mtime > yesterday",
         "ctime > 2024-01-01",
+        "mdate > -1d",
+        "cdate < now",
+        "adate > yesterday",
         "time.modified > -1hours",
         "time.created < -1h",
     ]);
@@ -377,25 +382,29 @@ fn test_multiline_content() {
 
 // Name predicate helpers - most common patterns
 pub fn name_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::file_eq(s))
+    Expr::name_predicate(NamePredicate::stem_eq(s))
 }
 
 pub fn name_ne(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::FileName(StringMatcher::ne(s)))
+    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::ne(s)))
 }
 
 pub fn name_contains(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::FileName(StringMatcher::contains(s)))
+    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::contains(s)))
 }
 
 pub fn name_regex(s: &str) -> Result<Expr, regex::Error> {
-    Ok(Expr::name_predicate(NamePredicate::FileName(
+    Ok(Expr::name_predicate(NamePredicate::BaseName(
         StringMatcher::regex(s)?,
     )))
 }
 
 pub fn name_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Expr {
-    Expr::name_predicate(NamePredicate::FileName(StringMatcher::in_set(items)))
+    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::in_set(items)))
+}
+
+pub fn filename_eq(s: &str) -> Expr {
+    Expr::name_predicate(NamePredicate::file_eq(s))
 }
 
 // Stem (BaseName) helpers

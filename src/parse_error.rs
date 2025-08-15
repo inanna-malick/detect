@@ -18,7 +18,7 @@ impl fmt::Display for PestError {
             if positives.iter().any(|r| {
                 matches!(
                     r,
-                    Rule::bare_name | Rule::bare_stem | Rule::bare_extension | Rule::bare_parent
+                    Rule::bare_name | Rule::bare_extension | Rule::bare_parent
                 )
             }) {
                 if let pest::error::LineColLocation::Pos((1, col)) = self.0.line_col {
@@ -61,8 +61,8 @@ fn rule_to_user_friendly(rule: &Rule) -> String {
         Rule::set_literal => "set [item1, item2, ...]",
 
         // Selectors
-        Rule::bare_name => "'name'",
-        Rule::bare_stem => "'stem'",
+        Rule::bare_name => "'name' or 'stem'",
+        Rule::bare_filename => "'filename'",
         Rule::bare_extension => "'extension' or 'ext'",
         Rule::bare_parent => "'parent'",
         Rule::bare_full => "'full' or 'path'",

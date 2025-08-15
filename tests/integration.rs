@@ -216,6 +216,7 @@ async fn test_size_operations() {
 
     let cases = vec![
         ("size > 1000", &["large.txt"][..], size_files.clone()),
+        ("bytes > 1000", &["large.txt"][..], size_files.clone()),
         (
             "size < 10",
             &["small.txt", "exact.txt", "empty.txt"][..],
@@ -233,7 +234,7 @@ async fn test_size_operations() {
             size_files.clone(),
         ),
         (
-            "path.name == small.txt && size < 5",
+            "path.name == small && size < 5", // name without extension
             &["small.txt"][..],
             size_files.clone(),
         ),
@@ -297,7 +298,7 @@ async fn test_boolean_operations() {
         ),
         // OR operation
         (
-            r#"path.name == "main.rs" || path.name == "lib.rs""#,
+            r#"path.name == "main" || path.name == "lib""#, // name without extension
             &["main.rs", "lib.rs"][..],
             bool_files.clone(),
         ),
@@ -315,7 +316,7 @@ async fn test_boolean_operations() {
         ),
         // Nested parentheses
         (
-            r#"path.extension == "rs" && !(path.name == "test.rs" || path.name == "main.rs")"#,
+            r#"path.extension == "rs" && !(path.name == "test" || path.name == "main")"#, // name without extension
             &["test_utils.rs", "lib.rs"][..],
             bool_files.clone(),
         ),
@@ -338,7 +339,7 @@ async fn test_regex_patterns() {
 
     let cases = vec![
         (
-            r#"path.name ~= "test_.*\.rs$""#,
+            r#"path.name ~= "test_.*""#, // name without extension
             &["test_utils.rs", "test_integration.rs"][..],
             regex_files.clone(),
         ),
@@ -382,7 +383,7 @@ async fn test_set_operations() {
             set_files.clone(),
         ),
         (
-            "path.name in [main.rs, app.js, index.html]",
+            "path.name in [main, app, index]", // name without extension
             &["main.rs", "app.js", "index.html"][..],
             set_files.clone(),
         ),
@@ -455,17 +456,17 @@ async fn test_quoted_strings() {
 
     let cases = vec![
         (
-            r#"path.name == "my file.txt""#,
+            r#"path.filename == "my file.txt""#, // Use filename for exact match
             &["my file.txt"][..],
             quoted_files.clone(),
         ),
         (
-            r#"path.name ~= "test file""#,
+            r#"path.name ~= "test file""#, // name matches without extension
             &["test file 1.txt", "test file 2.doc"][..],
             quoted_files.clone(),
         ),
         (
-            r#"path.name == 'config.json'"#,
+            r#"path.filename == 'config.json'"#, // use filename for exact match
             &["config.json"][..],
             quoted_files.clone(),
         ),

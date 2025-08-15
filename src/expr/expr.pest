@@ -50,21 +50,21 @@ string_predicate = {
     
     // Bare shorthand forms for path selectors (without path. prefix)
     bare_path_shorthand = { 
-        bare_name | bare_stem | bare_extension | bare_parent | bare_full
+        bare_name | bare_filename | bare_extension | bare_parent | bare_full
     }
-    bare_name = { "name" | "filename" }
-    bare_stem = { "stem" }
+    bare_name = { "name" | "stem" }
+    bare_filename = { "filename" }
     bare_extension = { "extension" | "ext" }
     bare_parent = { "parent" }
     bare_full = { "full" }
     path_with_component = {
-        "path" ~ "." ~ (path_full | path_parent_dir | path_parent | path_name | path_stem | path_extension)
+        "path" ~ "." ~ (path_full | path_parent_dir | path_parent | path_name | path_filename | path_extension)
     }
     path_full = { "full" }
     path_parent = { "parent" }
     path_parent_dir = { "parent_dir" }
-    path_name = { "name" }
-    path_stem = { "stem" }
+    path_name = { "name" | "stem" }
+    path_filename = { "filename" }
     path_extension = { "extension" | "ext" }
     
     // Content selectors with domain support
@@ -101,7 +101,7 @@ numeric_predicate = {
     numeric_ne |
     numeric_comparison
   }
-  size = { "filesize" | "size" }
+  size = { "filesize" | "size" | "bytes" }
   depth = { "depth" }
   
   numeric_eq = { eq ~ numeric_value }
@@ -124,9 +124,9 @@ temporal_predicate = {
   temporal_selector = { time_with_domain | bare_time }
     time_with_domain = { "time" ~ "." ~ (modified | created | accessed) }
     bare_time = { modified | created | accessed }
-    modified = { "modified" | "mtime" }
-    created  = { "created" | "ctime" }
-    accessed = { "accessed" | "atime" }
+    modified = { "modified" | "mtime" | "mdate" }
+    created  = { "created" | "ctime" | "cdate" }
+    accessed = { "accessed" | "atime" | "adate" }
     
   temporal_eq = { eq ~ temporal_value }
   temporal_ne = { ne ~ temporal_value }

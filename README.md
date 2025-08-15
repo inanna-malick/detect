@@ -18,8 +18,11 @@ A fast, powerful tool for finding files by name, content, and metadata using an 
 ```bash
 cargo install detect
 
-# Find files by name pattern
-detect 'path.name == README.md'
+# Find files by name pattern (name without extension)
+detect 'path.name == README && path.ext == md'
+
+# Find files by exact filename  
+detect 'path.filename == README.md'
 
 # Search file contents
 detect 'contents contains TODO'
@@ -62,7 +65,7 @@ detect 'size > 10kb AND NOT contents contains test AND NOT contents contains TOD
 detect 'path.ext == ts AND contents ~= @(Component|Injectable|Directive)'
 
 # Recent changes to build files
-detect 'modified > -7d AND path.name ~= (Makefile|.*\.mk|build\.)'
+detect 'modified > -7d AND path.filename ~= (Makefile|.*\.mk|build\.)'
 
 # Complex boolean logic with grouping
 detect '(path.ext == js OR path.ext == ts) AND (contents contains import OR contents contains require) AND size > 1kb'
