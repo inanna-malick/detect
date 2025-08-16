@@ -76,11 +76,17 @@ pub struct Typechecker;
 
 impl Typechecker {
     /// Transform a raw expression into a typed expression
+    /// 
+    /// # Errors
+    /// Returns `DetectError` for syntax errors, unknown selectors, incompatible operators, or invalid values.
     pub fn typecheck(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
         Self::typecheck_inner(raw_expr, source)
     }
 
-    fn typecheck_inner(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
+    fn typecheck_inner(
+        raw_expr: RawExpr<'_>,
+        source: &str,
+    ) -> Result<Expr<Predicate>, DetectError> {
         match raw_expr {
             RawExpr::Predicate(pred) => {
                 let typed_pred = Self::typecheck_predicate(pred, source)?;
@@ -125,15 +131,27 @@ impl Typechecker {
         )?;
 
         match typed_selector {
-            TypedSelector::String(selector, operator) => {
-                Self::build_string_predicate(selector, operator, &pred.value, pred.value_span, source)
-            }
-            TypedSelector::Numeric(selector, operator) => {
-                Self::build_numeric_predicate(selector, operator, &pred.value, pred.value_span, source)
-            }
-            TypedSelector::Temporal(selector, operator) => {
-                Self::build_temporal_predicate(selector, operator, &pred.value, pred.value_span, source)
-            }
+            TypedSelector::String(selector, operator) => Self::build_string_predicate(
+                selector,
+                operator,
+                &pred.value,
+                pred.value_span,
+                source,
+            ),
+            TypedSelector::Numeric(selector, operator) => Self::build_numeric_predicate(
+                selector,
+                operator,
+                &pred.value,
+                pred.value_span,
+                source,
+            ),
+            TypedSelector::Temporal(selector, operator) => Self::build_temporal_predicate(
+                selector,
+                operator,
+                &pred.value,
+                pred.value_span,
+                source,
+            ),
         }
     }
 

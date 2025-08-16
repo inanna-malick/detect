@@ -1,5 +1,5 @@
-use detect::v2_parser::{test_utils::RawTestExpr, Typechecker, *};
 use detect::v2_parser::error::DetectError as TypecheckError;
+use detect::v2_parser::{test_utils::RawTestExpr, Typechecker, *};
 
 #[test]
 fn test_edge_case_empty_inputs() {

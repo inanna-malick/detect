@@ -4,6 +4,15 @@
 /// ensuring that only valid combinations can be constructed at compile time.
 use super::typechecker::TypecheckError;
 
+/// Error type for parsing selectors and operators
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseError {
+    /// Unknown selector name
+    UnknownSelector(String),
+    /// Unknown operator name
+    UnknownOperator(String),
+}
+
 // ============================================================================
 // Operator Types
 // ============================================================================
@@ -45,11 +54,11 @@ pub enum TemporalOperator {
 /// Path component selectors - all return strings
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathComponent {
-    Full,      // path, path.full, full
-    Name,      // filename, path.filename, name, file
-    Stem,      // stem, path.stem, basename, base
-    Extension, // ext, extension, path.extension, suffix
-    Parent,    // parent, path.parent, dir, directory
+    Full,      // path - absolute filesystem path
+    Name,      // name - complete filename with extension
+    Stem,      // basename - filename without extension
+    Extension, // ext - file extension without dot
+    Parent,    // dir - parent directory path
 }
 
 /// String-type selectors
@@ -97,67 +106,51 @@ pub enum TypedSelector {
 // ============================================================================
 
 /// Parse a selector string into a typed selector category
-pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ()> {
+/// 
+/// # Errors
+/// Returns `ParseError::UnknownSelector` if the selector name is not recognized.
+pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
     match s {
-        // Path selectors - Full
-        "path" | "path.full" | "full" => Ok(SelectorCategory::String(StringSelector::Path(
+        // File Identity (5)
+        "name" => Ok(SelectorCategory::String(StringSelector::Path(
+            PathComponent::Name,
+        ))),
+        "basename" => Ok(SelectorCategory::String(StringSelector::Path(
+            PathComponent::Stem,
+        ))),
+        "ext" => Ok(SelectorCategory::String(StringSelector::Path(
+            PathComponent::Extension,
+        ))),
+        "path" => Ok(SelectorCategory::String(StringSelector::Path(
             PathComponent::Full,
         ))),
+        "dir" => Ok(SelectorCategory::String(StringSelector::Path(
+            PathComponent::Parent,
+        ))),
 
-        // Path selectors - Name (full filename with extension)
-        "filename" | "path.filename" | "file" => Ok(SelectorCategory::String(
-            StringSelector::Path(PathComponent::Name),
-        )),
+        // File Properties (3)
+        "size" => Ok(SelectorCategory::Numeric(NumericSelector::Size)),
+        "type" => Ok(SelectorCategory::String(StringSelector::Type)),
+        "depth" => Ok(SelectorCategory::Numeric(NumericSelector::Depth)),
 
-        // Path selectors - Stem (filename without extension)
-        // Note: path.name maps to stem for v1 compatibility
-        "stem" | "path.stem" | "path.name" | "name" | "basename" | "base" => Ok(
-            SelectorCategory::String(StringSelector::Path(PathComponent::Stem)),
-        ),
+        // Time (3)
+        "modified" => Ok(SelectorCategory::Temporal(TemporalSelector::Modified)),
+        "created" => Ok(SelectorCategory::Temporal(TemporalSelector::Created)),
+        "accessed" => Ok(SelectorCategory::Temporal(TemporalSelector::Accessed)),
 
-        // Path selectors - Extension
-        "ext" | "extension" | "path.extension" | "suffix" => Ok(SelectorCategory::String(
-            StringSelector::Path(PathComponent::Extension),
-        )),
+        // Content (1)
+        "content" => Ok(SelectorCategory::String(StringSelector::Contents)),
 
-        // Path selectors - Parent
-        "parent" | "path.parent" | "dir" | "directory" => Ok(SelectorCategory::String(
-            StringSelector::Path(PathComponent::Parent),
-        )),
-
-        // Contents selector
-        "contents" | "content" | "text" => Ok(SelectorCategory::String(StringSelector::Contents)),
-
-        // Type selector
-        "type" | "filetype" | "kind" => Ok(SelectorCategory::String(StringSelector::Type)),
-
-        // Size selector
-        "size" | "filesize" | "bytes" => Ok(SelectorCategory::Numeric(NumericSelector::Size)),
-
-        // Depth selector
-        "depth" | "level" => Ok(SelectorCategory::Numeric(NumericSelector::Depth)),
-
-        // Temporal selectors - Modified
-        "modified" | "mtime" | "mod" | "modification" => {
-            Ok(SelectorCategory::Temporal(TemporalSelector::Modified))
-        }
-
-        // Temporal selectors - Created
-        "created" | "ctime" | "birth" | "birthtime" => {
-            Ok(SelectorCategory::Temporal(TemporalSelector::Created))
-        }
-
-        // Temporal selectors - Accessed
-        "accessed" | "atime" | "access" => {
-            Ok(SelectorCategory::Temporal(TemporalSelector::Accessed))
-        }
-
-        _ => Err(()),
+        // Everything else is unknown
+        _ => Err(ParseError::UnknownSelector(s.to_string())),
     }
 }
 
 /// Parse a string operator with aliases
-pub fn parse_string_operator(s: &str) -> Result<StringOperator, ()> {
+/// 
+/// # Errors
+/// Returns `ParseError::UnknownOperator` if the operator is not recognized.
+pub fn parse_string_operator(s: &str) -> Result<StringOperator, ParseError> {
     let s_lower = s.to_lowercase();
     match s_lower.as_str() {
         "==" | "=" | "eq" => Ok(StringOperator::Equals),
@@ -165,12 +158,15 @@ pub fn parse_string_operator(s: &str) -> Result<StringOperator, ()> {
         "~=" | "=~" | "~" | "matches" | "regex" => Ok(StringOperator::Matches),
         "contains" | "has" | "includes" => Ok(StringOperator::Contains),
         "in" => Ok(StringOperator::In),
-        _ => Err(()),
+        _ => Err(ParseError::UnknownOperator(s.to_string())),
     }
 }
 
 /// Parse a numeric operator with aliases
-pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, ()> {
+/// 
+/// # Errors
+/// Returns `ParseError::UnknownOperator` if the operator is not recognized.
+pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, ParseError> {
     let s_lower = s.to_lowercase();
     match s_lower.as_str() {
         "==" | "=" | "eq" => Ok(NumericOperator::Equals),
@@ -179,23 +175,29 @@ pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, ()> {
         ">=" | "=>" | "gte" | "ge" => Ok(NumericOperator::GreaterOrEqual),
         "<" | "lt" => Ok(NumericOperator::Less),
         "<=" | "=<" | "lte" | "le" => Ok(NumericOperator::LessOrEqual),
-        _ => Err(()),
+        _ => Err(ParseError::UnknownOperator(s.to_string())),
     }
 }
 
 /// Parse a temporal operator with aliases
-pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ()> {
+/// 
+/// # Errors
+/// Returns `ParseError::UnknownOperator` if the operator is not recognized.
+pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ParseError> {
     let s_lower = s.to_lowercase();
     match s_lower.as_str() {
         "==" | "=" | "eq" | "on" => Ok(TemporalOperator::Equals),
         "!=" | "<>" | "ne" | "neq" => Ok(TemporalOperator::NotEquals),
         "<" | "before" | "lt" => Ok(TemporalOperator::Before),
         ">" | "after" | "gt" => Ok(TemporalOperator::After),
-        _ => Err(()),
+        _ => Err(ParseError::UnknownOperator(s.to_string())),
     }
 }
 
 /// Parse selector and operator together, ensuring type compatibility
+/// 
+/// # Errors
+/// Returns `TypecheckError` for unknown selectors, unknown operators, or incompatible selector-operator combinations.
 pub fn parse_selector_operator(
     selector_str: &str,
     selector_span: pest::Span,
@@ -204,13 +206,12 @@ pub fn parse_selector_operator(
     source: &str,
 ) -> Result<TypedSelector, TypecheckError> {
     use crate::v2_parser::error::SpanExt;
-    let selector_category = recognize_selector(selector_str).map_err(|_| {
-        TypecheckError::UnknownSelector {
+    let selector_category =
+        recognize_selector(selector_str).map_err(|_| TypecheckError::UnknownSelector {
             selector: selector_str.to_string(),
             span: selector_span.to_source_span(),
             src: source.to_string(),
-        }
-    })?;
+        })?;
 
     // Check if operator exists for ANY type to determine error type
     let operator_lower = operator_str.to_lowercase();
@@ -309,12 +310,12 @@ impl StringSelector {
     /// Get canonical name for error messages
     pub fn canonical_name(&self) -> &'static str {
         match self {
-            StringSelector::Path(PathComponent::Full) => "path.full",
-            StringSelector::Path(PathComponent::Name) => "filename",
-            StringSelector::Path(PathComponent::Stem) => "stem",
-            StringSelector::Path(PathComponent::Extension) => "extension",
-            StringSelector::Path(PathComponent::Parent) => "parent",
-            StringSelector::Contents => "contents",
+            StringSelector::Path(PathComponent::Full) => "path",
+            StringSelector::Path(PathComponent::Name) => "name",
+            StringSelector::Path(PathComponent::Stem) => "basename",
+            StringSelector::Path(PathComponent::Extension) => "ext",
+            StringSelector::Path(PathComponent::Parent) => "dir",
+            StringSelector::Contents => "content",
             StringSelector::Type => "type",
         }
     }

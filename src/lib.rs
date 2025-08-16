@@ -17,7 +17,6 @@ use predicate::Predicate;
 use slog::{debug, info, Logger};
 use v2_parser::{error::DetectError, RawParser, Typechecker};
 
-
 pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     logger: Logger,
     root: &Path,

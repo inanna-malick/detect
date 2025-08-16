@@ -2,7 +2,7 @@
 
 The detect tool includes built-in MCP (Model Context Protocol) support that allows AI assistants like Claude Desktop to use detect's powerful filesystem search capabilities.
 
-Note: The detect MCP binary can be used to evaluate expressions as a command line tool e.g. `detect 'extension == rs'`. Run `detect --help` for details.
+Note: The detect MCP binary can be used to evaluate expressions as a command line tool e.g. `detect 'ext == rs'`. Run `detect --help` for details.
 
 ## Installation
 
@@ -57,7 +57,7 @@ Search filesystem using detect's expressive query language.
 expression: "*.rs"
 
 # Find large JavaScript files with TODOs
-expression: "*.js AND size > 10kb AND contents contains TODO"
+expression: "*.js AND size > 10kb AND content contains TODO"
 
 # Find recently modified Python files
 expression: "*.py AND modified > -7days"
@@ -86,8 +86,8 @@ echo '{"jsonrpc":"2.0","method":"tools/call","id":3,"params":{"name":"detect","a
 The detect MCP server supports the full detect query language:
 
 - **File patterns**: `*.rs`, `**/*.js`, `test_*.txt`
-- **Path selectors**: `name`, `stem`, `extension`, `parent`, `path`
-- **Content search**: `contents contains TODO`, `contents ~= regex`
+- **Path selectors**: `name`, `basename`, `ext`, `dir`, `path`
+- **Content search**: `content contains TODO`, `content ~= regex`
 - **Metadata**: `size > 1mb`, `modified > -7days`, `type == file`
 - **Boolean logic**: `AND`/`OR`/`NOT` or `&&`/`||`/`!`
 - **Sets**: `extension in [js, ts, jsx]`

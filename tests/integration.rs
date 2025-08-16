@@ -8,7 +8,7 @@ fn test_logger() -> Logger {
     Logger::root(Discard, o!())
 }
 
-fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
+fn f<'a>(path: &'a str, content: &'a str) -> TestFile<'a> {
     let (path, name) = if path.contains('/') {
         path.rsplit_once('/').unwrap()
     } else {
@@ -18,7 +18,7 @@ fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
     TestFile {
         path,
         name,
-        contents,
+        content,
     }
 }
 
@@ -26,7 +26,7 @@ fn f<'a>(path: &'a str, contents: &'a str) -> TestFile<'a> {
 struct TestFile<'a> {
     path: &'a str,
     name: &'a str,
-    contents: &'a str,
+    content: &'a str,
 }
 
 struct Case<'a> {
@@ -43,7 +43,7 @@ impl<'a> Case<'a> {
             create_dir_all(format!("{}/{}", tmp_path, file.path)).unwrap();
             std::fs::write(
                 format!("{}/{}/{}", tmp_path, file.path, file.name),
-                file.contents,
+                file.content,
             )
             .unwrap();
         }
@@ -109,37 +109,37 @@ async fn test_path_operations() {
     let cases = vec![
         // Test name only
         (
-            "path.name == foo",
+            "basename == foo",
             &["foo", "z/foo", "bar/foo"][..],
             basic_files.clone(),
         ),
         // Test path only
         (
-            "path.full ~= bar",
+            "path ~= bar",
             &["bar", "bar/baz", "bar/foo"][..],
             vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
         ),
         // Test not name
         (
-            "!path.name == foo",
+            "!basename == foo",
             &["", "bar", "bar/baz"][..],
             vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
         ),
-        // Test name and contents
+        // Test name and content
         (
-            "path.name == foo && contents ~= foo",
+            "basename == foo && content ~= foo",
             &["foo"][..],
             basic_files.clone(),
         ),
         // Test parent directory
         (
-            "path.parent == bar",
+            "dir == bar",
             &["bar/foo", "bar/baz"][..],
             basic_files.clone(),
         ),
         // Test stem
         (
-            "path.stem == README",
+            "basename == README",
             &["README.md", "README"][..],
             vec![
                 f("README.md", "# Hello"),
@@ -148,11 +148,7 @@ async fn test_path_operations() {
             ],
         ),
         // Test full path
-        (
-            "path.full == bar/foo",
-            &["bar/foo"][..],
-            basic_files.clone(),
-        ),
+        ("path == bar/foo", &["bar/foo"][..], basic_files.clone()),
     ];
 
     run_test_cases(cases).await;
@@ -173,12 +169,12 @@ async fn test_extension_operations() {
 
     let cases = vec![
         (
-            "path.extension == rs",
+            "ext == rs",
             &["main.rs", "lib.rs", "test.rs"][..],
             code_files.clone(),
         ),
         (
-            "path.extension != rs",
+            "ext != rs",
             &[
                 "",
                 "style.css",
@@ -189,13 +185,9 @@ async fn test_extension_operations() {
             ][..],
             code_files.clone(),
         ),
+        ("ext == \"\"", &["Makefile"][..], code_files.clone()),
         (
-            "path.extension == \"\"",
-            &["Makefile"][..],
-            code_files.clone(),
-        ),
-        (
-            "extension in [js, jsx, ts, tsx]",
+            "ext in [js, jsx, ts, tsx]",
             &["app.js", "component.jsx"][..],
             code_files.clone(),
         ),
@@ -216,7 +208,6 @@ async fn test_size_operations() {
 
     let cases = vec![
         ("size > 1000", &["large.txt"][..], size_files.clone()),
-        ("bytes > 1000", &["large.txt"][..], size_files.clone()),
         (
             "size < 10",
             &["small.txt", "exact.txt", "empty.txt"][..],
@@ -234,7 +225,7 @@ async fn test_size_operations() {
             size_files.clone(),
         ),
         (
-            "path.name == small && size < 5", // name without extension
+            "basename == small && size < 5", // name without extension
             &["small.txt"][..],
             size_files.clone(),
         ),
@@ -255,22 +246,22 @@ async fn test_content_operations() {
 
     let cases = vec![
         (
-            r#"contents contains "TODO""#,
+            r#"content contains "TODO""#,
             &["main.rs", "lib.rs", "readme.md"][..],
             content_files.clone(),
         ),
         (
-            r#"contents ~= "TODO|FIXME""#,
+            r#"content ~= "TODO|FIXME""#,
             &["main.rs", "lib.rs", "readme.md"][..],
             content_files.clone(),
         ),
         (
-            r#"contents ~= "^//.*TODO""#,
+            r#"content ~= "^//.*TODO""#,
             &["main.rs"][..],
             content_files.clone(),
         ),
         (
-            r#"path.extension == rs && contents contains "TODO""#,
+            r#"ext == rs && content contains "TODO""#,
             &["main.rs", "lib.rs"][..],
             content_files.clone(),
         ),
@@ -292,31 +283,31 @@ async fn test_boolean_operations() {
     let cases = vec![
         // AND operation
         (
-            r#"path.extension == "rs" && path.name contains "test""#,
+            r#"ext == "rs" && basename contains "test""#,
             &["test.rs", "test_utils.rs"][..],
             bool_files.clone(),
         ),
         // OR operation
         (
-            r#"path.name == "main" || path.name == "lib""#, // name without extension
+            r#"basename == "main" || basename == "lib""#, // name without extension
             &["main.rs", "lib.rs"][..],
             bool_files.clone(),
         ),
         // NOT operation
         (
-            r#"!(path.name contains "test")"#,
+            r#"!(basename contains "test")"#,
             &["", "main.rs", "lib.rs", "doc.txt"][..],
             bool_files.clone(),
         ),
         // Complex: (A || B) && !C
         (
-            r#"(path.name contains "main" || path.name contains "lib") && !path.name contains "test""#,
+            r#"(basename contains "main" || basename contains "lib") && !basename contains "test""#,
             &["main.rs", "lib.rs"][..],
             bool_files.clone(),
         ),
         // Nested parentheses
         (
-            r#"path.extension == "rs" && !(path.name == "test" || path.name == "main")"#, // name without extension
+            r#"ext == "rs" && !(basename == "test" || basename == "main")"#, // name without extension
             &["test_utils.rs", "lib.rs"][..],
             bool_files.clone(),
         ),
@@ -339,17 +330,17 @@ async fn test_regex_patterns() {
 
     let cases = vec![
         (
-            r#"path.name ~= "test_.*""#, // name without extension
+            r#"basename ~= "test_.*""#, // name without extension
             &["test_utils.rs", "test_integration.rs"][..],
             regex_files.clone(),
         ),
         (
-            r#"path.full ~= "(^|.*/)?test/.*\.rs$""#,
+            r#"path ~= "(^|.*/)?test/.*\.rs$""#,
             &["src/test/utils.rs", "lib/test/helpers.rs", "test/main.rs"][..],
             regex_files.clone(),
         ),
         (
-            r#"path.name ~= "^test""#,
+            r#"basename ~= "^test""#,
             &[
                 "test_utils.rs",
                 "test_integration.rs",
@@ -378,17 +369,17 @@ async fn test_set_operations() {
 
     let cases = vec![
         (
-            "path.extension in [rs, js, ts]",
+            "ext in [rs, js, ts]",
             &["main.rs", "lib.rs", "app.js"][..],
             set_files.clone(),
         ),
         (
-            "path.name in [main, app, index]", // name without extension
+            "basename in [main, app, index]", // name without extension
             &["main.rs", "app.js", "index.html"][..],
             set_files.clone(),
         ),
         (
-            r#"path.stem in ["main", "lib", "app"]"#,
+            r#"basename in ["main", "lib", "app"]"#,
             &["main.rs", "lib.rs", "app.js"][..],
             set_files.clone(),
         ),
@@ -456,17 +447,17 @@ async fn test_quoted_strings() {
 
     let cases = vec![
         (
-            r#"path.filename == "my file.txt""#, // Use filename for exact match
+            r#"name == "my file.txt""#, // Use filename for exact match
             &["my file.txt"][..],
             quoted_files.clone(),
         ),
         (
-            r#"path.name ~= "test file""#, // name matches without extension
+            r#"basename ~= "test file""#, // name matches without extension
             &["test file 1.txt", "test file 2.doc"][..],
             quoted_files.clone(),
         ),
         (
-            r#"path.filename == 'config.json'"#, // use filename for exact match
+            r#"name == 'config.json'"#, // use filename for exact match
             &["config.json"][..],
             quoted_files.clone(),
         ),
@@ -481,7 +472,7 @@ async fn test_special_cases() {
     let empty_cases = vec![
         // Empty extension
         (
-            r#"path.extension == """#,
+            r#"ext == """#,
             &["README", "Makefile", "noext"][..],
             vec![
                 f("README", ""),
@@ -493,7 +484,7 @@ async fn test_special_cases() {
         ),
         // Empty parent (root files)
         (
-            r#"path.parent == "" && type == "file""#,
+            r#"dir == "" && type == "file""#,
             &["rootfile.txt"][..],
             vec![
                 f("rootfile.txt", ""),
@@ -503,7 +494,7 @@ async fn test_special_cases() {
         ),
         // Empty content
         (
-            r#"contents == """#,
+            r#"content == """#,
             &["empty.txt", "also_empty.rs"][..],
             vec![
                 f("empty.txt", ""),
@@ -531,19 +522,19 @@ async fn test_complex_queries() {
     let cases = vec![
         // Complex path and content
         (
-            r#"path.full contains "src" && contents contains "todo""#,
+            r#"path contains "src" && content contains "todo""#,
             &["src/main.rs"][..],
             complex_files.clone(),
         ),
         // Multiple conditions with negation
         (
-            r#"path.extension == "rs" && !path.parent contains "test" && contents ~= "fn|pub""#,
+            r#"ext == "rs" && !dir contains "test" && content ~= "fn|pub""#,
             &["src/main.rs", "src/lib.rs"][..],
             complex_files.clone(),
         ),
         // Set membership with other conditions
         (
-            r#"path.extension in [rs, md] && (contents contains "TODO" || contents contains "todo")"#,
+            r#"ext in [rs, md] && (content contains "TODO" || content contains "todo")"#,
             &["src/main.rs", "tests/integration.rs", "docs/README.md"][..],
             complex_files.clone(),
         ),
@@ -574,7 +565,7 @@ async fn test_symlinks() {
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        r#"path.name ~= link"#.to_owned(),
+        r#"basename ~= link"#.to_owned(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await

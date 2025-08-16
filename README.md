@@ -3,12 +3,12 @@
 A fast, powerful tool for finding files by name, content, and metadata using an expressive query language. Drop-in replacement for complex `find`/`grep` pipelines.
 
 ```shell
-➜  detect 'path.extension == rs && contents ~= async'
+➜  detect 'ext == rs && content ~= async'
 ./src/main.rs
 ./src/lib.rs
 ./src/eval/fs.rs
 
-➜  detect 'size > 50kb && modified > -7d && contents contains TODO'
+➜  detect 'size > 50kb && modified > -7d && content contains TODO'
 ./docs/planning.md
 ./src/experimental.rs
 ```
@@ -19,16 +19,16 @@ A fast, powerful tool for finding files by name, content, and metadata using an 
 cargo install detect
 
 # Find files by name pattern (name without extension)
-detect 'path.name == README && path.ext == md'
+detect 'basename == README && ext == md'
 
 # Find files by exact filename  
-detect 'path.filename == README.md'
+detect 'name == README.md'
 
 # Search file contents
-detect 'contents contains TODO'
+detect 'content contains TODO'
 
 # Complex queries with boolean logic
-detect 'path.ext == ts AND contents ~= @Injectable AND NOT path.full contains test'
+detect 'ext == ts AND content ~= @Injectable AND NOT path contains test'
 ```
 
 ## Why detect?
@@ -40,7 +40,7 @@ Traditional Unix tools require chaining multiple commands with complex syntax:
 find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 
 # New way: same query, readable syntax
-detect 'path.ext == ts AND size > 5kb AND modified > -7d AND contents contains TODO'
+detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
 ```
 
 ## Key Features
@@ -56,19 +56,19 @@ detect 'path.ext == ts AND size > 5kb AND modified > -7d AND contents contains T
 
 ```bash
 # Security audit: find config files with secrets
-detect 'path.ext in [env,json,yml] AND contents ~= (password|secret|api_key)'
+detect 'ext in [env,json,yml] AND content ~= (password|secret|api_key)'
 
 # Code quality: large files without tests or docs
-detect 'size > 10kb AND NOT contents contains test AND NOT contents contains TODO'
+detect 'size > 10kb AND NOT content contains test AND NOT content contains TODO'
 
 # Angular components with specific decorators
-detect 'path.ext == ts AND contents ~= @(Component|Injectable|Directive)'
+detect 'ext == ts AND content ~= @(Component|Injectable|Directive)'
 
 # Recent changes to build files
-detect 'modified > -7d AND path.filename ~= (Makefile|.*\.mk|build\.)'
+detect 'modified > -7d AND name ~= (Makefile|.*\.mk|build\.)'
 
 # Complex boolean logic with grouping
-detect '(path.ext == js OR path.ext == ts) AND (contents contains import OR contents contains require) AND size > 1kb'
+detect '(ext == js OR ext == ts) AND (content contains import OR content contains require) AND size > 1kb'
 ```
 
 **Full syntax reference and advanced features**: `detect --help`
@@ -77,6 +77,6 @@ detect '(path.ext == js OR path.ext == ts) AND (contents contains import OR cont
 
 detect optimizes query execution automatically:
 - Applies fast metadata filters first (name, size, dates)
-- Only scans file contents for files passing metadata filters
+- Only scans file content for files passing metadata filters
 - Uses streaming regex engines for large file content matching
 - Respects `.gitignore` by default (override with `-i`)

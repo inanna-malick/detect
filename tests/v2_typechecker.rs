@@ -3,8 +3,8 @@ use detect::predicate::{
     parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
     StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
 };
-use detect::v2_parser::{RawParser, Typechecker};
 use detect::v2_parser::error::DetectError as TypecheckError;
+use detect::v2_parser::{RawParser, Typechecker};
 
 /// Helper function to parse and typecheck an expression
 fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {
@@ -32,15 +32,15 @@ use std::collections::HashSet;
 
 #[test]
 fn test_selector_recognition() {
-    // Test path.full selector
+    // Test path selector (full absolute path)
     let typed = parse_and_typecheck("path == foo").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FullPath(
         StringMatcher::Equals("foo".to_string()),
     )));
     assert_eq!(typed, expected);
 
-    // Test filename selector
-    let typed = parse_and_typecheck("filename == test.rs").unwrap();
+    // Test name selector (full filename with extension)
+    let typed = parse_and_typecheck("name == test.rs").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FileName(
         StringMatcher::Equals("test.rs".to_string()),
     )));
@@ -57,7 +57,9 @@ fn test_selector_recognition() {
 #[test]
 fn test_unknown_selector() {
     let error = parse_and_typecheck("unknown_selector == foo").unwrap_err();
-    assert!(matches!(error, TypecheckError::UnknownSelector { selector, .. } if selector == "unknown_selector"));
+    assert!(
+        matches!(error, TypecheckError::UnknownSelector { selector, .. } if selector == "unknown_selector")
+    );
 }
 
 #[test]
@@ -79,15 +81,15 @@ fn test_operator_validation() {
 
 #[test]
 fn test_string_value_parsing() {
-    // Equals - note: "name" now maps to BaseName (stem) for v1 compatibility
-    let typed = parse_and_typecheck("name == test").unwrap();
-    let expected = Expr::Predicate(Predicate::name(NamePredicate::BaseName(
-        StringMatcher::Equals("test".to_string()),
+    // Equals - "name" now means full filename with extension
+    let typed = parse_and_typecheck("name == test.rs").unwrap();
+    let expected = Expr::Predicate(Predicate::name(NamePredicate::FileName(
+        StringMatcher::Equals("test.rs".to_string()),
     )));
     assert_eq!(typed, expected);
 
     // Not equals
-    let typed = parse_and_typecheck("filename != test.rs").unwrap();
+    let typed = parse_and_typecheck("name != test.rs").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FileName(
         StringMatcher::NotEquals("test.rs".to_string()),
     )));
@@ -173,7 +175,8 @@ fn test_boolean_logic_preservation() {
 
 #[test]
 fn test_complex_expression() {
-    let typed = parse_and_typecheck("(filename == test.rs OR ext in [js, ts]) AND NOT size > 1mb").unwrap();
+    let typed =
+        parse_and_typecheck("(name == test.rs OR ext in [js, ts]) AND NOT size > 1mb").unwrap();
 
     // Construct expected complex expression
     let lhs_left = Expr::Predicate(Predicate::name(NamePredicate::FileName(
@@ -268,56 +271,6 @@ fn test_operator_aliases() {
 }
 
 #[test]
-fn test_selector_aliases() {
-    // Test that all selector aliases resolve correctly
-    let cases = vec![
-        // Path aliases
-        ("path.full == x", "full == x", "path == x"),
-        ("path.filename == x", "file == x", "filename == x"),
-        ("path.stem == x", "base == x", "basename == x"),
-        ("path.extension == x", "suffix == x", "ext == x"),
-        ("path.parent == x", "dir == x", "directory == x"),
-        // Content aliases
-        (
-            "contents contains x",
-            "content contains x",
-            "text contains x",
-        ),
-        // Type aliases
-        ("type == file", "filetype == file", "kind == file"),
-        // Size aliases
-        ("size > 100", "filesize > 100", "bytes > 100"),
-        // Depth aliases
-        ("depth < 3", "level < 3", "depth < 3"),
-        // Temporal aliases (skip relative time tests - they'll differ by microseconds)
-        (
-            "created == 2024-01-01",
-            "birth == 2024-01-01",
-            "birthtime == 2024-01-01",
-        ),
-        (
-            "accessed < 2024-01-01",
-            "atime < 2024-01-01",
-            "access < 2024-01-01",
-        ),
-    ];
-
-    for (a, b, c) in cases {
-        let result_a = RawParser::parse_raw_expr(a).unwrap();
-        let typed_a = Typechecker::typecheck(result_a, a).unwrap();
-
-        let result_b = RawParser::parse_raw_expr(b).unwrap();
-        let typed_b = Typechecker::typecheck(result_b, b).unwrap();
-
-        let result_c = RawParser::parse_raw_expr(c).unwrap();
-        let typed_c = Typechecker::typecheck(result_c, c).unwrap();
-
-        assert_eq!(typed_a, typed_b, "Failed for {} vs {}", a, b);
-        assert_eq!(typed_b, typed_c, "Failed for {} vs {}", b, c);
-    }
-}
-
-#[test]
 fn test_invalid_values() {
     // Set value for non-in operator
     let error = parse_and_typecheck("name == [foo, bar]").unwrap_err();
@@ -328,17 +281,17 @@ fn test_invalid_values() {
     let error = parse_and_typecheck("size > foo").unwrap_err();
     assert!(matches!(error, TypecheckError::InvalidValue { .. }));
 
-    // Set value for contents - contents doesn't support 'in' operator
-    let error = parse_and_typecheck("contents in [foo, bar]").unwrap_err();
+    // Set value for content - content doesn't support 'in' operator
+    let error = parse_and_typecheck("content in [foo, bar]").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
 #[test]
-fn test_contents_operators() {
+fn test_content_operators() {
     // Contents supports limited operators
     let valid_ops = vec!["==", "~=", "contains"];
     for op in valid_ops {
-        let expr = format!("contents {} pattern", op);
+        let expr = format!("content {} pattern", op);
         assert!(
             parse_and_typecheck(&expr).is_ok(),
             "Failed for operator: {}",
@@ -347,11 +300,11 @@ fn test_contents_operators() {
     }
 
     // Contents does not support 'in'
-    let error = parse_and_typecheck("contents in [foo, bar]").unwrap_err();
+    let error = parse_and_typecheck("content in [foo, bar]").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Contents does not support '!='
-    let error = parse_and_typecheck("contents != pattern").unwrap_err();
+    let error = parse_and_typecheck("content != pattern").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
@@ -370,11 +323,11 @@ fn test_type_safety_enforcement() {
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Contents with 'in' operator should fail (special case)
-    let error = parse_and_typecheck("contents in [foo, bar]").unwrap_err();
+    let error = parse_and_typecheck("content in [foo, bar]").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Contents with '!=' operator should fail (special case)
-    let error = parse_and_typecheck("contents != pattern").unwrap_err();
+    let error = parse_and_typecheck("content != pattern").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
@@ -402,59 +355,6 @@ fn test_all_operator_aliases_work() {
         "modified on 2024-01-01",
         "modified before 2024-01-01",
         "modified after 2024-01-01",
-    ];
-
-    for expr in test_cases {
-        let parse_result = RawParser::parse_raw_expr(expr);
-        assert!(parse_result.is_ok(), "Failed to parse: {}", expr);
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
-        assert!(typecheck_result.is_ok(), "Failed to typecheck: {}", expr);
-    }
-}
-
-#[test]
-fn test_all_selector_aliases_work() {
-    // Test cases that use various selector aliases
-    let test_cases = vec![
-        // Path aliases
-        "path.full == test",
-        "full == test",
-        "file == test.rs",
-        "base == test",
-        "suffix == rs",
-        "dir == src",
-        "directory == src",
-        // Content aliases
-        "text contains TODO",
-        // Type aliases
-        "kind == file",
-        "filetype == file",
-        // Size aliases
-        "bytes > 100",
-        // Depth aliases
-        "level < 3",
-        // Temporal aliases
-        "mod > 2024-01-01",
-        "birth == 2024-01-01",
-        "birthtime == 2024-01-01",
-        "access < 2024-01-01",
-        "atime < 2024-01-01",
-    ];
-
-    for expr in test_cases {
-        let parse_result = RawParser::parse_raw_expr(expr);
-        assert!(parse_result.is_ok(), "Failed to parse: {}", expr);
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
-        assert!(typecheck_result.is_ok(), "Failed to typecheck: {}", expr);
-    }
-}
-
-#[test]
-fn test_complex_expressions_with_aliases() {
-    let test_cases = vec![
-        "(file eq test.rs OR suffix in [js, ts]) AND NOT bytes gt 1mb",
-        "dir == src AND (content matches TODO OR content regex FIXME)",
-        "kind == file AND mod after 2024-01-01 AND bytes lte 10mb",
     ];
 
     for expr in test_cases {

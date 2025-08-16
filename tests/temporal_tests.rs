@@ -366,13 +366,13 @@ async fn test_time_selectors() {
     .await;
     run_temporal_test(
         &tmp_dir,
-        "mtime > -1hour",
+        "modified > -1hour",
         vec!["test.txt"],
         vec!["old.txt"],
     )
     .await;
 
-    // Test created selector (ctime - creation time is OS-specific, just verify it runs)
+    // Test created selector (created - creation time is OS-specific, just verify it runs)
     let mut created_files = Vec::new();
     detect::parse_and_run_fs(
         Logger::root(Discard, o!()),
@@ -390,7 +390,7 @@ async fn test_time_selectors() {
     let _ = std::fs::read_to_string(&test_file).unwrap();
 
     run_temporal_test(&tmp_dir, "accessed > -1minute", vec!["test.txt"], vec![]).await;
-    run_temporal_test(&tmp_dir, "atime > -1minute", vec!["test.txt"], vec![]).await;
+    run_temporal_test(&tmp_dir, "accessed > -1minute", vec!["test.txt"], vec![]).await;
 
     // Test time.selector syntax
     // TODO: v2_parser doesn't support time.modified selector syntax yet
@@ -403,13 +403,13 @@ async fn test_time_selectors() {
     // .await;
 
     // Test created time variants
-    let mut ctime_files = Vec::new();
+    let mut created_files = Vec::new();
     detect::parse_and_run_fs(
         Logger::root(Discard, o!()),
         tmp_dir.path(),
         false,
-        "ctime > -1hour".to_owned(),
-        |p| ctime_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
+        "created > -1hour".to_owned(),
+        |p| created_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
     .unwrap();
@@ -450,7 +450,7 @@ async fn test_temporal_combined_queries() {
     // Test temporal + extension
     run_temporal_test(
         &tmp_dir,
-        "path.extension == rs && modified > -1day",
+        "ext == rs && modified > -1day",
         vec!["new.rs", "new_todo.rs"],
         vec!["old.rs", "new.txt", "old.txt", "old_todo.rs"],
     )
@@ -459,7 +459,7 @@ async fn test_temporal_combined_queries() {
     // Test temporal + content
     run_temporal_test(
         &tmp_dir,
-        r#"contents contains "TODO" && modified > -1day"#,
+        r#"content contains "TODO" && modified > -1day"#,
         vec!["new_todo.rs"],
         vec!["old_todo.rs", "new.rs", "new.txt"],
     )
@@ -486,7 +486,7 @@ async fn test_temporal_combined_queries() {
     // Test temporal with negation
     run_temporal_test(
         &tmp_dir,
-        r#"!(path.name contains "old") && modified > -1day"#,
+        r#"!(basename contains "old") && modified > -1day"#,
         vec!["new.rs", "new.txt", "new_todo.rs"],
         vec!["old.rs", "old.txt", "old_todo.rs"],
     )

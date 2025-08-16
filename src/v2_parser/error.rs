@@ -19,7 +19,7 @@ pub enum DetectError {
 
     // Typechecker errors with spans
     #[error("Unknown selector: {selector}")]
-    #[diagnostic(code(detect::unknown_selector), help("Valid selectors include: name, path, ext, size, modified, etc."))]
+    #[diagnostic(code(detect::unknown_selector), help("Valid selectors: name, basename, ext, path, dir, size, type, depth, modified, created, accessed, content"))]
     UnknownSelector {
         selector: String,
         #[label("unknown selector")]
@@ -27,9 +27,12 @@ pub enum DetectError {
         #[source_code]
         src: String,
     },
-    
+
     #[error("Unknown operator: {operator}")]
-    #[diagnostic(code(detect::unknown_operator), help("Valid operators include: ==, !=, >, <, contains, matches, etc."))]
+    #[diagnostic(
+        code(detect::unknown_operator),
+        help("Valid operators include: ==, !=, >, <, contains, matches, etc.")
+    )]
     UnknownOperator {
         operator: String,
         #[label("unknown operator")]
@@ -37,9 +40,12 @@ pub enum DetectError {
         #[source_code]
         src: String,
     },
-    
+
     #[error("Operator '{operator}' is not compatible with selector '{selector}'")]
-    #[diagnostic(code(detect::incompatible_operator), help("This selector requires a different type of operator"))]
+    #[diagnostic(
+        code(detect::incompatible_operator),
+        help("This selector requires a different type of operator")
+    )]
     IncompatibleOperator {
         selector: String,
         operator: String,
@@ -50,9 +56,12 @@ pub enum DetectError {
         #[source_code]
         src: String,
     },
-    
+
     #[error("Expected {expected} value, found: {found}")]
-    #[diagnostic(code(detect::invalid_value), help("Check the value type for this selector"))]
+    #[diagnostic(
+        code(detect::invalid_value),
+        help("Check the value type for this selector")
+    )]
     InvalidValue {
         expected: String,
         found: String,
@@ -64,7 +73,10 @@ pub enum DetectError {
 
     // Escape errors
     #[error("Invalid escape sequence '\\{char}'")]
-    #[diagnostic(code(detect::invalid_escape), help("Valid escape sequences: \\n, \\t, \\\\, \\\", \\'"))]
+    #[diagnostic(
+        code(detect::invalid_escape),
+        help("Valid escape sequences: \\n, \\t, \\\\, \\\", \\'")
+    )]
     InvalidEscape {
         char: char,
         #[label("invalid escape")]
@@ -130,7 +142,7 @@ impl DetectError {
             pest::error::InputLocation::Pos(pos) => Some((pos, 0).into()),
             pest::error::InputLocation::Span((start, end)) => Some((start, end - start).into()),
         };
-        
+
         DetectError::Syntax {
             span,
             message: pest_err.to_string(),
@@ -168,18 +180,17 @@ impl DetectError {
     /// Add source code to the error
     pub fn with_source(mut self, src: String) -> Self {
         match &mut self {
-            DetectError::Syntax { src: s, .. } |
-            DetectError::UnknownSelector { src: s, .. } |
-            DetectError::UnknownOperator { src: s, .. } |
-            DetectError::IncompatibleOperator { src: s, .. } |
-            DetectError::InvalidValue { src: s, .. } |
-            DetectError::InvalidEscape { src: s, .. } |
-            DetectError::UnterminatedEscape { src: s, .. } |
-            DetectError::Internal { src: s, .. } => {
+            DetectError::Syntax { src: s, .. }
+            | DetectError::UnknownSelector { src: s, .. }
+            | DetectError::UnknownOperator { src: s, .. }
+            | DetectError::IncompatibleOperator { src: s, .. }
+            | DetectError::InvalidValue { src: s, .. }
+            | DetectError::InvalidEscape { src: s, .. }
+            | DetectError::UnterminatedEscape { src: s, .. }
+            | DetectError::Internal { src: s, .. } => {
                 *s = src;
             }
         }
         self
     }
 }
-

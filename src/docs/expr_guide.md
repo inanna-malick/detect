@@ -1,47 +1,51 @@
 SYNTAX: selector operator value
 
-## Path Predicates
-Selectors: path.{name,stem,ext,parent,full}
-Operators: == != ~= contains in
-Examples: "file.rs" [rs,js] *.txt "/src/lib.rs" src/
+## Clean 12-Selector System
 
-## Content Predicates  
-Selectors: contents
-Operators: == != ~= contains
-Examples: "TODO" async.*await @(Injectable|Component)
+### File Identity (What is it?)
+name - full filename with extension (e.g., "README.md")
+basename - filename without extension (e.g., "README")
+ext - file extension without dot (e.g., "md")
+path - full absolute path
+dir - parent directory path
 
-## Size Predicates
-Selectors: size
-Operators: == != > < >= <= in
-Examples: 123 45kb 1mb 2gb 1mb-5gb
-Formats: b kb mb gb tb
+### File Properties (How big/what kind?)
+size - file size in bytes (supports: 45kb 1mb 2gb)
+type - file/directory/symlink/socket/fifo
+depth - directory depth from search root
 
-## Time Predicates
-Selectors: modified, created, accessed
-Operators: == != > < >= <=
-Examples: -7d -1h 2023-01-01 yesterday today now
+### Time (When did things happen?)
+modified - last modification time
+created - creation/birth time
+accessed - last access time
 
-## Type Predicates
-Selectors: type
-Operators: == != in
-Examples: file dir symlink socket fifo block char
+### Content (What's inside?)
+content - file text content
+
+## Operators by Type
+String: == != ~= contains in
+Numeric: == != > < >= <=
+Temporal: == != > < (before/after)
+
+## Examples
 
 ## Boolean Logic
 Operators: AND OR NOT ()
 Usage: combine and group expressions
 
 ## Examples:
-path.ext == rs AND contents ~= async     # Rust files with async
+ext == rs AND content ~= async           # Rust files with async
 size > 1mb AND modified > -7d            # Large recent files  
-contents contains TODO AND NOT path ~= test # TODOs outside tests
-type == file AND path in [Makefile,*.mk] # Build files only
-path.name ~= \.service$ AND path.ext == ts AND NOT contents contains test
-contents ~= @(Injectable|Component) AND size > 10kb
-(contents contains TODO OR contents contains FIXME) AND modified > -7d
+content contains TODO AND NOT path ~= test # TODOs outside tests
+type == file AND basename == Makefile    # Build files only
+basename ~= "\.service$" AND ext == ts AND NOT content contains test
+content ~= "@(Injectable|Component)" AND size > 10kb
+(content contains TODO OR content contains FIXME) AND modified > -7d
+basename == README AND size < 1kb        # Small README files
 
 ## Migration from find:
-find . -name "*.js" -size +1M → detect 'path.ext == js AND size > 1mb'
-find . -type f -exec grep -l TODO {} \; → detect 'contents contains TODO'
+find . -name "*.js" -size +1M → detect 'ext == js AND size > 1mb'
+find . -type f -exec grep -l TODO {} \; → detect 'content contains TODO'
 
 ## Syntax Notes:
 - Quotes required for whitespace/special chars

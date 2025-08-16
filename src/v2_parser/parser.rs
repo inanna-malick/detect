@@ -17,8 +17,8 @@ pub struct RawParser;
 impl RawParser {
     /// Parse an expression from input string into a Raw AST
     pub fn parse_raw_expr(input: &str) -> Result<RawExpr<'_>, RawParseError> {
-        let mut pairs =
-            Self::parse(Rule::program, input).map_err(|e| RawParseError::from_pest(Box::new(e), input.to_string()))?;
+        let mut pairs = Self::parse(Rule::program, input)
+            .map_err(|e| RawParseError::from_pest(Box::new(e), input.to_string()))?;
 
         let program_pair = pairs
             .next()
