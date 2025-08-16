@@ -6,6 +6,7 @@ use crate::{
         StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
     },
     v2_parser::{
+        error::{DetectError, SpanExt},
         typed::{
             self, NumericOperator, NumericSelector, PathComponent, StringOperator, StringSelector,
             TemporalOperator, TemporalSelector, TypedSelector,
@@ -14,40 +15,11 @@ use crate::{
     },
 };
 
-/// Error type for typechecking failures
-#[derive(Debug, Clone)]
-pub enum TypecheckError {
-    UnknownSelector(String),
-    UnknownOperator(String),
-    IncompatibleOperator { selector: String, operator: String },
-    InvalidValue { expected: String, found: String },
-    Internal(String),
-}
-
-impl std::fmt::Display for TypecheckError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TypecheckError::UnknownSelector(sel) => write!(f, "Unknown selector: {}", sel),
-            TypecheckError::UnknownOperator(op) => write!(f, "Unknown operator: {}", op),
-            TypecheckError::IncompatibleOperator { selector, operator } => {
-                write!(
-                    f,
-                    "Operator '{}' is not compatible with selector '{}'",
-                    operator, selector
-                )
-            }
-            TypecheckError::InvalidValue { expected, found } => {
-                write!(f, "Expected {} value, found: {}", expected, found)
-            }
-            TypecheckError::Internal(msg) => write!(f, "Internal error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for TypecheckError {}
+// Re-export DetectError as TypecheckError for compatibility
+pub use crate::v2_parser::error::DetectError as TypecheckError;
 
 /// Parse size values like "1mb", "100kb", etc. into bytes
-fn parse_size_value(s: &str) -> Result<u64, TypecheckError> {
+fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64, TypecheckError> {
     let s = s.trim().to_lowercase();
 
     // Find where the unit starts
@@ -63,6 +35,8 @@ fn parse_size_value(s: &str) -> Result<u64, TypecheckError> {
         return Err(TypecheckError::InvalidValue {
             expected: "size with unit (e.g., 1mb, 100kb)".to_string(),
             found: s,
+            span: value_span.to_source_span(),
+            src: source.to_string(),
         });
     }
 
@@ -74,6 +48,8 @@ fn parse_size_value(s: &str) -> Result<u64, TypecheckError> {
         .map_err(|_| TypecheckError::InvalidValue {
             expected: "numeric value".to_string(),
             found: number_str.to_string(),
+            span: value_span.to_source_span(),
+            src: source.to_string(),
         })?;
 
     let multiplier = match unit_str {
@@ -86,6 +62,8 @@ fn parse_size_value(s: &str) -> Result<u64, TypecheckError> {
             return Err(TypecheckError::InvalidValue {
                 expected: "size unit (b, kb, mb, gb, tb)".to_string(),
                 found: unit_str.to_string(),
+                span: value_span.to_source_span(),
+                src: source.to_string(),
             })
         }
     };
@@ -98,52 +76,63 @@ pub struct Typechecker;
 
 impl Typechecker {
     /// Transform a raw expression into a typed expression
-    pub fn typecheck(raw_expr: RawExpr<'_>) -> Result<Expr<Predicate>, TypecheckError> {
+    pub fn typecheck(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
+        Self::typecheck_inner(raw_expr, source)
+    }
+
+    fn typecheck_inner(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
         match raw_expr {
             RawExpr::Predicate(pred) => {
-                let typed_pred = Self::typecheck_predicate(pred)?;
+                let typed_pred = Self::typecheck_predicate(pred, source)?;
                 Ok(Expr::Predicate(typed_pred))
             }
             RawExpr::And(lhs, rhs) => {
-                let typed_lhs = Self::typecheck(*lhs)?;
-                let typed_rhs = Self::typecheck(*rhs)?;
+                let typed_lhs = Self::typecheck_inner(*lhs, source)?;
+                let typed_rhs = Self::typecheck_inner(*rhs, source)?;
                 Ok(Expr::and(typed_lhs, typed_rhs))
             }
             RawExpr::Or(lhs, rhs) => {
-                let typed_lhs = Self::typecheck(*lhs)?;
-                let typed_rhs = Self::typecheck(*rhs)?;
+                let typed_lhs = Self::typecheck_inner(*lhs, source)?;
+                let typed_rhs = Self::typecheck_inner(*rhs, source)?;
                 Ok(Expr::or(typed_lhs, typed_rhs))
             }
             RawExpr::Not(expr) => {
-                let typed_expr = Self::typecheck(*expr)?;
+                let typed_expr = Self::typecheck_inner(*expr, source)?;
                 Ok(Expr::negate(typed_expr))
             }
             RawExpr::Glob(span) => {
                 let glob_str = span.as_str();
-                let glob =
-                    globset::Glob::new(glob_str).map_err(|e| TypecheckError::InvalidValue {
-                        expected: "valid glob pattern".to_string(),
-                        found: format!("{}: {}", glob_str, e),
-                    })?;
+                let glob = globset::Glob::new(glob_str).map_err(|e| DetectError::InvalidValue {
+                    expected: "valid glob pattern".to_string(),
+                    found: format!("{}: {}", glob_str, e),
+                    span: span.to_source_span(),
+                    src: source.to_string(),
+                })?;
                 Ok(Expr::name_predicate(NamePredicate::GlobPattern(glob)))
             }
         }
     }
 
     /// Transform a raw predicate into a typed predicate using the new type system
-    fn typecheck_predicate(pred: RawPredicate<'_>) -> Result<Predicate, TypecheckError> {
-        // Parse selector and operator together with type safety
-        let typed_selector = typed::parse_selector_operator(pred.selector, pred.operator)?;
+    fn typecheck_predicate(pred: RawPredicate<'_>, source: &str) -> Result<Predicate, DetectError> {
+        // Parse selector and operator together with type safety, passing spans
+        let typed_selector = typed::parse_selector_operator(
+            pred.selector,
+            pred.selector_span,
+            pred.operator,
+            pred.operator_span,
+            source,
+        )?;
 
         match typed_selector {
             TypedSelector::String(selector, operator) => {
-                Self::build_string_predicate(selector, operator, &pred.value)
+                Self::build_string_predicate(selector, operator, &pred.value, pred.value_span, source)
             }
             TypedSelector::Numeric(selector, operator) => {
-                Self::build_numeric_predicate(selector, operator, &pred.value)
+                Self::build_numeric_predicate(selector, operator, &pred.value, pred.value_span, source)
             }
             TypedSelector::Temporal(selector, operator) => {
-                Self::build_temporal_predicate(selector, operator, &pred.value)
+                Self::build_temporal_predicate(selector, operator, &pred.value, pred.value_span, source)
             }
         }
     }
@@ -153,8 +142,10 @@ impl Typechecker {
         selector: StringSelector,
         operator: StringOperator,
         value: &RawValue,
-    ) -> Result<Predicate, TypecheckError> {
-        let string_matcher = Self::parse_string_value(value, operator)?;
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        let string_matcher = Self::parse_string_value(value, operator, value_span, source)?;
 
         match selector {
             StringSelector::Path(component) => {
@@ -169,12 +160,14 @@ impl Typechecker {
             }
             StringSelector::Type => Ok(Predicate::meta(MetadataPredicate::Type(string_matcher))),
             StringSelector::Contents => {
-                let pattern = Self::build_content_pattern(value, operator)?;
+                let pattern = Self::build_content_pattern(value, operator, value_span, source)?;
                 let content_pred =
                     StreamingCompiledContentPredicate::new(pattern).map_err(|e| {
-                        TypecheckError::InvalidValue {
+                        DetectError::InvalidValue {
                             expected: "valid regex pattern".to_string(),
                             found: format!("{:?}", e),
+                            span: value_span.to_source_span(),
+                            src: source.to_string(),
                         }
                     })?;
                 Ok(Predicate::contents(content_pred))
@@ -187,8 +180,10 @@ impl Typechecker {
         selector: NumericSelector,
         operator: NumericOperator,
         value: &RawValue,
-    ) -> Result<Predicate, TypecheckError> {
-        let number_value = Self::parse_numeric_value(value, &selector)?;
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        let number_value = Self::parse_numeric_value(value, &selector, value_span, source)?;
         let number_matcher = Self::build_number_matcher(operator, number_value);
 
         let meta_pred = match selector {
@@ -203,8 +198,10 @@ impl Typechecker {
         selector: TemporalSelector,
         operator: TemporalOperator,
         value: &RawValue,
-    ) -> Result<Predicate, TypecheckError> {
-        let time_value = Self::parse_temporal_value(value)?;
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        let time_value = Self::parse_temporal_value(value, value_span, source)?;
         let time_matcher = Self::build_time_matcher(operator, time_value);
 
         let meta_pred = match selector {
@@ -219,15 +216,19 @@ impl Typechecker {
     fn parse_string_value(
         value: &RawValue,
         operator: StringOperator,
-    ) -> Result<StringMatcher, TypecheckError> {
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<StringMatcher, DetectError> {
         match value {
             RawValue::String(s) => match operator {
                 StringOperator::Equals => Ok(StringMatcher::Equals(s.to_string())),
                 StringOperator::NotEquals => Ok(StringMatcher::NotEquals(s.to_string())),
                 StringOperator::Matches => {
-                    StringMatcher::regex(s).map_err(|e| TypecheckError::InvalidValue {
+                    StringMatcher::regex(s).map_err(|e| DetectError::InvalidValue {
                         expected: "valid regex pattern".to_string(),
                         found: format!("{}: {}", s, e),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
                     })
                 }
                 StringOperator::Contains => Ok(StringMatcher::Contains(s.to_string())),
@@ -240,9 +241,11 @@ impl Typechecker {
             },
             RawValue::Set(items) => {
                 if !matches!(operator, StringOperator::In) {
-                    return Err(TypecheckError::InvalidValue {
+                    return Err(DetectError::InvalidValue {
                         expected: "single string value".to_string(),
                         found: "set".to_string(),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
                     });
                 }
                 let set: std::collections::HashSet<String> =
@@ -256,13 +259,17 @@ impl Typechecker {
     fn build_content_pattern(
         value: &RawValue,
         operator: StringOperator,
-    ) -> Result<String, TypecheckError> {
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<String, DetectError> {
         let s = match value {
             RawValue::String(s) => s,
             RawValue::Set(_) => {
-                return Err(TypecheckError::InvalidValue {
+                return Err(DetectError::InvalidValue {
                     expected: "string value for contents".to_string(),
                     found: "set".to_string(),
+                    span: value_span.to_source_span(),
+                    src: source.to_string(),
                 });
             }
         };
@@ -272,9 +279,10 @@ impl Typechecker {
             StringOperator::Matches => s.to_string(),
             StringOperator::Contains => regex::escape(s),
             _ => {
-                return Err(TypecheckError::Internal(
-                    "Invalid operator for contents".to_string(),
-                ))
+                return Err(DetectError::Internal {
+                    message: "Invalid operator for contents".to_string(),
+                    src: source.to_string(),
+                })
             }
         };
 
@@ -285,25 +293,31 @@ impl Typechecker {
     fn parse_numeric_value(
         value: &RawValue,
         selector: &NumericSelector,
-    ) -> Result<u64, TypecheckError> {
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<u64, DetectError> {
         let s = match value {
             RawValue::String(s) => s,
             RawValue::Set(_) => {
-                return Err(TypecheckError::InvalidValue {
+                return Err(DetectError::InvalidValue {
                     expected: "numeric value".to_string(),
                     found: "set".to_string(),
+                    span: value_span.to_source_span(),
+                    src: source.to_string(),
                 });
             }
         };
 
         if matches!(selector, NumericSelector::Size) && s.chars().any(|c| c.is_alphabetic()) {
             // Parse as size with unit
-            parse_size_value(s)
+            parse_size_value(s, value_span, source)
         } else {
             // Parse as plain number
-            s.parse().map_err(|_| TypecheckError::InvalidValue {
+            s.parse().map_err(|_| DetectError::InvalidValue {
                 expected: "numeric value".to_string(),
                 found: s.to_string(),
+                span: value_span.to_source_span(),
+                src: source.to_string(),
             })
         }
     }
@@ -323,20 +337,26 @@ impl Typechecker {
     /// Parse temporal value
     fn parse_temporal_value(
         value: &RawValue,
-    ) -> Result<chrono::DateTime<chrono::Local>, TypecheckError> {
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<chrono::DateTime<chrono::Local>, DetectError> {
         let s = match value {
             RawValue::String(s) => s,
             RawValue::Set(_) => {
-                return Err(TypecheckError::InvalidValue {
+                return Err(DetectError::InvalidValue {
                     expected: "time value".to_string(),
                     found: "set".to_string(),
+                    span: value_span.to_source_span(),
+                    src: source.to_string(),
                 });
             }
         };
 
-        parse_time_value(s).map_err(|e| TypecheckError::InvalidValue {
+        parse_time_value(s).map_err(|e| DetectError::InvalidValue {
             expected: "valid time value".to_string(),
             found: format!("{}: {:?}", s, e),
+            span: value_span.to_source_span(),
+            src: source.to_string(),
         })
     }
 

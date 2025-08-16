@@ -1,4 +1,5 @@
-use detect::v2_parser::{test_utils::RawTestExpr, TypecheckError, Typechecker, *};
+use detect::v2_parser::{test_utils::RawTestExpr, Typechecker, *};
+use detect::v2_parser::error::DetectError as TypecheckError;
 
 #[test]
 fn test_edge_case_empty_inputs() {
@@ -116,33 +117,36 @@ fn test_unicode_and_special_chars() {
 #[test]
 fn test_operator_edge_cases() {
     // Single = is now valid (alias for ==)
-    let result = RawParser::parse_raw_expr("name = foo").unwrap();
+    let expr = "name = foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
     let expected = RawTestExpr::string_predicate("name", "=", "foo");
     assert_eq!(result.to_test_expr(), expected);
     // Verify it typechecks successfully as an alias for ==
-    let typecheck_result = Typechecker::typecheck(result);
+    let typecheck_result = Typechecker::typecheck(result, expr);
     assert!(
         typecheck_result.is_ok(),
         "Single = should typecheck as valid alias for =="
     );
 
     // Single ! now parses but will fail at typecheck (needs to be != or NOT)
-    let result = RawParser::parse_raw_expr("name ! foo").unwrap();
+    let expr = "name ! foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
     let expected = RawTestExpr::string_predicate("name", "!", "foo");
     assert_eq!(result.to_test_expr(), expected);
     // Verify it fails at typecheck with UnknownOperator
-    let typecheck_result = Typechecker::typecheck(result);
+    let typecheck_result = Typechecker::typecheck(result, expr);
     assert!(
-        matches!(typecheck_result, Err(TypecheckError::UnknownOperator(ref o)) if o == "!"),
+        matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == "!"),
         "Single ! should fail typecheck with UnknownOperator"
     );
 
     // Single ~ is now valid (alias for ~=)
-    let result = RawParser::parse_raw_expr("name ~ foo").unwrap();
+    let expr = "name ~ foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
     let expected = RawTestExpr::string_predicate("name", "~", "foo");
     assert_eq!(result.to_test_expr(), expected);
     // Verify it typechecks successfully as an alias for ~=
-    let typecheck_result = Typechecker::typecheck(result);
+    let typecheck_result = Typechecker::typecheck(result, expr);
     assert!(
         typecheck_result.is_ok(),
         "Single ~ should typecheck as valid alias"
@@ -156,22 +160,24 @@ fn test_operator_edge_cases() {
     );
 
     // Non-existent operators now parse but will fail at typecheck
-    let result = RawParser::parse_raw_expr("name === foo").unwrap();
+    let expr = "name === foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
     let expected = RawTestExpr::string_predicate("name", "===", "foo");
     assert_eq!(result.to_test_expr(), expected);
     // Verify it fails at typecheck with UnknownOperator
-    let typecheck_result = Typechecker::typecheck(result);
+    let typecheck_result = Typechecker::typecheck(result, expr);
     assert!(
-        matches!(typecheck_result, Err(TypecheckError::UnknownOperator(ref o)) if o == "==="),
+        matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == "==="),
         "Triple equals should fail typecheck with UnknownOperator"
     );
 
     // <> is now valid (alias for !=)
-    let result = RawParser::parse_raw_expr("name <> foo").unwrap();
+    let expr = "name <> foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
     let expected = RawTestExpr::string_predicate("name", "<>", "foo");
     assert_eq!(result.to_test_expr(), expected);
     // Verify it typechecks successfully as an alias for !=
-    let typecheck_result = Typechecker::typecheck(result);
+    let typecheck_result = Typechecker::typecheck(result, expr);
     assert!(
         typecheck_result.is_ok(),
         "SQL-style <> should typecheck as valid alias for !="
@@ -484,9 +490,9 @@ fn test_unknown_operators_parse_but_fail_typecheck() {
         );
 
         // Typecheck should fail with UnknownOperator
-        let typecheck_result = Typechecker::typecheck(result);
+        let typecheck_result = Typechecker::typecheck(result, expr);
         assert!(
-            matches!(typecheck_result, Err(TypecheckError::UnknownOperator(ref o)) if o == expected_op),
+            matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == expected_op),
             "Expected UnknownOperator({}) for '{}', got {:?}",
             expected_op,
             expr,

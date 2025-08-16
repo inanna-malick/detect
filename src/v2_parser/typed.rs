@@ -97,7 +97,7 @@ pub enum TypedSelector {
 // ============================================================================
 
 /// Parse a selector string into a typed selector category
-pub fn recognize_selector(s: &str) -> Result<SelectorCategory, TypecheckError> {
+pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ()> {
     match s {
         // Path selectors - Full
         "path" | "path.full" | "full" => Ok(SelectorCategory::String(StringSelector::Path(
@@ -152,12 +152,12 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, TypecheckError> {
             Ok(SelectorCategory::Temporal(TemporalSelector::Accessed))
         }
 
-        _ => Err(TypecheckError::UnknownSelector(s.to_string())),
+        _ => Err(()),
     }
 }
 
 /// Parse a string operator with aliases
-pub fn parse_string_operator(s: &str) -> Result<StringOperator, TypecheckError> {
+pub fn parse_string_operator(s: &str) -> Result<StringOperator, ()> {
     let s_lower = s.to_lowercase();
     match s_lower.as_str() {
         "==" | "=" | "eq" => Ok(StringOperator::Equals),
@@ -165,12 +165,12 @@ pub fn parse_string_operator(s: &str) -> Result<StringOperator, TypecheckError> 
         "~=" | "=~" | "~" | "matches" | "regex" => Ok(StringOperator::Matches),
         "contains" | "has" | "includes" => Ok(StringOperator::Contains),
         "in" => Ok(StringOperator::In),
-        _ => Err(TypecheckError::UnknownOperator(s.to_string())),
+        _ => Err(()),
     }
 }
 
 /// Parse a numeric operator with aliases
-pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, TypecheckError> {
+pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, ()> {
     let s_lower = s.to_lowercase();
     match s_lower.as_str() {
         "==" | "=" | "eq" => Ok(NumericOperator::Equals),
@@ -179,28 +179,38 @@ pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, TypecheckError
         ">=" | "=>" | "gte" | "ge" => Ok(NumericOperator::GreaterOrEqual),
         "<" | "lt" => Ok(NumericOperator::Less),
         "<=" | "=<" | "lte" | "le" => Ok(NumericOperator::LessOrEqual),
-        _ => Err(TypecheckError::UnknownOperator(s.to_string())),
+        _ => Err(()),
     }
 }
 
 /// Parse a temporal operator with aliases
-pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, TypecheckError> {
+pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ()> {
     let s_lower = s.to_lowercase();
     match s_lower.as_str() {
         "==" | "=" | "eq" | "on" => Ok(TemporalOperator::Equals),
         "!=" | "<>" | "ne" | "neq" => Ok(TemporalOperator::NotEquals),
         "<" | "before" | "lt" => Ok(TemporalOperator::Before),
         ">" | "after" | "gt" => Ok(TemporalOperator::After),
-        _ => Err(TypecheckError::UnknownOperator(s.to_string())),
+        _ => Err(()),
     }
 }
 
 /// Parse selector and operator together, ensuring type compatibility
 pub fn parse_selector_operator(
     selector_str: &str,
+    selector_span: pest::Span,
     operator_str: &str,
+    operator_span: pest::Span,
+    source: &str,
 ) -> Result<TypedSelector, TypecheckError> {
-    let selector_category = recognize_selector(selector_str)?;
+    use crate::v2_parser::error::SpanExt;
+    let selector_category = recognize_selector(selector_str).map_err(|_| {
+        TypecheckError::UnknownSelector {
+            selector: selector_str.to_string(),
+            span: selector_span.to_source_span(),
+            src: source.to_string(),
+        }
+    })?;
 
     // Check if operator exists for ANY type to determine error type
     let operator_lower = operator_str.to_lowercase();
@@ -215,9 +225,16 @@ pub fn parse_selector_operator(
                     TypecheckError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
+                        selector_span: selector_span.to_source_span(),
+                        operator_span: operator_span.to_source_span(),
+                        src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator(operator_str.to_string())
+                    TypecheckError::UnknownOperator {
+                        operator: operator_str.to_string(),
+                        span: operator_span.to_source_span(),
+                        src: source.to_string(),
+                    }
                 }
             })?;
 
@@ -228,6 +245,9 @@ pub fn parse_selector_operator(
                         return Err(TypecheckError::IncompatibleOperator {
                             selector: selector_str.to_string(),
                             operator: operator_str.to_string(),
+                            selector_span: selector_span.to_source_span(),
+                            operator_span: operator_span.to_source_span(),
+                            src: source.to_string(),
                         });
                     }
                     _ => {}
@@ -243,9 +263,16 @@ pub fn parse_selector_operator(
                     TypecheckError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
+                        selector_span: selector_span.to_source_span(),
+                        operator_span: operator_span.to_source_span(),
+                        src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator(operator_str.to_string())
+                    TypecheckError::UnknownOperator {
+                        operator: operator_str.to_string(),
+                        span: operator_span.to_source_span(),
+                        src: source.to_string(),
+                    }
                 }
             })?;
             Ok(TypedSelector::Numeric(selector, operator))
@@ -257,9 +284,16 @@ pub fn parse_selector_operator(
                     TypecheckError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
+                        selector_span: selector_span.to_source_span(),
+                        operator_span: operator_span.to_source_span(),
+                        src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator(operator_str.to_string())
+                    TypecheckError::UnknownOperator {
+                        operator: operator_str.to_string(),
+                        span: operator_span.to_source_span(),
+                        src: source.to_string(),
+                    }
                 }
             })?;
             Ok(TypedSelector::Temporal(selector, operator))

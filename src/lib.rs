@@ -12,61 +12,11 @@ use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use ignore::WalkBuilder;
-use parse_error::DetectError;
+// use parse_error::DetectError; // Replaced by v2_parser error
 use predicate::Predicate;
 use slog::{debug, info, Logger};
-use v2_parser::{RawParseError, RawParser, TypecheckError, Typechecker};
+use v2_parser::{error::DetectError, RawParser, Typechecker};
 
-// Convert v2_parser's RawParseError to DetectError
-fn convert_raw_parse_error(err: RawParseError, _source: Arc<str>) -> DetectError {
-    match err {
-        RawParseError::Syntax(_pest_err) => {
-            // For now, convert to a generic syntax error
-            // TODO: Convert pest error properly when Rule types align
-            DetectError::from(anyhow::anyhow!("Syntax error in expression"))
-        }
-        RawParseError::InvalidEscape { char, position } => DetectError::from(anyhow::anyhow!(
-            "Invalid escape sequence '\\{}' at position {}",
-            char,
-            position
-        )),
-        RawParseError::UnterminatedEscape => DetectError::from(anyhow::anyhow!(
-            "Unterminated escape sequence at end of string"
-        )),
-        RawParseError::Internal(msg) => {
-            DetectError::from(anyhow::anyhow!("Internal parser error: {}", msg))
-        }
-    }
-}
-
-// Convert v2_parser's TypecheckError to DetectError
-fn convert_typecheck_error(err: TypecheckError, _source: Arc<str>) -> DetectError {
-    // Convert typechecker errors to anyhow errors for now
-    // The v1 ParseError doesn't have direct mappings for these
-    match err {
-        TypecheckError::UnknownSelector(sel) => {
-            DetectError::from(anyhow::anyhow!("Unknown selector: {}", sel))
-        }
-        TypecheckError::UnknownOperator(op) => {
-            DetectError::from(anyhow::anyhow!("Unknown operator: {}", op))
-        }
-        TypecheckError::IncompatibleOperator { selector, operator } => {
-            DetectError::from(anyhow::anyhow!(
-                "Operator '{}' is not compatible with selector '{}'",
-                operator,
-                selector
-            ))
-        }
-        TypecheckError::InvalidValue { expected, found } => DetectError::from(anyhow::anyhow!(
-            "Expected {} value, found: {}",
-            expected,
-            found
-        )),
-        TypecheckError::Internal(msg) => {
-            DetectError::from(anyhow::anyhow!("Internal error: {}", msg))
-        }
-    }
-}
 
 pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     logger: Logger,
@@ -75,15 +25,9 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     expr: String,
     mut on_match: F,
 ) -> Result<(), DetectError> {
-    let expr_source = std::sync::Arc::from(expr.as_str());
-
     // Use v2_parser: parse then typecheck
     let parse_result = RawParser::parse_raw_expr(&expr)
-        .map_err(|e| convert_raw_parse_error(e, Arc::clone(&expr_source)))
-        .and_then(|raw_expr| {
-            Typechecker::typecheck(raw_expr)
-                .map_err(|e| convert_typecheck_error(e, Arc::clone(&expr_source)))
-        });
+        .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr));
 
     match parse_result {
         Ok(parsed_expr) => {

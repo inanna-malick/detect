@@ -86,7 +86,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match result {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Error: {}", e);
+            // Display the error using miette's formatting
+            eprintln!("{:?}", miette::Report::new(e));
             std::process::exit(1);
         }
     }

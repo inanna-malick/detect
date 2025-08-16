@@ -3,31 +3,51 @@ use detect::predicate::{
     parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
     StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
 };
-use detect::v2_parser::{RawParser, TypecheckError, Typechecker};
+use detect::v2_parser::{RawParser, Typechecker};
+use detect::v2_parser::error::DetectError as TypecheckError;
+
+/// Helper function to parse and typecheck an expression
+fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {
+    let raw_expr = RawParser::parse_raw_expr(expr).unwrap();
+    Typechecker::typecheck(raw_expr, expr)
+}
+
+// Helper macro to check error types, ignoring span and src fields
+macro_rules! assert_error_type {
+    ($error:expr, UnknownSelector) => {
+        matches!($error, TypecheckError::UnknownSelector { .. })
+    };
+    ($error:expr, UnknownOperator) => {
+        matches!($error, TypecheckError::UnknownOperator { .. })
+    };
+    ($error:expr, IncompatibleOperator) => {
+        matches!($error, TypecheckError::IncompatibleOperator { .. })
+    };
+    ($error:expr, InvalidValue) => {
+        matches!($error, TypecheckError::InvalidValue { .. })
+    };
+}
 use globset;
 use std::collections::HashSet;
 
 #[test]
 fn test_selector_recognition() {
     // Test path.full selector
-    let result = RawParser::parse_raw_expr("path == foo").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("path == foo").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FullPath(
         StringMatcher::Equals("foo".to_string()),
     )));
     assert_eq!(typed, expected);
 
     // Test filename selector
-    let result = RawParser::parse_raw_expr("filename == test.rs").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("filename == test.rs").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FileName(
         StringMatcher::Equals("test.rs".to_string()),
     )));
     assert_eq!(typed, expected);
 
     // Test extension selector
-    let result = RawParser::parse_raw_expr("ext == rs").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("ext == rs").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::Extension(
         StringMatcher::Equals("rs".to_string()),
     )));
@@ -36,53 +56,45 @@ fn test_selector_recognition() {
 
 #[test]
 fn test_unknown_selector() {
-    let result = RawParser::parse_raw_expr("unknown_selector == foo").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
-    assert!(matches!(error, TypecheckError::UnknownSelector(s) if s == "unknown_selector"));
+    let error = parse_and_typecheck("unknown_selector == foo").unwrap_err();
+    assert!(matches!(error, TypecheckError::UnknownSelector { selector, .. } if selector == "unknown_selector"));
 }
 
 #[test]
 fn test_operator_validation() {
     // Valid string operator
-    let result = RawParser::parse_raw_expr("name == foo").unwrap();
-    assert!(Typechecker::typecheck(result).is_ok());
+    assert!(parse_and_typecheck("name == foo").is_ok());
 
     // Invalid operator for string selector (numeric operator on string type)
-    let result = RawParser::parse_raw_expr("name > foo").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("name > foo").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Valid numeric operator
-    let result = RawParser::parse_raw_expr("size > 1000").unwrap();
-    assert!(Typechecker::typecheck(result).is_ok());
+    assert!(parse_and_typecheck("size > 1000").is_ok());
 
     // Invalid operator for numeric selector (string operator on numeric type)
-    let result = RawParser::parse_raw_expr("size contains foo").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("size contains foo").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
 #[test]
 fn test_string_value_parsing() {
     // Equals - note: "name" now maps to BaseName (stem) for v1 compatibility
-    let result = RawParser::parse_raw_expr("name == test").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("name == test").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::BaseName(
         StringMatcher::Equals("test".to_string()),
     )));
     assert_eq!(typed, expected);
 
     // Not equals
-    let result = RawParser::parse_raw_expr("filename != test.rs").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("filename != test.rs").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FileName(
         StringMatcher::NotEquals("test.rs".to_string()),
     )));
     assert_eq!(typed, expected);
 
     // Contains
-    let result = RawParser::parse_raw_expr("path contains src").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("path contains src").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::FullPath(
         StringMatcher::Contains("src".to_string()),
     )));
@@ -91,8 +103,7 @@ fn test_string_value_parsing() {
 
 #[test]
 fn test_set_value_parsing() {
-    let result = RawParser::parse_raw_expr("ext in [rs, js, ts]").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("ext in [rs, js, ts]").unwrap();
     let expected_set: HashSet<String> = vec!["rs", "js", "ts"]
         .into_iter()
         .map(|s| s.to_string())
@@ -105,8 +116,7 @@ fn test_set_value_parsing() {
 
 #[test]
 fn test_regex_parsing() {
-    let result = RawParser::parse_raw_expr("content ~= TODO.*").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("content ~= TODO.*").unwrap();
     let expected_content = StreamingCompiledContentPredicate::new("TODO.*".to_string()).unwrap();
     let expected = Expr::Predicate(Predicate::contents(expected_content));
     assert_eq!(typed, expected);
@@ -115,16 +125,14 @@ fn test_regex_parsing() {
 #[test]
 fn test_size_value_parsing() {
     // Plain number (size > 1000 becomes range 1001..)
-    let result = RawParser::parse_raw_expr("size > 1000").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("size > 1000").unwrap();
     let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
         NumberMatcher::In(Bound::Left(1001..)),
     )));
     assert_eq!(typed, expected);
 
     // Size with unit (1mb = 1048576 bytes, so > 1mb becomes range 1048577..)
-    let result = RawParser::parse_raw_expr("size > 1mb").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("size > 1mb").unwrap();
     let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
         NumberMatcher::In(Bound::Left(1048577..)),
     )));
@@ -134,15 +142,13 @@ fn test_size_value_parsing() {
 #[test]
 fn test_temporal_value_parsing() {
     // Relative time - just verify it's the right structure, times will differ slightly
-    let result = RawParser::parse_raw_expr("modified > -7d").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("modified > -7d").unwrap();
     assert!(
         matches!(typed, Expr::Predicate(ref p) if matches!(p, Predicate::Metadata(ref mp) if matches!(&**mp, MetadataPredicate::Modified(TimeMatcher::After(_)))))
     );
 
     // Absolute date - this should be exactly comparable
-    let result = RawParser::parse_raw_expr("created == 2024-01-01").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("created == 2024-01-01").unwrap();
     let expected_time = parse_time_value("2024-01-01").unwrap();
     let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Created(
         TimeMatcher::Equals(expected_time),
@@ -153,27 +159,21 @@ fn test_temporal_value_parsing() {
 #[test]
 fn test_boolean_logic_preservation() {
     // AND
-    let result = RawParser::parse_raw_expr("name == foo AND size > 1000").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("name == foo AND size > 1000").unwrap();
     assert!(matches!(typed, Expr::And(_, _)));
 
     // OR
-    let result = RawParser::parse_raw_expr("name == foo OR ext == rs").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("name == foo OR ext == rs").unwrap();
     assert!(matches!(typed, Expr::Or(_, _)));
 
     // NOT
-    let result = RawParser::parse_raw_expr("NOT name == foo").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("NOT name == foo").unwrap();
     assert!(matches!(typed, Expr::Not(_)));
 }
 
 #[test]
 fn test_complex_expression() {
-    let result =
-        RawParser::parse_raw_expr("(filename == test.rs OR ext in [js, ts]) AND NOT size > 1mb")
-            .unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("(filename == test.rs OR ext in [js, ts]) AND NOT size > 1mb").unwrap();
 
     // Construct expected complex expression
     let lhs_left = Expr::Predicate(Predicate::name(NamePredicate::FileName(
@@ -199,8 +199,7 @@ fn test_complex_expression() {
 
 #[test]
 fn test_glob_pattern() {
-    let result = RawParser::parse_raw_expr("*.rs").unwrap();
-    let typed = Typechecker::typecheck(result).unwrap();
+    let typed = parse_and_typecheck("*.rs").unwrap();
     let expected_glob = globset::Glob::new("*.rs").unwrap();
     let expected = Expr::Predicate(Predicate::name(NamePredicate::GlobPattern(expected_glob)));
     assert_eq!(typed, expected);
@@ -221,10 +220,10 @@ fn test_operator_aliases() {
 
     for (alias, canonical) in cases {
         let result1 = RawParser::parse_raw_expr(alias).unwrap();
-        let typed1 = Typechecker::typecheck(result1).unwrap();
+        let typed1 = Typechecker::typecheck(result1, alias).unwrap();
 
         let result2 = RawParser::parse_raw_expr(canonical).unwrap();
-        let typed2 = Typechecker::typecheck(result2).unwrap();
+        let typed2 = Typechecker::typecheck(result2, canonical).unwrap();
 
         assert_eq!(typed1, typed2, "Failed for {} vs {}", alias, canonical);
     }
@@ -242,10 +241,10 @@ fn test_operator_aliases() {
 
     for (alias, canonical) in num_cases {
         let result1 = RawParser::parse_raw_expr(alias).unwrap();
-        let typed1 = Typechecker::typecheck(result1).unwrap();
+        let typed1 = Typechecker::typecheck(result1, alias).unwrap();
 
         let result2 = RawParser::parse_raw_expr(canonical).unwrap();
-        let typed2 = Typechecker::typecheck(result2).unwrap();
+        let typed2 = Typechecker::typecheck(result2, canonical).unwrap();
 
         assert_eq!(typed1, typed2, "Failed for {} vs {}", alias, canonical);
     }
@@ -259,10 +258,10 @@ fn test_operator_aliases() {
 
     for (alias, canonical) in time_cases {
         let result1 = RawParser::parse_raw_expr(alias).unwrap();
-        let typed1 = Typechecker::typecheck(result1).unwrap();
+        let typed1 = Typechecker::typecheck(result1, alias).unwrap();
 
         let result2 = RawParser::parse_raw_expr(canonical).unwrap();
-        let typed2 = Typechecker::typecheck(result2).unwrap();
+        let typed2 = Typechecker::typecheck(result2, canonical).unwrap();
 
         assert_eq!(typed1, typed2, "Failed for {} vs {}", alias, canonical);
     }
@@ -305,13 +304,13 @@ fn test_selector_aliases() {
 
     for (a, b, c) in cases {
         let result_a = RawParser::parse_raw_expr(a).unwrap();
-        let typed_a = Typechecker::typecheck(result_a).unwrap();
+        let typed_a = Typechecker::typecheck(result_a, a).unwrap();
 
         let result_b = RawParser::parse_raw_expr(b).unwrap();
-        let typed_b = Typechecker::typecheck(result_b).unwrap();
+        let typed_b = Typechecker::typecheck(result_b, b).unwrap();
 
         let result_c = RawParser::parse_raw_expr(c).unwrap();
-        let typed_c = Typechecker::typecheck(result_c).unwrap();
+        let typed_c = Typechecker::typecheck(result_c, c).unwrap();
 
         assert_eq!(typed_a, typed_b, "Failed for {} vs {}", a, b);
         assert_eq!(typed_b, typed_c, "Failed for {} vs {}", b, c);
@@ -321,19 +320,16 @@ fn test_selector_aliases() {
 #[test]
 fn test_invalid_values() {
     // Set value for non-in operator
-    let result = RawParser::parse_raw_expr("name == [foo, bar]").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("name == [foo, bar]").unwrap_err();
     // With the new typechecker, using a set with == returns InvalidValue
     assert!(matches!(error, TypecheckError::InvalidValue { .. }));
 
     // Non-numeric value for size
-    let result = RawParser::parse_raw_expr("size > foo").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("size > foo").unwrap_err();
     assert!(matches!(error, TypecheckError::InvalidValue { .. }));
 
     // Set value for contents - contents doesn't support 'in' operator
-    let result = RawParser::parse_raw_expr("contents in [foo, bar]").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("contents in [foo, bar]").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
@@ -343,50 +339,42 @@ fn test_contents_operators() {
     let valid_ops = vec!["==", "~=", "contains"];
     for op in valid_ops {
         let expr = format!("contents {} pattern", op);
-        let result = RawParser::parse_raw_expr(&expr).unwrap();
         assert!(
-            Typechecker::typecheck(result).is_ok(),
+            parse_and_typecheck(&expr).is_ok(),
             "Failed for operator: {}",
             op
         );
     }
 
     // Contents does not support 'in'
-    let result = RawParser::parse_raw_expr("contents in [foo, bar]").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("contents in [foo, bar]").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Contents does not support '!='
-    let result = RawParser::parse_raw_expr("contents != pattern").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("contents != pattern").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
 #[test]
 fn test_type_safety_enforcement() {
     // String selector with numeric operator should fail
-    let result = RawParser::parse_raw_expr("name > foo").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("name > foo").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Numeric selector with string operator should fail
-    let result = RawParser::parse_raw_expr("size contains foo").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("size contains foo").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Temporal selector with invalid operator should fail
-    let result = RawParser::parse_raw_expr("modified contains 2024").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("modified contains 2024").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Contents with 'in' operator should fail (special case)
-    let result = RawParser::parse_raw_expr("contents in [foo, bar]").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("contents in [foo, bar]").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 
     // Contents with '!=' operator should fail (special case)
-    let result = RawParser::parse_raw_expr("contents != pattern").unwrap();
-    let error = Typechecker::typecheck(result).unwrap_err();
+    let error = parse_and_typecheck("contents != pattern").unwrap_err();
     assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
 }
 
@@ -419,7 +407,7 @@ fn test_all_operator_aliases_work() {
     for expr in test_cases {
         let parse_result = RawParser::parse_raw_expr(expr);
         assert!(parse_result.is_ok(), "Failed to parse: {}", expr);
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap());
+        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
         assert!(typecheck_result.is_ok(), "Failed to typecheck: {}", expr);
     }
 }
@@ -456,7 +444,7 @@ fn test_all_selector_aliases_work() {
     for expr in test_cases {
         let parse_result = RawParser::parse_raw_expr(expr);
         assert!(parse_result.is_ok(), "Failed to parse: {}", expr);
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap());
+        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
         assert!(typecheck_result.is_ok(), "Failed to typecheck: {}", expr);
     }
 }
@@ -472,7 +460,7 @@ fn test_complex_expressions_with_aliases() {
     for expr in test_cases {
         let parse_result = RawParser::parse_raw_expr(expr);
         assert!(parse_result.is_ok(), "Failed to parse: {}", expr);
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap());
+        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
         assert!(typecheck_result.is_ok(), "Failed to typecheck: {}", expr);
     }
 }
@@ -491,10 +479,10 @@ fn test_case_insensitive_operators() {
 
     for (upper_case, lower_case) in test_cases {
         let result1 = RawParser::parse_raw_expr(upper_case).unwrap();
-        let typed1 = Typechecker::typecheck(result1).unwrap();
+        let typed1 = Typechecker::typecheck(result1, upper_case).unwrap();
 
         let result2 = RawParser::parse_raw_expr(lower_case).unwrap();
-        let typed2 = Typechecker::typecheck(result2).unwrap();
+        let typed2 = Typechecker::typecheck(result2, lower_case).unwrap();
 
         assert_eq!(
             typed1, typed2,
@@ -518,10 +506,10 @@ fn test_truly_unknown_operators() {
     ];
 
     for (expr, op) in test_cases {
-        let result = RawParser::parse_raw_expr(expr).unwrap(); // Should parse now
-        let error = Typechecker::typecheck(result).unwrap_err();
+        // Should parse now, but fail at typecheck
+        let error = parse_and_typecheck(expr).unwrap_err();
         assert!(
-            matches!(error, TypecheckError::UnknownOperator(ref o) if o == op),
+            matches!(error, TypecheckError::UnknownOperator { operator: ref o, .. } if o == op),
             "Expected UnknownOperator({}) for expression: {}",
             op,
             expr
