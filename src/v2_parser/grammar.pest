@@ -11,7 +11,14 @@ expr = { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
 
 predicate = { selector ~ operator ~ value }
   selector = @{ (ASCII_ALPHANUMERIC | "." | "_")+ }
-  operator = @{ ">=" | "<=" | "==" | "!=" | "~=" | ">" | "<" | "contains" | "in" }
+  // Parse operators flexibly - validate in typechecker
+  // Start with symbols or letters, but not mix arbitrarily
+  operator = @{ 
+    // Symbol-based operators (can combine symbols)
+    ("=" | "!" | ">" | "<" | "~")+ |
+    // Word-based operators (alphanumeric with underscores)
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+  }
   
   value = { quoted_string | set_literal | bare_value }
   bare_value = @{ (!("[" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||" | ^"and" | ^"or" | "," | "]") ~ ANY)+ }

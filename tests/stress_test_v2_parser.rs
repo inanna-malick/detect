@@ -1,4 +1,4 @@
-use detect::v2_parser::{test_utils::RawTestExpr, *};
+use detect::v2_parser::{test_utils::RawTestExpr, TypecheckError, Typechecker, *};
 
 #[test]
 fn test_edge_case_empty_inputs() {
@@ -115,25 +115,58 @@ fn test_unicode_and_special_chars() {
 
 #[test]
 fn test_operator_edge_cases() {
-    // Incomplete operators
-    let result = RawParser::parse_raw_expr("name = foo");
-    assert!(result.is_err(), "Single = should fail");
+    // Single = is now valid (alias for ==)
+    let result = RawParser::parse_raw_expr("name = foo").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "=", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it typechecks successfully as an alias for ==
+    let typecheck_result = Typechecker::typecheck(result);
+    assert!(typecheck_result.is_ok(), "Single = should typecheck as valid alias for ==");
 
-    let result = RawParser::parse_raw_expr("name ! foo");
-    assert!(result.is_err(), "Single ! should fail");
+    // Single ! now parses but will fail at typecheck (needs to be != or NOT)
+    let result = RawParser::parse_raw_expr("name ! foo").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "!", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it fails at typecheck with UnknownOperator
+    let typecheck_result = Typechecker::typecheck(result);
+    assert!(
+        matches!(typecheck_result, Err(TypecheckError::UnknownOperator(ref o)) if o == "!"),
+        "Single ! should fail typecheck with UnknownOperator"
+    );
 
-    let result = RawParser::parse_raw_expr("name ~ foo");
-    assert!(result.is_err(), "Single ~ should fail");
+    // Single ~ is now valid (alias for ~=)
+    let result = RawParser::parse_raw_expr("name ~ foo").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "~", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it typechecks successfully as an alias for ~=
+    let typecheck_result = Typechecker::typecheck(result);
+    assert!(typecheck_result.is_ok(), "Single ~ should typecheck as valid alias");
 
+    // Spaced operators will parse as separate tokens and fail
     let result = RawParser::parse_raw_expr("name < = foo");
-    assert!(result.is_err(), "Spaced <= should fail");
+    assert!(
+        result.is_err(),
+        "Spaced <= should still fail due to grammar structure"
+    );
 
-    // Non-existent operators
-    let result = RawParser::parse_raw_expr("name === foo");
-    assert!(result.is_err(), "Triple equals should fail");
+    // Non-existent operators now parse but will fail at typecheck
+    let result = RawParser::parse_raw_expr("name === foo").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "===", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it fails at typecheck with UnknownOperator
+    let typecheck_result = Typechecker::typecheck(result);
+    assert!(
+        matches!(typecheck_result, Err(TypecheckError::UnknownOperator(ref o)) if o == "==="),
+        "Triple equals should fail typecheck with UnknownOperator"
+    );
 
-    let result = RawParser::parse_raw_expr("name <> foo");
-    assert!(result.is_err(), "SQL-style not equals should fail");
+    // <> is now valid (alias for !=)
+    let result = RawParser::parse_raw_expr("name <> foo").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "<>", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it typechecks successfully as an alias for !=
+    let typecheck_result = Typechecker::typecheck(result);
+    assert!(typecheck_result.is_ok(), "SQL-style <> should typecheck as valid alias for !=");
 }
 
 #[test]
@@ -410,6 +443,46 @@ fn test_extreme_nesting_limits() {
         expected = RawTestExpr::not(expected);
     }
     assert_eq!(result.unwrap().to_test_expr(), expected);
+}
+
+#[test]
+fn test_unknown_operators_parse_but_fail_typecheck() {
+    // Test that various unknown operators parse successfully but fail at typecheck
+    let test_cases = vec![
+        ("name ! foo", "!", "name", "foo"),
+        ("size === 100", "===", "size", "100"),
+        ("path <=> test", "<=>", "path", "test"),
+        ("content ~~ pattern", "~~", "content", "pattern"),
+        ("depth >>> 3", ">>>", "depth", "3"),
+        ("type !! file", "!!", "type", "file"),
+        ("ext !== rs", "!==", "ext", "rs"),
+    ];
+
+    for (expr, expected_op, expected_selector, expected_value) in test_cases {
+        // Parse should succeed
+        let result = RawParser::parse_raw_expr(expr).unwrap_or_else(|e| {
+            panic!("Failed to parse '{}': {:?}", expr, e);
+        });
+        
+        // Verify parsed structure
+        let expected = RawTestExpr::string_predicate(expected_selector, expected_op, expected_value);
+        assert_eq!(
+            result.to_test_expr(),
+            expected,
+            "Parsed structure mismatch for '{}'",
+            expr
+        );
+        
+        // Typecheck should fail with UnknownOperator
+        let typecheck_result = Typechecker::typecheck(result);
+        assert!(
+            matches!(typecheck_result, Err(TypecheckError::UnknownOperator(ref o)) if o == expected_op),
+            "Expected UnknownOperator({}) for '{}', got {:?}",
+            expected_op,
+            expr,
+            typecheck_result
+        );
+    }
 }
 
 #[test]
