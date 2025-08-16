@@ -104,15 +104,16 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, TypecheckError> {
             PathComponent::Full,
         ))),
 
-        // Path selectors - Name
-        "filename" | "path.filename" | "name" | "file" => Ok(SelectorCategory::String(
+        // Path selectors - Name (full filename with extension)
+        "filename" | "path.filename" | "file" => Ok(SelectorCategory::String(
             StringSelector::Path(PathComponent::Name),
         )),
 
-        // Path selectors - Stem
-        "stem" | "path.stem" | "basename" | "base" => Ok(SelectorCategory::String(
-            StringSelector::Path(PathComponent::Stem),
-        )),
+        // Path selectors - Stem (filename without extension)
+        // Note: path.name maps to stem for v1 compatibility
+        "stem" | "path.stem" | "path.name" | "name" | "basename" | "base" => Ok(
+            SelectorCategory::String(StringSelector::Path(PathComponent::Stem)),
+        ),
 
         // Path selectors - Extension
         "ext" | "extension" | "path.extension" | "suffix" => Ok(SelectorCategory::String(

@@ -64,10 +64,10 @@ fn test_operator_validation() {
 
 #[test]
 fn test_string_value_parsing() {
-    // Equals - note: "name" maps to FileName (complete filename)
+    // Equals - note: "name" now maps to BaseName (stem) for v1 compatibility
     let result = RawParser::parse_raw_expr("name == test").unwrap();
     let typed = Typechecker::typecheck(result).unwrap();
-    let expected = Expr::Predicate(Predicate::name(NamePredicate::FileName(
+    let expected = Expr::Predicate(Predicate::name(NamePredicate::BaseName(
         StringMatcher::Equals("test".to_string()),
     )));
     assert_eq!(typed, expected);

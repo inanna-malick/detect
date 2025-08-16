@@ -121,7 +121,10 @@ fn test_operator_edge_cases() {
     assert_eq!(result.to_test_expr(), expected);
     // Verify it typechecks successfully as an alias for ==
     let typecheck_result = Typechecker::typecheck(result);
-    assert!(typecheck_result.is_ok(), "Single = should typecheck as valid alias for ==");
+    assert!(
+        typecheck_result.is_ok(),
+        "Single = should typecheck as valid alias for =="
+    );
 
     // Single ! now parses but will fail at typecheck (needs to be != or NOT)
     let result = RawParser::parse_raw_expr("name ! foo").unwrap();
@@ -140,7 +143,10 @@ fn test_operator_edge_cases() {
     assert_eq!(result.to_test_expr(), expected);
     // Verify it typechecks successfully as an alias for ~=
     let typecheck_result = Typechecker::typecheck(result);
-    assert!(typecheck_result.is_ok(), "Single ~ should typecheck as valid alias");
+    assert!(
+        typecheck_result.is_ok(),
+        "Single ~ should typecheck as valid alias"
+    );
 
     // Spaced operators will parse as separate tokens and fail
     let result = RawParser::parse_raw_expr("name < = foo");
@@ -166,7 +172,10 @@ fn test_operator_edge_cases() {
     assert_eq!(result.to_test_expr(), expected);
     // Verify it typechecks successfully as an alias for !=
     let typecheck_result = Typechecker::typecheck(result);
-    assert!(typecheck_result.is_ok(), "SQL-style <> should typecheck as valid alias for !=");
+    assert!(
+        typecheck_result.is_ok(),
+        "SQL-style <> should typecheck as valid alias for !="
+    );
 }
 
 #[test]
@@ -463,16 +472,17 @@ fn test_unknown_operators_parse_but_fail_typecheck() {
         let result = RawParser::parse_raw_expr(expr).unwrap_or_else(|e| {
             panic!("Failed to parse '{}': {:?}", expr, e);
         });
-        
+
         // Verify parsed structure
-        let expected = RawTestExpr::string_predicate(expected_selector, expected_op, expected_value);
+        let expected =
+            RawTestExpr::string_predicate(expected_selector, expected_op, expected_value);
         assert_eq!(
             result.to_test_expr(),
             expected,
             "Parsed structure mismatch for '{}'",
             expr
         );
-        
+
         // Typecheck should fail with UnknownOperator
         let typecheck_result = Typechecker::typecheck(result);
         assert!(

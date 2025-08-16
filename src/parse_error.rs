@@ -144,6 +144,21 @@ pub enum PredicateParseError {
 
     #[error("Invalid set literal")]
     SetParse(#[from] serde_json::Error),
+
+    #[error("Unknown selector: {0}")]
+    UnknownSelector(String),
+
+    #[error("Unknown operator: {0}")]
+    UnknownOperator(String),
+
+    #[error("Operator '{operator}' is not compatible with selector '{selector}'")]
+    IncompatibleOperator { selector: String, operator: String },
+
+    #[error("Expected {expected} value, found: {found}")]
+    InvalidValue { expected: String, found: String },
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 impl ParseError {
