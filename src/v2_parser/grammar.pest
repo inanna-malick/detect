@@ -1,0 +1,28 @@
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+
+program = { SOI ~ expr ~ EOI }
+expr = { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
+  infix = _{ and | or }
+    and = { "&&" | ^"and" }
+    or = { "||" | ^"or" }
+  prefix = _{ neg }
+    neg = { "!" | "\\!" | ^"not" }
+  primary = _{ predicate | glob_pattern | "(" ~ expr ~ ")" }
+
+predicate = { selector ~ operator ~ value }
+  selector = @{ (ASCII_ALPHANUMERIC | "." | "_")+ }
+  operator = @{ ">=" | "<=" | "==" | "!=" | "~=" | ">" | "<" | "contains" | "in" }
+  
+  value = { quoted_string | set_literal | bare_value }
+  bare_value = @{ (!("[" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||" | ^"and" | ^"or" | "," | "]") ~ ANY)+ }
+  
+  set_literal = { "[" ~ set_items? ~ "]" }
+  set_items = { value ~ ("," ~ WHITESPACE* ~ value)* }
+  
+  quoted_string = { "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
+  inner_double = @{ (!"\"" ~ (escaped | ANY))* }
+  inner_single = @{ (!"'" ~ (escaped | ANY))* }
+  
+  escaped = { "\\" ~ ("\"" | "'" | "\\" | "n" | "t" | "r") }
+
+glob_pattern = @{ (ASCII_ALPHANUMERIC | "*" | "/" | "." | "_" | "-" | "?" | "[" | "]")+ }
