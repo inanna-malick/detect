@@ -4,22 +4,36 @@ use clap::{command, Parser};
 use detect::parse_and_run_fs;
 use slog::{o, Drain, Level, Logger};
 
-const EXPR_GUIDE: &str = include_str!("docs/expr_guide.md");
+const EXAMPLES: &str = include_str!("docs/examples.md");
+const PREDICATES: &str = include_str!("docs/predicates.md");
+const OPERATORS: &str = include_str!("docs/operators.md");
 
 #[derive(Parser, Debug)]
 #[command(
     name = "detect",
     author,
     version,
-    about = "Find filesystem entities using expressions",
-    long_about = EXPR_GUIDE
+    about = "Find filesystem entities using expressions"
 )]
 struct Args {
     /// Run as MCP server for AI assistants
     #[arg(long = "mcp")]
     mcp: bool,
+
+    /// Show practical examples
+    #[arg(long = "examples")]
+    examples: bool,
+
+    /// Show available predicates/selectors
+    #[arg(long = "predicates")]
+    predicates: bool,
+
+    /// Show operator reference
+    #[arg(long = "operators")]
+    operators: bool,
+
     /// filtering expr
-    #[clap(index = 1, required_unless_present = "mcp")]
+    #[clap(index = 1, required_unless_present_any = ["mcp", "examples", "predicates", "operators"])]
     expr: Option<String>,
     /// target dir
     #[clap(index = 2)]
@@ -35,6 +49,22 @@ struct Args {
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+
+    // Handle info flags first
+    if args.examples {
+        println!("{}", EXAMPLES);
+        return Ok(());
+    }
+
+    if args.predicates {
+        println!("{}", PREDICATES);
+        return Ok(());
+    }
+
+    if args.operators {
+        println!("{}", OPERATORS);
+        return Ok(());
+    }
 
     // If --mcp flag is set, run as MCP server
     if args.mcp {
