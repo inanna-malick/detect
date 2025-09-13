@@ -1,6 +1,11 @@
 //! MCP server implementation for detect using manual JSON-RPC
 
 use crate::parse_and_run_fs;
+
+// Include documentation files for MCP tool descriptions
+const EXAMPLES: &str = include_str!("docs/examples.md");
+const PREDICATES: &str = include_str!("docs/predicates.md");
+const OPERATORS: &str = include_str!("docs/operators.md");
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -92,13 +97,13 @@ pub async fn run_mcp_server() -> Result<()> {
                                 "tools": [
                                     {
                                         "name": "detect",
-                                        "description": "Search filesystem using detect's expressive query language. Examples:\n- Find Rust files: 'extension == rs'\n- Find TODOs: 'contents contains TODO'\n- Complex: 'size > 1mb AND modified > -7days AND NOT path contains node_modules'\n- Glob patterns: '*.rs' or '**/*.js'\n- Multiple conditions: '(*.rs OR *.toml) AND size > 1kb'",
+                                        "description": "Search filesystem using expressive queries. Combines file metadata and content search in a single command.\n\nExamples:\n• 'ext == rs' - All Rust files\n• 'size > 1mb AND modified > -7d' - Large recent files\n• 'contents contains TODO' - Files with TODOs\n• 'name ~= test AND NOT contents contains skip' - Test files without skip\n• '*.{js,ts} AND contents ~= import.*React' - JS/TS files importing React\n\nSupports: path patterns, content search, size/date filters, regex, boolean logic (AND/OR/NOT)",
                                         "inputSchema": {
                                             "type": "object",
                                             "properties": {
                                                 "expression": {
                                                     "type": "string",
-                                                    "description": "The detect expression to evaluate (e.g., 'ext == rs && contents contains TODO')"
+                                                    "description": "The detect expression to evaluate (e.g., 'ext == rs && content contains TODO')"
                                                 },
                                                 "directory": {
                                                     "type": "string",
@@ -227,7 +232,45 @@ pub async fn run_mcp_server() -> Result<()> {
                             }
                             "detect_help" => {
                                 serde_json::json!({
-                                    "help": include_str!("docs/expr_guide.md")
+                                    "help": format!(
+                                        "# Detect Query Language Reference\n\n\
+                                        ## Basic Syntax\n\
+                                        `selector operator value` OR glob patterns like `*.rs`\n\n\
+                                        ## Common Selectors\n\
+                                        • **Path**: name (filename), ext (extension), stem, parent, path (full)\n\
+                                        • **Content**: contents, content, text (all equivalent)\n\
+                                        • **Metadata**: size, type, modified (mtime/mdate), created (ctime/cdate), accessed (atime/adate)\n\n\
+                                        ## Operators\n\
+                                        • **Comparison**: == != > < >= <=\n\
+                                        • **Pattern**: ~= (regex), contains (substring)\n\
+                                        • **Membership**: in [value1, value2, ...]\n\
+                                        • **Boolean**: AND OR NOT ( )\n\n\
+                                        ## Size Units\n\
+                                        b, kb (k), mb (m), gb (g), tb (t)\n\n\
+                                        ## Time Formats\n\
+                                        • Relative: -7d, -1h, -30m (negative = past)\n\
+                                        • Keywords: now, today, yesterday\n\
+                                        • Absolute: 2024-01-15\n\n\
+                                        ## Examples\n\
+                                        ```\n\
+                                        # Find Rust files with async code\n\
+                                        ext == rs AND contents ~= async\n\n\
+                                        # Large files modified recently\n\
+                                        size > 5mb AND modified > -7days\n\n\
+                                        # Test files without 'skip' markers\n\
+                                        name contains test AND NOT contents contains skip\n\n\
+                                        # Config files with potential secrets\n\
+                                        ext in [json, yml, env] AND contents ~= (password|secret|api_key)\n\n\
+                                        # Using glob patterns\n\
+                                        *.{js,ts} AND size > 10kb\n\
+                                        **/*.md AND modified > yesterday\n\
+                                        ```\n\n\
+                                        ## Tips\n\
+                                        • Glob patterns can be mixed with boolean expressions\n\
+                                        • Path filters are evaluated first for performance\n\
+                                        • Regex patterns use Rust regex, with automatic PCRE2 fallback if Rust regex parsing fails\n\
+                                        • Use NOT instead of ! to avoid shell issues"
+                                    )
                                 })
                             }
                             _ => serde_json::json!({

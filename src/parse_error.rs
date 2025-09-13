@@ -23,7 +23,7 @@ impl fmt::Display for PestError {
             }) {
                 if let pest::error::LineColLocation::Pos((1, col)) = self.0.line_col {
                     if col <= 10 {
-                        write!(f, "\n\nHint: Selectors should be prefixed with 'path.' (e.g., 'path.name')")?;
+                        write!(f, "\n\nHint: Use standard selectors like 'name', 'basename', 'ext', 'path', etc.")?;
                     }
                 }
             }

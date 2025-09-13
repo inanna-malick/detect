@@ -25,6 +25,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     mut on_match: F,
 ) -> Result<(), DetectError> {
     // Use v2_parser: parse then typecheck
+    let original_query = expr.clone();
     let parse_result = RawParser::parse_raw_expr(&expr)
         .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr));
 
@@ -52,6 +53,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             info!(logger, "parsed expression"; "expr" => %expr);
 
+            let mut match_count = 0;
             for entry in walker.into_iter() {
                 let entry = entry.map_err(|e| DetectError::from(anyhow::Error::from(e)))?;
                 let path = entry.path();
@@ -68,7 +70,19 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 debug!(logger, "visited entity"; "path" => #?path, "duration" => #?duration, "result" => is_match);
 
                 if is_match {
+                    match_count += 1;
                     on_match(path);
+                }
+            }
+
+            // Provide helpful feedback when no matches are found
+            if match_count == 0 {
+                eprintln!("No files matched the query: {}", original_query);
+                eprintln!("Searched in: {}", root.display());
+                if respect_gitignore {
+                    eprintln!("Hint: Use -i flag to include gitignored files, or try broadening your search criteria");
+                } else {
+                    eprintln!("Hint: Try broadening your search criteria or check the path/expression syntax");
                 }
             }
 
