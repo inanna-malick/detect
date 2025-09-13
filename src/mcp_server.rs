@@ -262,7 +262,7 @@ pub async fn run_mcp_server() -> Result<()> {
                                         # Config files with potential secrets\n\
                                         ext in [json, yml, env] AND contents ~= (password|secret|api_key)\n\n\
                                         # Using glob patterns\n\
-                                        *.{js,ts} AND size > 10kb\n\
+                                        *.{{js,ts}} AND size > 10kb\n\
                                         **/*.md AND modified > yesterday\n\
                                         ```\n\n\
                                         ## Tips\n\

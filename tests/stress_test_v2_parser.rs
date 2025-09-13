@@ -340,7 +340,7 @@ fn test_glob_vs_predicate_conflicts() {
 #[test]
 fn test_complex_real_world_cases() {
     // Very complex expression - verify it parses to AND at root
-    let complex = r#"(path.filename == "test.rs" OR ext in [js, ts, "file.jsx"]) AND NOT (size > 1mb OR modified < -7d) AND contents ~= "(TODO|FIXME)""#;
+    let complex = r#"(name == "test.rs" OR ext in [js, ts, "file.jsx"]) AND NOT (size > 1mb OR modified < -7d) AND content ~= "(TODO|FIXME)""#;
     let result = RawParser::parse_raw_expr(complex);
     assert!(
         matches!(result.unwrap().to_test_expr(), RawTestExpr::And(_, _)),
@@ -379,10 +379,10 @@ fn test_parser_robustness() {
 fn test_maximum_adversarial_cases() {
     // Test deeply nested boolean logic with mixed quotes and edge cases
     let adversarial_expr = r#"
-        (((NOT (path.filename == "test\\\"file" OR ext in ['rs', "js"]) AND 
+        (((NOT (name == "test\\\"file" OR ext in ['rs', "js"]) AND 
           size > 1024) OR (NOT NOT modified > -7d)) AND 
-         (contents ~= "TODO.*FIXME" OR name != "")) AND 
-        !(path.parent contains "/" AND NOT (type == "file"))
+         (content ~= "TODO.*FIXME" OR name != "")) AND 
+        !(dir contains "/" AND NOT (type == "file"))
     "#
     .trim()
     .replace("\n        ", " ");

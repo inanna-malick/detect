@@ -106,7 +106,7 @@ pub enum TypedSelector {
 // ============================================================================
 
 /// Parse a selector string into a typed selector category
-/// 
+///
 /// # Errors
 /// Returns `ParseError::UnknownSelector` if the selector name is not recognized.
 pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
@@ -147,7 +147,7 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
 }
 
 /// Parse a string operator with aliases
-/// 
+///
 /// # Errors
 /// Returns `ParseError::UnknownOperator` if the operator is not recognized.
 pub fn parse_string_operator(s: &str) -> Result<StringOperator, ParseError> {
@@ -163,7 +163,7 @@ pub fn parse_string_operator(s: &str) -> Result<StringOperator, ParseError> {
 }
 
 /// Parse a numeric operator with aliases
-/// 
+///
 /// # Errors
 /// Returns `ParseError::UnknownOperator` if the operator is not recognized.
 pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, ParseError> {
@@ -180,7 +180,7 @@ pub fn parse_numeric_operator(s: &str) -> Result<NumericOperator, ParseError> {
 }
 
 /// Parse a temporal operator with aliases
-/// 
+///
 /// # Errors
 /// Returns `ParseError::UnknownOperator` if the operator is not recognized.
 pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ParseError> {
@@ -195,7 +195,7 @@ pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ParseError> 
 }
 
 /// Parse selector and operator together, ensuring type compatibility
-/// 
+///
 /// # Errors
 /// Returns `TypecheckError` for unknown selectors, unknown operators, or incompatible selector-operator combinations.
 pub fn parse_selector_operator(

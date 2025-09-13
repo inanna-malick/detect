@@ -76,7 +76,7 @@ pub struct Typechecker;
 
 impl Typechecker {
     /// Transform a raw expression into a typed expression
-    /// 
+    ///
     /// # Errors
     /// Returns `DetectError` for syntax errors, unknown selectors, incompatible operators, or invalid values.
     pub fn typecheck(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
