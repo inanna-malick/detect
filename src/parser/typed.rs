@@ -205,7 +205,7 @@ pub fn parse_selector_operator(
     operator_span: pest::Span,
     source: &str,
 ) -> Result<TypedSelector, TypecheckError> {
-    use crate::v2_parser::error::SpanExt;
+    use crate::parser::error::SpanExt;
     let selector_category =
         recognize_selector(selector_str).map_err(|_| TypecheckError::UnknownSelector {
             selector: selector_str.to_string(),

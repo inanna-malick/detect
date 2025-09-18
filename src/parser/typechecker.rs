@@ -5,7 +5,7 @@ use crate::{
         parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
         StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
     },
-    v2_parser::{
+    parser::{
         error::{DetectError, SpanExt},
         typed::{
             self, NumericOperator, NumericSelector, PathComponent, StringOperator, StringSelector,
@@ -16,7 +16,7 @@ use crate::{
 };
 
 // Re-export DetectError as TypecheckError for compatibility
-pub use crate::v2_parser::error::DetectError as TypecheckError;
+pub use crate::parser::error::DetectError as TypecheckError;
 
 /// Parse size values like "1mb", "100kb", etc. into bytes
 fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64, TypecheckError> {

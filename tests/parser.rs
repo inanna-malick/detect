@@ -1,494 +1,285 @@
-use detect::expr::Expr;
-use detect::parser::parse_expr;
-use detect::predicate::{
-    Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
-    StreamingCompiledContentPredicate, StringMatcher,
-};
+use detect::parser::test_utils::RawTestExpr;
+use detect::parser::*;
 
-type TestExpr =
-    Expr<Predicate<NamePredicate, MetadataPredicate, StreamingCompiledContentPredicate>>;
-
-fn test_cases(cases: &[(&str, TestExpr)]) {
-    for (input, expected) in cases {
-        let parsed =
-            parse_expr(input).unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", input, e));
-        assert_eq!(parsed, *expected, "Mismatch for '{}'", input);
-    }
-}
-
-fn test_parse_ok(cases: &[&str]) {
-    for input in cases {
-        parse_expr(input).unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", input, e));
-    }
-}
-
-fn test_parse_err(cases: &[&str]) {
-    for input in cases {
-        assert!(
-            parse_expr(input).is_err(),
-            "Expected parse error for '{}', but it succeeded",
-            input
-        );
-    }
+#[test]
+fn test_simple_predicate() {
+    let result = RawParser::parse_raw_expr("name == foo").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "==", "foo");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_path_shorthands() {
-    test_cases(&[
-        ("name == foo", name_eq("foo")),
-        ("filename == foo", filename_eq("foo")),
-        ("path.name == foo", name_eq("foo")),
-        ("stem == README", stem_eq("README")),
-        ("path.stem == README", stem_eq("README")),
-        ("extension == rs", ext_eq("rs")),
-        ("ext == rs", ext_eq("rs")),
-        ("path.extension == rs", ext_eq("rs")),
-        ("path.ext == rs", ext_eq("rs")),
-        ("parent == /usr/bin", parent_eq("/usr/bin")),
-        ("path.parent == /usr/bin", parent_eq("/usr/bin")),
-        ("full == /usr/bin/foo", full_path_eq("/usr/bin/foo")),
-        ("path.full == /usr/bin/foo", full_path_eq("/usr/bin/foo")),
-        ("path == /usr/bin/foo", full_path_eq("/usr/bin/foo")),
-    ]);
+fn test_quoted_values() {
+    let result = RawParser::parse_raw_expr(r#"filename == "my file.txt""#).unwrap();
+    let expected = RawTestExpr::string_predicate("filename", "==", "my file.txt");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_content_selectors() {
-    let expected = content_contains("TODO");
-    test_cases(&[
-        (r#"content.text contains "TODO""#, expected),
-        (r#"text contains "TODO""#, content_contains("TODO")),
-        (r#"contents contains "TODO""#, content_contains("TODO")),
-        (r#"content contains "TODO""#, content_contains("TODO")),
-    ]);
+fn test_single_quoted_values() {
+    let result = RawParser::parse_raw_expr("filename == 'my file.txt'").unwrap();
+    let expected = RawTestExpr::string_predicate("filename", "==", "my file.txt");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_name_operations() {
-    test_cases(&[
-        ("path.name == foo", name_eq("foo")),
-        ("path.name != bar", name_ne("bar")),
-        ("path.name ~= test.*", name_regex("test.*").unwrap()),
-        (r#"path.name contains "test""#, name_contains("test")),
-    ]);
+fn test_escape_sequences() {
+    // Test double quote escapes
+    let result = RawParser::parse_raw_expr(r#"name == "file\"with\"quotes""#).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "==", r#"file\"with\"quotes"#);
+    assert_eq!(result.to_test_expr(), expected);
+
+    // Test various escape sequences
+    let result = RawParser::parse_raw_expr(r#"content == "line1\nline2\ttab\\backslash""#).unwrap();
+    let expected =
+        RawTestExpr::string_predicate("content", "==", r#"line1\nline2\ttab\\backslash"#);
+    assert_eq!(result.to_test_expr(), expected);
+
+    // Test single quote escapes
+    let result = RawParser::parse_raw_expr(r"name == 'file\'with\'quotes'").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "==", r"file\'with\'quotes");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_regex_patterns() {
-    test_parse_ok(&[
-        r"path.name ~= ^[0-9]{10,13}.*\.ts$",
-        r#"path.name ~= "(foo|bar)""#,
-        r"path.name ~= test\?.*",
-        r"contents ~= TODO.*\{.*\}",
-        r#"contents ~= "@(Injectable|Component)""#,
-        r"contents ~= class\s+\w+Service",
-    ]);
+fn test_set_values() {
+    let result = RawParser::parse_raw_expr("ext in [rs, js, ts]").unwrap();
+    let expected = RawTestExpr::set_predicate("ext", "in", vec!["rs", "js", "ts"]);
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_set_operations() {
-    test_cases(&[
-        ("path.name in [foo,bar,baz]", name_in(["foo", "bar", "baz"])),
-        (
-            r#"path.name in ["foo","bar","baz"]"#,
-            name_in(["foo", "bar", "baz"]),
-        ),
-        (
-            "path.name in [foo, bar, baz]",
-            name_in(["foo", "bar", "baz"]),
-        ),
-        (
-            r#"path.name in ["foo", "bar", "baz"]"#,
-            name_in(["foo", "bar", "baz"]),
-        ),
-        ("extension in [js, ts, jsx]", ext_in(["js", "ts", "jsx"])),
-        ("path.ext in [rs, toml]", ext_in(["rs", "toml"])),
-    ]);
+fn test_mixed_set() {
+    let result = RawParser::parse_raw_expr(r#"name in [README, "my file", config]"#).unwrap();
+    let expected = RawTestExpr::set_predicate("name", "in", vec!["README", "my file", "config"]);
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_size_operations() {
-    test_cases(&[
-        ("size > 1000", size_gt(1000)),
-        ("filesize > 1000", size_gt(1000)),
-        ("bytes > 1000", size_gt(1000)),
-        ("size < 1000", size_lt(1000)),
-        ("size >= 1000", size_gte(1000)),
-        ("size <= 1000", size_lte(1000)),
-        ("size == 1000", size_eq(1000)),
-        ("size != 1000", size_ne(1000)),
-    ]);
+fn test_set_with_quotes_and_escapes() {
+    let result = RawParser::parse_raw_expr(r#"name in ["file\"1", 'file\'2', plain]"#).unwrap();
+    let expected =
+        RawTestExpr::set_predicate("name", "in", vec![r#"file\"1"#, r"file\'2", "plain"]);
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_size_units() {
-    test_cases(&[
-        ("size > 1kb", size_gt(1024)),
-        ("size > 1KB", size_gt(1024)),
-        ("size > 1k", size_gt(1024)),
-        ("size > 1K", size_gt(1024)),
-        ("bytes > 1mb", size_gt(1048576)),
-        ("size > 1mb", size_gt(1048576)),
-        ("size > 1MB", size_gt(1048576)),
-        ("size > 1m", size_gt(1048576)),
-        ("size > 1M", size_gt(1048576)),
-        ("size > 1gb", size_gt(1073741824)),
-        ("size > 1GB", size_gt(1073741824)),
-        ("size > 1g", size_gt(1073741824)),
-        ("size > 1G", size_gt(1073741824)),
-        ("size > 1tb", size_gt(1099511627776)),
-        ("size > 1TB", size_gt(1099511627776)),
-        ("size > 1t", size_gt(1099511627776)),
-        ("size > 1T", size_gt(1099511627776)),
-        ("size > 1.5mb", size_gt(1572864)),
-        ("size > 2.5gb", size_gt(2684354560)),
-    ]);
+fn test_empty_set() {
+    let result = RawParser::parse_raw_expr("ext in []").unwrap();
+    let expected = RawTestExpr::set_predicate("ext", "in", vec![]);
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_temporal_operations() {
-    test_parse_ok(&[
-        "modified > -7days",
-        "modified > -7.days",
-        "modified > -7d",
-        "created < -30minutes",
-        "created < -30min",
-        "created < -30m",
-        "accessed == now",
-        "accessed == today",
-        "mtime > yesterday",
-        "ctime > 2024-01-01",
-        "mdate > -1d",
-        "cdate < now",
-        "adate > yesterday",
-        "time.modified > -1hours",
-        "time.created < -1h",
-    ]);
+fn test_boolean_logic() {
+    let result = RawParser::parse_raw_expr("name == foo AND size > 1000").unwrap();
+    let expected = RawTestExpr::and(
+        RawTestExpr::string_predicate("name", "==", "foo"),
+        RawTestExpr::string_predicate("size", ">", "1000"),
+    );
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_boolean_operations() {
-    test_cases(&[
-        (
-            "size > 100 && name == foo",
-            Expr::and(size_gt(100), name_eq("foo")),
-        ),
-        (
-            "size > 100 || name == foo",
-            Expr::or(size_gt(100), name_eq("foo")),
-        ),
-        ("!name == foo", Expr::negate(name_eq("foo"))),
-        ("!(size > 100)", Expr::negate(size_gt(100))),
-        (
-            "size > 100 && (name == foo || name == bar)",
-            Expr::and(size_gt(100), Expr::or(name_eq("foo"), name_eq("bar"))),
-        ),
-    ]);
+fn test_or_logic() {
+    let result = RawParser::parse_raw_expr("name == foo OR name == bar").unwrap();
+    let expected = RawTestExpr::or(
+        RawTestExpr::string_predicate("name", "==", "foo"),
+        RawTestExpr::string_predicate("name", "==", "bar"),
+    );
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_case_insensitive_keywords() {
-    test_cases(&[
-        (
-            "size > 100 and name == foo",
-            Expr::and(size_gt(100), name_eq("foo")),
-        ),
-        (
-            "size > 100 OR name == foo",
-            Expr::or(size_gt(100), name_eq("foo")),
-        ),
-        ("NOT name == foo", Expr::negate(name_eq("foo"))),
-    ]);
+fn test_negation_variants() {
+    // Test NOT keyword
+    let result = RawParser::parse_raw_expr("NOT name == foo").unwrap();
+    let expected = RawTestExpr::not(RawTestExpr::string_predicate("name", "==", "foo"));
+    assert_eq!(result.to_test_expr(), expected);
+
+    // Test ! symbol
+    let result = RawParser::parse_raw_expr("! name == foo").unwrap();
+    let expected = RawTestExpr::not(RawTestExpr::string_predicate("name", "==", "foo"));
+    assert_eq!(result.to_test_expr(), expected);
+
+    // Test escaped ! symbol
+    let result = RawParser::parse_raw_expr("\\! name == foo").unwrap();
+    let expected = RawTestExpr::not(RawTestExpr::string_predicate("name", "==", "foo"));
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_glob_patterns() {
-    // Test that glob patterns parse successfully
-    test_parse_ok(&[
-        "*.rs",
-        "*test*",
-        "src/*.rs",
-        "**/*.rs",
-        "*.{rs,toml}",
-        "test_*.txt",
-        "??.rs",
-        "[ab]*.txt",
-    ]);
-
-    // Test glob patterns in boolean expressions
-    test_parse_ok(&[
-        "*.rs && size > 1kb",
-        "*test* || contents contains TODO",
-        "NOT *.md",
-        "(*.rs || *.toml) && modified > -7days",
-    ]);
+fn test_glob_pattern() {
+    let result = RawParser::parse_raw_expr("*.rs").unwrap();
+    let expected = RawTestExpr::glob("*.rs");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_size_with_spaces() {
-    // Test that spaces between number and unit work
-    test_parse_ok(&[
-        "size > 10 kb",
-        "size < 1 mb",
-        "size >= 100 gb",
-        "size == 5 tb",
-        "size > 10 kb && modified > -7days",
-    ]);
-}
-
-#[test]
-fn test_type_selectors() {
-    test_cases(&[
-        (r#"type == "file""#, type_eq("file")),
-        (r#"filetype == "file""#, type_eq("file")),
-        (r#"meta.type == "file""#, type_eq("file")),
-        (r#"type == "directory""#, type_eq("directory")),
-        (r#"type == "dir""#, type_eq("dir")),
-    ]);
-}
-
-#[test]
-fn test_quoted_strings() {
-    test_cases(&[
-        (r#"name == "foo bar""#, name_eq("foo bar")),
-        (
-            r#"contents contains "TODO: fix this""#,
-            content_contains("TODO: fix this"),
-        ),
-        (
-            r#"path == "/path with spaces/file.txt""#,
-            full_path_eq("/path with spaces/file.txt"),
-        ),
-        (r#"name == 'foo bar'"#, name_eq("foo bar")),
-        (
-            r#"parent contains 'my folder'"#,
-            parent_contains("my folder"),
-        ),
-    ]);
+fn test_complex_glob_pattern() {
+    let result = RawParser::parse_raw_expr("**/*.js").unwrap();
+    let expected = RawTestExpr::glob("**/*.js");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
 fn test_operator_precedence() {
-    test_cases(&[
-        // Expr::and binds tighter than OR
-        (
-            "name == a || name == b && size > 100",
-            Expr::or(name_eq("a"), Expr::and(name_eq("b"), size_gt(100))),
+    // AND should bind tighter than OR
+    let result = RawParser::parse_raw_expr("a == b OR c == d AND e == f").unwrap();
+    let expected = RawTestExpr::or(
+        RawTestExpr::string_predicate("a", "==", "b"),
+        RawTestExpr::and(
+            RawTestExpr::string_predicate("c", "==", "d"),
+            RawTestExpr::string_predicate("e", "==", "f"),
         ),
-        // NOT binds tightest
-        (
-            "!name == foo && size > 100",
-            Expr::and(Expr::negate(name_eq("foo")), size_gt(100)),
+    );
+    assert_eq!(result.to_test_expr(), expected);
+}
+
+#[test]
+fn test_parentheses() {
+    let result = RawParser::parse_raw_expr("(a == b OR c == d) AND e == f").unwrap();
+    let expected = RawTestExpr::and(
+        RawTestExpr::or(
+            RawTestExpr::string_predicate("a", "==", "b"),
+            RawTestExpr::string_predicate("c", "==", "d"),
         ),
-        // Parentheses override precedence
-        (
-            "(name == a || name == b) && size > 100",
-            Expr::and(Expr::or(name_eq("a"), name_eq("b")), size_gt(100)),
+        RawTestExpr::string_predicate("e", "==", "f"),
+    );
+    assert_eq!(result.to_test_expr(), expected);
+}
+
+#[test]
+fn test_complex_expression() {
+    let result = RawParser::parse_raw_expr(
+        r#"(name == "test.rs" OR ext in [js, ts]) AND NOT size > 1mb"#,
+    )
+    .unwrap();
+
+    let expected = RawTestExpr::and(
+        RawTestExpr::or(
+            RawTestExpr::string_predicate("name", "==", "test.rs"),
+            RawTestExpr::set_predicate("ext", "in", vec!["js", "ts"]),
         ),
-    ]);
+        RawTestExpr::not(RawTestExpr::string_predicate("size", ">", "1mb")),
+    );
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_complex_expressions() {
-    test_cases(&[
-        (
-            r#"extension in [rs, toml] && size > 1kb && !path.parent contains "target""#,
-            Expr::and(
-                Expr::and(ext_in(["rs", "toml"]), size_gt(1024)),
-                Expr::negate(parent_contains("target")),
-            ),
-        ),
-        (
-            r#"type == "file" && size < 10mb && (name ~= ".*\.rs$" || name ~= ".*\.toml$")"#,
-            Expr::and(
-                Expr::and(type_eq("file"), size_lt(10485760)),
-                Expr::or(
-                    name_regex(r".*\.rs$").unwrap(),
-                    name_regex(r".*\.toml$").unwrap(),
-                ),
-            ),
-        ),
-    ]);
+fn test_all_operators() {
+    let test_cases = vec![
+        ("name == foo", "=="),
+        ("name != foo", "!="),
+        ("name ~= foo", "~="),
+        ("name > foo", ">"),
+        ("name < foo", "<"),
+        ("name >= foo", ">="),
+        ("name <= foo", "<="),
+        ("name contains foo", "contains"),
+        ("name in [foo]", "in"),
+    ];
+
+    for (input, expected_op) in test_cases {
+        let result = RawParser::parse_raw_expr(input).unwrap();
+        match result.to_test_expr() {
+            RawTestExpr::Predicate(pred) => {
+                assert_eq!(pred.operator, expected_op, "Failed for input: {}", input);
+            }
+            _ => panic!("Expected predicate for input: {}", input),
+        }
+    }
 }
 
 #[test]
-fn test_content_operations() {
-    test_cases(&[
-        (r#"contents contains "TODO""#, content_contains("TODO")),
-        (r#"contents ~= "TODO|FIXME""#, content_regex("TODO|FIXME")),
-        (
-            r#"contents ~= "(BEGIN|END).*(PRIVATE|KEY)""#,
-            content_regex("(BEGIN|END).*(PRIVATE|KEY)"),
-        ),
-    ]);
+fn test_complex_selectors() {
+    let result = RawParser::parse_raw_expr("name == test.rs").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "==", "test.rs");
+    assert_eq!(result.to_test_expr(), expected);
+
+    let result = RawParser::parse_raw_expr("meta.size > 1000").unwrap();
+    let expected = RawTestExpr::string_predicate("meta.size", ">", "1000");
+    assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
-fn test_error_cases() {
-    test_parse_err(&[
-        "size >",
-        "name ==",
-        "modified > -7",
-        "size > 1zb",
-        "unknown_selector == foo",
-        "path.unknown == foo",
-        "((name == foo)",
-        "name == foo))",
-        "&& name == foo",
-        "name == foo ||",
-        r#"name ~= "[unclosed""#,
-    ]);
+fn test_case_insensitive_keywords() {
+    let result = RawParser::parse_raw_expr("name == foo AND name == bar").unwrap();
+    let result_upper = RawParser::parse_raw_expr("name == foo AND name == bar").unwrap();
+    assert_eq!(result.to_test_expr(), result_upper.to_test_expr());
+
+    let result = RawParser::parse_raw_expr("NOT name == foo").unwrap();
+    let result_lower = RawParser::parse_raw_expr("not name == foo").unwrap();
+    assert_eq!(result.to_test_expr(), result_lower.to_test_expr());
 }
 
 #[test]
-fn test_alternate_operators() {
-    test_cases(&[
-        ("name ~ foo.*", name_regex("foo.*").unwrap()),
-        ("name = foo", name_eq("foo")),
-        ("name =~ foo.*", name_regex("foo.*").unwrap()),
-    ]);
+fn test_syntax_errors() {
+    // Missing value
+    let result = RawParser::parse_raw_expr("name ==");
+    assert!(result.is_err());
+
+    // Missing operator
+    let result = RawParser::parse_raw_expr("name foo");
+    assert!(result.is_err());
+
+    // Unclosed parentheses
+    let result = RawParser::parse_raw_expr("(name == foo");
+    assert!(result.is_err());
+
+    // Unclosed set
+    let result = RawParser::parse_raw_expr("name in [foo");
+    assert!(result.is_err());
+
+    // Unclosed quote
+    let result = RawParser::parse_raw_expr(r#"name == "unclosed"#);
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_bare_vs_quoted_values() {
-    test_cases(&[
-        ("name == foo", name_eq("foo")),
-        ("name == foo.txt", name_eq("foo.txt")),
-        ("name == foo-bar_baz", name_eq("foo-bar_baz")),
-        (r#"name == "foo bar""#, name_eq("foo bar")),
-        (r#"name == "foo(bar)""#, name_eq("foo(bar)")),
-        (r#"name == "foo&bar""#, name_eq("foo&bar")),
-    ]);
+fn test_invalid_escape_sequences() {
+    // Since we're a syntax-only parser, we preserve escape sequences without validating them
+    // This previously "invalid" escape sequence is now just preserved as-is
+    let result = RawParser::parse_raw_expr(r#"name == "invalid\x""#);
+    let expected = RawTestExpr::string_predicate("name", "==", r"invalid\x");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // Unterminated string (this is actually a syntax error, not escape error)
+    let result = RawParser::parse_raw_expr("name == \"unterminated");
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_path_with_dots() {
-    test_cases(&[
-        ("path == ./foo/bar.txt", full_path_eq("./foo/bar.txt")),
-        ("path == ../foo/bar.txt", full_path_eq("../foo/bar.txt")),
-        ("parent == ./foo", parent_eq("./foo")),
-    ]);
+fn test_whitespace_handling() {
+    let result1 = RawParser::parse_raw_expr("name==foo").unwrap();
+    let result2 = RawParser::parse_raw_expr("name == foo").unwrap();
+    let result3 = RawParser::parse_raw_expr("  name   ==   foo  ").unwrap();
+
+    assert_eq!(result1.to_test_expr(), result2.to_test_expr());
+    assert_eq!(result2.to_test_expr(), result3.to_test_expr());
 }
 
 #[test]
-fn test_multiline_content() {
-    test_parse_ok(&[
-        r#"contents ~= "struct \{[\s\S]*?field""#,
-        r#"contents ~= "TODO[\s\S]*?DONE""#,
-    ]);
+fn test_set_with_whitespace() {
+    let result = RawParser::parse_raw_expr("ext in [ rs , js , ts ]").unwrap();
+    let expected = RawTestExpr::set_predicate("ext", "in", vec!["rs", "js", "ts"]);
+    assert_eq!(result.to_test_expr(), expected);
 }
 
-// Boilerplate (helper functions)
+#[test]
+fn test_edge_cases() {
+    // Empty string value
+    let result = RawParser::parse_raw_expr(r#"name == """#).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "==", "");
+    assert_eq!(result.to_test_expr(), expected);
 
-// Name predicate helpers - most common patterns
-pub fn name_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::stem_eq(s))
-}
+    // Value with special characters
+    let result = RawParser::parse_raw_expr("name == foo-bar_baz.txt").unwrap();
+    let expected = RawTestExpr::string_predicate("name", "==", "foo-bar_baz.txt");
+    assert_eq!(result.to_test_expr(), expected);
 
-pub fn name_ne(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::ne(s)))
-}
-
-pub fn name_contains(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::contains(s)))
-}
-
-pub fn name_regex(s: &str) -> Result<Expr, regex::Error> {
-    Ok(Expr::name_predicate(NamePredicate::BaseName(
-        StringMatcher::regex(s)?,
-    )))
-}
-
-pub fn name_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Expr {
-    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::in_set(items)))
-}
-
-pub fn filename_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::file_eq(s))
-}
-
-// Stem (BaseName) helpers
-pub fn stem_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::stem_eq(s))
-}
-
-pub fn stem_contains(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::BaseName(StringMatcher::contains(s)))
-}
-
-// Extension helpers
-pub fn ext_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::ext_eq(s))
-}
-
-pub fn ext_contains(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::Extension(StringMatcher::contains(s)))
-}
-
-pub fn ext_in<I: IntoIterator<Item = S>, S: AsRef<str>>(items: I) -> Expr {
-    Expr::name_predicate(NamePredicate::ext_in(items))
-}
-
-// Parent directory (DirPath) helpers
-pub fn parent_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::DirPath(StringMatcher::eq(s)))
-}
-
-pub fn parent_contains(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::DirPath(StringMatcher::contains(s)))
-}
-
-// Full path helpers
-pub fn full_path_eq(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::path_eq(s))
-}
-
-pub fn full_path_contains(s: &str) -> Expr {
-    Expr::name_predicate(NamePredicate::FullPath(StringMatcher::contains(s)))
-}
-
-// Metadata helpers
-pub fn type_eq(s: &str) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Type(StringMatcher::eq(s)))
-}
-
-pub fn size_eq(bytes: u64) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Filesize(NumberMatcher::Equals(bytes)))
-}
-
-pub fn size_ne(bytes: u64) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Filesize(NumberMatcher::NotEquals(bytes)))
-}
-
-pub fn size_gt(bytes: u64) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(
-        (bytes + 1)..,
-    ))))
-}
-
-pub fn size_gte(bytes: u64) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Filesize(NumberMatcher::In(Bound::Left(
-        bytes..,
-    ))))
-}
-
-pub fn size_lt(bytes: u64) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Filesize(NumberMatcher::In(
-        Bound::Right(..bytes),
-    )))
-}
-
-pub fn size_lte(bytes: u64) -> Expr {
-    Expr::meta_predicate(MetadataPredicate::Filesize(NumberMatcher::In(
-        Bound::Right(..(bytes + 1)),
-    )))
-}
-
-// Content helpers
-pub fn content_contains(pattern: &str) -> Expr {
-    Expr::content_predicate(StreamingCompiledContentPredicate::new(regex::escape(pattern)).unwrap())
-}
-
-pub fn content_regex(pattern: &str) -> Expr {
-    Expr::content_predicate(StreamingCompiledContentPredicate::new(pattern.to_string()).unwrap())
+    // Selector with dots and underscores
+    let result = RawParser::parse_raw_expr("path.name_with_underscores == foo").unwrap();
+    let expected = RawTestExpr::string_predicate("path.name_with_underscores", "==", "foo");
+    assert_eq!(result.to_test_expr(), expected);
 }

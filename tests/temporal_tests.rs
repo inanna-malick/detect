@@ -228,7 +228,7 @@ async fn test_absolute_dates_and_keywords() {
         .unwrap();
 
     // Test keyword-based queries
-    // TODO: v2_parser doesn't support >= and <= for temporal operators yet
+    // TODO: parser doesn't support >= and <= for temporal operators yet
     // run_temporal_test(
     //     &tmp_dir,
     //     "modified >= today",
@@ -243,7 +243,7 @@ async fn test_absolute_dates_and_keywords() {
         vec!["yesterday.txt"],
     )
     .await;
-    // TODO: v2_parser doesn't support >= and <= for temporal operators yet
+    // TODO: parser doesn't support >= and <= for temporal operators yet
     // run_temporal_test(
     //     &tmp_dir,
     //     "modified >= yesterday",
@@ -328,7 +328,7 @@ async fn test_absolute_dates_and_keywords() {
         .set_modified(yesterday_end_systime)
         .unwrap();
 
-    // TODO: v2_parser doesn't support >= and <= for temporal operators yet
+    // TODO: parser doesn't support >= and <= for temporal operators yet
     // run_temporal_test(
     //     &tmp_dir,
     //     "modified >= today",
@@ -393,7 +393,7 @@ async fn test_time_selectors() {
     run_temporal_test(&tmp_dir, "accessed > -1minute", vec!["test.txt"], vec![]).await;
 
     // Test time.selector syntax
-    // TODO: v2_parser doesn't support time.modified selector syntax yet
+    // TODO: parser doesn't support time.modified selector syntax yet
     // run_temporal_test(
     //     &tmp_dir,
     //     "time.modified > -1hour",

@@ -3,8 +3,8 @@ use detect::predicate::{
     parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
     StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
 };
-use detect::v2_parser::error::DetectError as TypecheckError;
-use detect::v2_parser::{RawParser, Typechecker};
+use detect::parser::error::DetectError as TypecheckError;
+use detect::parser::{RawParser, Typechecker};
 
 /// Helper function to parse and typecheck an expression
 fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {

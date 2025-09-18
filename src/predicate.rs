@@ -14,7 +14,7 @@ use std::{
 };
 
 use crate::expr::short_circuit::ShortCircuit;
-use crate::parse_error::PredicateParseError;
+use crate::predicate_error::PredicateParseError;
 use crate::util::Done;
 use chrono::{DateTime, Duration, Local, NaiveDate};
 

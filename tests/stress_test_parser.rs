@@ -1,5 +1,5 @@
-use detect::v2_parser::error::DetectError as TypecheckError;
-use detect::v2_parser::{test_utils::RawTestExpr, Typechecker, *};
+use detect::parser::error::DetectError as TypecheckError;
+use detect::parser::{test_utils::RawTestExpr, Typechecker, *};
 
 #[test]
 fn test_edge_case_empty_inputs() {
@@ -547,7 +547,7 @@ fn test_mixed_quotes_in_sets() {
 
 #[test]
 fn test_very_large_numeric_values() {
-    use detect::v2_parser::typechecker::Typechecker;
+    use detect::parser::typechecker::Typechecker;
 
     // Test numbers at the edge of u64
     let cases = vec![
@@ -589,7 +589,7 @@ fn test_escaped_characters_in_values() {
 
 #[test]
 fn test_whitespace_in_set_values() {
-    use detect::v2_parser::typechecker::Typechecker;
+    use detect::parser::typechecker::Typechecker;
 
     // Whitespace should be preserved in set values
     let expr = r#"name in ["file one.txt", "file  two.txt", "  spaces  "]"#;
@@ -603,7 +603,7 @@ fn test_whitespace_in_set_values() {
 
 #[test]
 fn test_special_regex_characters() {
-    use detect::v2_parser::typechecker::Typechecker;
+    use detect::parser::typechecker::Typechecker;
 
     // Test regex patterns with special characters that require proper handling
     // These patterns test the hybrid regex engine's ability to handle both

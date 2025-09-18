@@ -2,20 +2,19 @@ mod eval;
 pub mod expr;
 mod hybrid_regex;
 pub mod mcp_server;
-pub mod parse_error;
-pub mod parser;
 pub mod predicate;
+mod predicate_error;
 mod util;
-pub mod v2_parser;
+pub mod parser;
 
 use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use ignore::WalkBuilder;
-// use parse_error::DetectError; // Replaced by v2_parser error
+// use parse_error::DetectError; // Replaced by parser error
 use predicate::Predicate;
 use slog::{debug, info, Logger};
-use v2_parser::{error::DetectError, RawParser, Typechecker};
+use parser::{error::DetectError, RawParser, Typechecker};
 
 pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     logger: Logger,
@@ -24,7 +23,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     expr: String,
     mut on_match: F,
 ) -> Result<(), DetectError> {
-    // Use v2_parser: parse then typecheck
+    // Use parser: parse then typecheck
     let original_query = expr.clone();
     let parse_result = RawParser::parse_raw_expr(&expr)
         .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr));
