@@ -209,6 +209,80 @@ fn test_glob_pattern() {
 }
 
 #[test]
+fn test_selector_aliases() {
+    // Test that all selector aliases resolve to the same predicate
+
+    // File identity aliases
+    assert_eq!(
+        parse_and_typecheck("filename == test.rs").unwrap(),
+        parse_and_typecheck("name == test.rs").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("stem == test").unwrap(),
+        parse_and_typecheck("basename == test").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("extension == rs").unwrap(),
+        parse_and_typecheck("ext == rs").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("parent contains src").unwrap(),
+        parse_and_typecheck("dir contains src").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("directory contains src").unwrap(),
+        parse_and_typecheck("dir contains src").unwrap()
+    );
+
+    // File property aliases
+    assert_eq!(
+        parse_and_typecheck("filesize > 1mb").unwrap(),
+        parse_and_typecheck("size > 1mb").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("bytes > 1024").unwrap(),
+        parse_and_typecheck("size > 1024").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("filetype == file").unwrap(),
+        parse_and_typecheck("type == file").unwrap()
+    );
+
+    // Time aliases - use absolute timestamps to avoid timing issues
+    assert_eq!(
+        parse_and_typecheck("mtime > 2024-01-01").unwrap(),
+        parse_and_typecheck("modified > 2024-01-01").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("ctime < 2024-12-31").unwrap(),
+        parse_and_typecheck("created < 2024-12-31").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("atime == 2024-06-15").unwrap(),
+        parse_and_typecheck("accessed == 2024-06-15").unwrap()
+    );
+
+    // Content aliases
+    assert_eq!(
+        parse_and_typecheck("contents contains TODO").unwrap(),
+        parse_and_typecheck("content contains TODO").unwrap()
+    );
+
+    assert_eq!(
+        parse_and_typecheck("text ~= pattern").unwrap(),
+        parse_and_typecheck("content ~= pattern").unwrap()
+    );
+}
+
+#[test]
 fn test_operator_aliases() {
     // Test string operator aliases
     let cases = vec![

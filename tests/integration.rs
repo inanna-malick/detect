@@ -575,3 +575,77 @@ async fn test_symlinks() {
     assert!(!found.contains(&"short".to_string()));
     assert!(!found.contains(&"target.txt".to_string()));
 }
+
+#[tokio::test]
+async fn test_alias_smoke_test() {
+    // Simple smoke test to verify selector aliases work with real filesystem
+    let cases = vec![
+        // Test filename alias
+        (
+            "filename == test.rs",
+            &["test.rs"][..],
+            vec![f("test.rs", "fn main() {}"), f("lib.rs", "")],
+        ),
+        // Test extension alias
+        (
+            "extension == md",
+            &["README.md"][..],
+            vec![f("README.md", "# Test"), f("main.rs", "")],
+        ),
+        // Test filesize alias
+        (
+            "filesize > 10",
+            &["", "large.txt"][..],  // Empty string is the directory itself
+            vec![f("small.txt", "x"), f("large.txt", "xxxxxxxxxxxxxxxxxxxx")],
+        ),
+        // Test filetype alias
+        (
+            "filetype == file",
+            &["a.txt", "b.txt"][..],
+            vec![f("a.txt", ""), f("b.txt", "")],
+        ),
+        // Test mtime alias (all files are recently created)
+        (
+            "mtime > -1h",
+            &["", "recent.txt"][..],  // All files match, including directory
+            vec![f("recent.txt", "new")],
+        ),
+        // Test contents alias
+        (
+            "contents contains TODO",
+            &["todo.txt"][..],
+            vec![f("todo.txt", "TODO: fix this"), f("done.txt", "all done")],
+        ),
+        // Test text alias
+        (
+            "text ~= FIXME",
+            &["broken.rs"][..],
+            vec![f("broken.rs", "// FIXME: bug here"), f("working.rs", "// works")],
+        ),
+        // Test stem alias
+        (
+            "stem == config",
+            &["config.json", "config.toml"][..],
+            vec![f("config.json", "{}"), f("config.toml", ""), f("other.txt", "")],
+        ),
+        // Test directory alias
+        (
+            "directory contains src",
+            &["src/main.rs"][..],
+            vec![f("src/main.rs", ""), f("test.rs", "")],
+        ),
+        // Test combined aliases in complex query
+        (
+            "filename ~= test AND extension == rs AND filesize > 0",
+            &["test_one.rs", "test_two.rs"][..],
+            vec![
+                f("test_one.rs", "x"),
+                f("test_two.rs", "x"),
+                f("test.txt", "x"),
+                f("main.rs", "x"),
+            ],
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}

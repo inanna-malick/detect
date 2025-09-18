@@ -111,35 +111,35 @@ pub enum TypedSelector {
 /// Returns `ParseError::UnknownSelector` if the selector name is not recognized.
 pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
     match s {
-        // File Identity (5)
-        "name" => Ok(SelectorCategory::String(StringSelector::Path(
+        // File Identity (5) + aliases
+        "name" | "filename" => Ok(SelectorCategory::String(StringSelector::Path(
             PathComponent::Name,
         ))),
-        "basename" => Ok(SelectorCategory::String(StringSelector::Path(
+        "basename" | "stem" => Ok(SelectorCategory::String(StringSelector::Path(
             PathComponent::Stem,
         ))),
-        "ext" => Ok(SelectorCategory::String(StringSelector::Path(
+        "ext" | "extension" => Ok(SelectorCategory::String(StringSelector::Path(
             PathComponent::Extension,
         ))),
         "path" => Ok(SelectorCategory::String(StringSelector::Path(
             PathComponent::Full,
         ))),
-        "dir" => Ok(SelectorCategory::String(StringSelector::Path(
+        "dir" | "parent" | "directory" => Ok(SelectorCategory::String(StringSelector::Path(
             PathComponent::Parent,
         ))),
 
-        // File Properties (3)
-        "size" => Ok(SelectorCategory::Numeric(NumericSelector::Size)),
-        "type" => Ok(SelectorCategory::String(StringSelector::Type)),
+        // File Properties (3) + aliases
+        "size" | "filesize" | "bytes" => Ok(SelectorCategory::Numeric(NumericSelector::Size)),
+        "type" | "filetype" => Ok(SelectorCategory::String(StringSelector::Type)),
         "depth" => Ok(SelectorCategory::Numeric(NumericSelector::Depth)),
 
-        // Time (3)
-        "modified" => Ok(SelectorCategory::Temporal(TemporalSelector::Modified)),
-        "created" => Ok(SelectorCategory::Temporal(TemporalSelector::Created)),
-        "accessed" => Ok(SelectorCategory::Temporal(TemporalSelector::Accessed)),
+        // Time (3) + common Unix aliases
+        "modified" | "mtime" => Ok(SelectorCategory::Temporal(TemporalSelector::Modified)),
+        "created" | "ctime" => Ok(SelectorCategory::Temporal(TemporalSelector::Created)),
+        "accessed" | "atime" => Ok(SelectorCategory::Temporal(TemporalSelector::Accessed)),
 
-        // Content (1)
-        "content" => Ok(SelectorCategory::String(StringSelector::Contents)),
+        // Content (1) + aliases
+        "content" | "contents" | "text" => Ok(SelectorCategory::String(StringSelector::Contents)),
 
         // Everything else is unknown
         _ => Err(ParseError::UnknownSelector(s.to_string())),

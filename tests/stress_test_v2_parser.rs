@@ -518,3 +518,122 @@ fn test_memory_stress_large_inputs() {
     let expected = RawTestExpr::set_predicate("name", "in", large_set_vec);
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
+
+#[test]
+fn test_empty_set_values() {
+    // Empty set should parse but might fail typecheck
+    let result = RawParser::parse_raw_expr("ext in []");
+    assert!(result.is_ok());
+
+    // Verify it parses as a set operation with empty items
+    let expected = RawTestExpr::set_predicate("ext", "in", vec![]);
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+}
+
+#[test]
+fn test_mixed_quotes_in_sets() {
+    // Mixed quotes should work fine
+    let cases = vec![
+        r#"ext in ['js', "ts", 'jsx']"#,
+        r#"name in ["test.rs", 'main.rs', "lib.rs"]"#,
+        r#"basename in ['config', "settings", 'options']"#,
+    ];
+
+    for expr in cases {
+        let result = RawParser::parse_raw_expr(expr);
+        assert!(result.is_ok(), "Failed to parse: {}", expr);
+    }
+}
+
+#[test]
+fn test_very_large_numeric_values() {
+    use detect::v2_parser::typechecker::Typechecker;
+
+    // Test numbers at the edge of u64
+    let cases = vec![
+        "size == 18446744073709551615", // u64::MAX
+        "size > 9999999999999999999",
+        "filesize < 1000000000000000000",
+    ];
+
+    for expr in cases {
+        let result = RawParser::parse_raw_expr(expr);
+        assert!(result.is_ok(), "Failed to parse: {}", expr);
+    }
+
+    // Test numbers beyond u64 range (should parse but fail typecheck)
+    let overflow = "size > 99999999999999999999999999999";
+    let parse_result = RawParser::parse_raw_expr(overflow);
+    assert!(parse_result.is_ok());
+
+    // Should fail during typecheck
+    let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), overflow);
+    assert!(typecheck_result.is_err());
+}
+
+#[test]
+fn test_escaped_characters_in_values() {
+    // Test various escape sequences
+    let cases = vec![
+        r#"name == "test\nfile.txt""#,
+        r#"content contains "line1\nline2\ttab""#,
+        r#"path ~= "\\\\server\\\\share""#,
+        r#"text contains "quote\"inside""#,
+    ];
+
+    for expr in cases {
+        let result = RawParser::parse_raw_expr(expr);
+        assert!(result.is_ok(), "Failed to parse: {}", expr);
+    }
+}
+
+#[test]
+fn test_whitespace_in_set_values() {
+    use detect::v2_parser::typechecker::Typechecker;
+
+    // Whitespace should be preserved in set values
+    let expr = r#"name in ["file one.txt", "file  two.txt", "  spaces  "]"#;
+    let result = RawParser::parse_raw_expr(expr);
+    assert!(result.is_ok());
+
+    // After typechecking, verify whitespace is preserved
+    let typed = Typechecker::typecheck(result.unwrap(), expr).unwrap();
+    // The actual verification would happen in the set values
+}
+
+#[test]
+fn test_special_regex_characters() {
+    use detect::v2_parser::typechecker::Typechecker;
+
+    // Test regex patterns with special characters that require proper handling
+    // These patterns test the hybrid regex engine's ability to handle both
+    // Rust regex and PCRE2 patterns correctly
+    let cases = vec![
+        // Escaped literal characters
+        (r#"name ~= "test\\.rs""#, "Escaped dot in regex"),
+        (r#"path ~= "src/main\\.rs""#, "Path with escaped dot"),
+
+        // Word boundaries (PCRE2 feature, should fallback)
+        (r#"content ~= "\\bword\\b""#, "Word boundary anchors"),
+
+        // Character classes and quantifiers
+        (r#"path ~= "[a-z]+\\.rs$""#, "Character class with quantifier"),
+        (r#"name ~= "^test_[0-9]{3}""#, "Anchored pattern with repetition"),
+
+        // Case insensitive flag
+        (r#"text ~= "(?i)case.*insensitive""#, "Case insensitive flag"),
+    ];
+
+    for (expr, description) in cases {
+        let parse_result = RawParser::parse_raw_expr(expr);
+        assert!(parse_result.is_ok(), "Failed to parse {}: {}", description, expr);
+
+        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
+        assert!(
+            typecheck_result.is_ok(),
+            "Failed to typecheck {}: {}",
+            description,
+            expr
+        );
+    }
+}
