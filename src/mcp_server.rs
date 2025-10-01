@@ -1,11 +1,6 @@
 //! MCP server implementation for detect using manual JSON-RPC
 
 use crate::parse_and_run_fs;
-
-// Include documentation files for MCP tool descriptions
-const EXAMPLES: &str = include_str!("docs/examples.md");
-const PREDICATES: &str = include_str!("docs/predicates.md");
-const OPERATORS: &str = include_str!("docs/operators.md");
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
