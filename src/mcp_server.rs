@@ -162,12 +162,8 @@ pub async fn run_mcp_server() -> Result<()> {
                                 let expression =
                                     tool_args.get("expression").and_then(|e| e.as_str());
 
-                                if expression.is_none() {
-                                    serde_json::json!({
-                                        "error": "Missing 'expression' parameter"
-                                    })
-                                } else {
-                                    let expression = expression.unwrap().to_string();
+                                if let Some(expr) = expression {
+                                    let expression = expr.to_string();
 
                                     let directory = tool_args
                                         .get("directory")
@@ -223,6 +219,10 @@ pub async fn run_mcp_server() -> Result<()> {
                                             "error": format!("Detect failed: {}", e)
                                         }),
                                     }
+                                } else {
+                                    serde_json::json!({
+                                        "error": "Missing 'expression' parameter"
+                                    })
                                 }
                             }
                             "detect_help" => {

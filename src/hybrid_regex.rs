@@ -49,10 +49,7 @@ impl<'a> HybridRegexRef<'a> {
         match self {
             HybridRegexRef::RustDFA(dfa) => {
                 let input = Input::new(text);
-                match dfa.try_search_fwd(&input) {
-                    Ok(Some(_)) => true,
-                    _ => false,
-                }
+                matches!(dfa.try_search_fwd(&input), Ok(Some(_)))
             }
             HybridRegexRef::Pcre2(re) => re.is_match(text).unwrap_or(false),
         }
