@@ -1,7 +1,7 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use super::parser::Rule;
+use super::raw::Rule;
 
 /// Main error type for detect expressions, using miette for beautiful diagnostics
 #[derive(Debug, Clone, Diagnostic, Error)]
