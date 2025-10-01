@@ -6,8 +6,8 @@ use std::borrow::Cow;
 /// Hybrid regex engine that silently falls back from Rust regex to PCRE2
 #[derive(Debug)]
 pub enum HybridRegex {
-    /// Rust regex DFA for streaming
-    RustDFA(DFA<Vec<u32>>),
+    /// Rust regex DFA for streaming (boxed to reduce size difference)
+    RustDFA(Box<DFA<Vec<u32>>>),
     /// PCRE2 regex for compatibility
     Pcre2(pcre2::bytes::Regex),
 }
@@ -17,7 +17,7 @@ impl HybridRegex {
     pub fn new(pattern: &str) -> Result<Self, String> {
         // Try Rust regex DFA first (preferred for performance)
         match DFA::new(pattern) {
-            Ok(dfa) => Ok(HybridRegex::RustDFA(dfa)),
+            Ok(dfa) => Ok(HybridRegex::RustDFA(Box::new(dfa))),
             Err(_rust_err) => {
                 // Silent fallback to PCRE2
                 match pcre2::bytes::Regex::new(pattern) {
@@ -28,37 +28,10 @@ impl HybridRegex {
         }
     }
 
-    /// Force PCRE2 engine (for --pcre2 flag)
-    pub fn new_pcre2(pattern: &str) -> Result<Self, String> {
-        match pcre2::bytes::Regex::new(pattern) {
-            Ok(pcre2_re) => Ok(HybridRegex::Pcre2(pcre2_re)),
-            Err(err) => Err(format!("Invalid PCRE2 pattern: {}", err)),
-        }
-    }
-
-    /// Check if the regex matches anywhere in the text
-    pub fn is_match(&self, text: &[u8]) -> bool {
-        match self {
-            HybridRegex::RustDFA(dfa) => {
-                // Use DFA for streaming match
-                // Check if DFA matches by running through the input
-                let input = Input::new(text);
-                match dfa.try_search_fwd(&input) {
-                    Ok(Some(_)) => true,
-                    _ => false,
-                }
-            }
-            HybridRegex::Pcre2(re) => {
-                // PCRE2 returns Result, we treat errors as non-match
-                re.is_match(text).unwrap_or(false)
-            }
-        }
-    }
-
     /// Get a borrowed reference version for streaming
     pub fn as_ref(&self) -> HybridRegexRef<'_> {
         match self {
-            HybridRegex::RustDFA(dfa) => HybridRegexRef::RustDFA(dfa.as_ref()),
+            HybridRegex::RustDFA(dfa) => HybridRegexRef::RustDFA(dfa.as_ref().as_ref()),
             HybridRegex::Pcre2(re) => HybridRegexRef::Pcre2(re),
         }
     }
