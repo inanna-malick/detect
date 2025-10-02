@@ -58,7 +58,8 @@ impl RawParser {
                     Rule::quoted_string => {
                         // quoted_string -> inner_double | inner_single (quotes stripped)
                         // Preserve all whitespace inside quotes
-                        inner.into_inner()
+                        inner
+                            .into_inner()
                             .next()
                             .map(|s| s.as_str().to_string())
                             .unwrap_or_default()
@@ -178,8 +179,11 @@ impl RawParser {
                 })?;
                 Ok(RawValue::Quoted(inner.as_str()))
             }
-            Rule::raw_token | Rule::bracketed | Rule::parenthesized |
-            Rule::curly_braced | Rule::bare_token => {
+            Rule::raw_token
+            | Rule::bracketed
+            | Rule::parenthesized
+            | Rule::curly_braced
+            | Rule::bare_token => {
                 // All raw tokens stored as-is, typechecker decides meaning based on operator
                 Ok(RawValue::Raw(pair.as_str()))
             }

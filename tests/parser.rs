@@ -151,10 +151,9 @@ fn test_parentheses() {
 
 #[test]
 fn test_complex_expression() {
-    let result = RawParser::parse_raw_expr(
-        r#"(name == "test.rs" OR ext in [js, ts]) AND NOT size > 1mb"#,
-    )
-    .unwrap();
+    let result =
+        RawParser::parse_raw_expr(r#"(name == "test.rs" OR ext in [js, ts]) AND NOT size > 1mb"#)
+            .unwrap();
 
     let expected = RawTestExpr::and(
         RawTestExpr::or(
@@ -230,7 +229,10 @@ fn test_syntax_errors() {
     // Unclosed bracket - now parses as bare token (grammar is permissive)
     // This is valid: searches for files named "[foo"
     let result = RawParser::parse_raw_expr("name in [foo");
-    assert!(result.is_ok(), "Permissive grammar allows [foo as bare token");
+    assert!(
+        result.is_ok(),
+        "Permissive grammar allows [foo as bare token"
+    );
 
     // Unclosed quote
     let result = RawParser::parse_raw_expr(r#"name == "unclosed"#);
@@ -364,29 +366,47 @@ fn test_reserved_words_as_complete_tokens_work_in_value_position() {
     // Reserved words as values should work - context disambiguates!
     // "name == or" searches for a file named "or", not a boolean operator
     let result = RawParser::parse_raw_expr("name == or");
-    assert!(result.is_ok(), "Reserved word 'or' in value position should work");
+    assert!(
+        result.is_ok(),
+        "Reserved word 'or' in value position should work"
+    );
     let expected = RawTestExpr::string_predicate("name", "==", "or");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 
     let result = RawParser::parse_raw_expr("name == and");
-    assert!(result.is_ok(), "Reserved word 'and' in value position should work");
+    assert!(
+        result.is_ok(),
+        "Reserved word 'and' in value position should work"
+    );
     let expected = RawTestExpr::string_predicate("name", "==", "and");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 
     let result = RawParser::parse_raw_expr("name == not");
-    assert!(result.is_ok(), "Reserved word 'not' in value position should work");
+    assert!(
+        result.is_ok(),
+        "Reserved word 'not' in value position should work"
+    );
     let expected = RawTestExpr::string_predicate("name", "==", "not");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 
     // Case variations
     let result = RawParser::parse_raw_expr("name == OR");
-    assert!(result.is_ok(), "Reserved word 'OR' in value position should work");
+    assert!(
+        result.is_ok(),
+        "Reserved word 'OR' in value position should work"
+    );
 
     let result = RawParser::parse_raw_expr("name == AND");
-    assert!(result.is_ok(), "Reserved word 'AND' in value position should work");
+    assert!(
+        result.is_ok(),
+        "Reserved word 'AND' in value position should work"
+    );
 
     let result = RawParser::parse_raw_expr("name == NOT");
-    assert!(result.is_ok(), "Reserved word 'NOT' in value position should work");
+    assert!(
+        result.is_ok(),
+        "Reserved word 'NOT' in value position should work"
+    );
 }
 
 #[test]
@@ -512,7 +532,10 @@ fn test_brackets_vs_sets_disambiguation() {
 
     // Regex character class with ~= operator
     let result = RawParser::parse_raw_expr("content ~= [0-9]");
-    assert!(result.is_ok(), "Should parse [0-9] as bracketed token for regex");
+    assert!(
+        result.is_ok(),
+        "Should parse [0-9] as bracketed token for regex"
+    );
     let expected = RawTestExpr::string_predicate("content", "~=", "[0-9]");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
@@ -541,7 +564,12 @@ fn test_special_chars_in_contains() {
         let result = RawParser::parse_raw_expr(expr);
         assert!(result.is_ok(), "Should parse: {}", expr);
         let expected = RawTestExpr::string_predicate("content", "contains", expected_value);
-        assert_eq!(result.unwrap().to_test_expr(), expected, "Failed for: {}", expr);
+        assert_eq!(
+            result.unwrap().to_test_expr(),
+            expected,
+            "Failed for: {}",
+            expr
+        );
     }
 }
 
@@ -578,7 +606,11 @@ fn test_regression_sets_still_work() {
         // Verify it's recognized as a bracketed token (not bare)
         match result.unwrap().to_test_expr() {
             RawTestExpr::Predicate(pred) => {
-                assert!(pred.value.to_string().starts_with('['), "Should be bracketed: {}", expr);
+                assert!(
+                    pred.value.to_string().starts_with('['),
+                    "Should be bracketed: {}",
+                    expr
+                );
             }
             _ => panic!("Expected predicate for: {}", expr),
         }
@@ -600,7 +632,12 @@ fn test_regression_regex_patterns_still_work() {
         let result = RawParser::parse_raw_expr(expr);
         assert!(result.is_ok(), "Should parse regex: {}", expr);
         let expected = RawTestExpr::string_predicate("content", "~=", expected_value);
-        assert_eq!(result.unwrap().to_test_expr(), expected, "Failed for: {}", expr);
+        assert_eq!(
+            result.unwrap().to_test_expr(),
+            expected,
+            "Failed for: {}",
+            expr
+        );
     }
 }
 
@@ -706,10 +743,112 @@ fn test_set_parsing_complex_real_world() {
     use detect::parser::RawParser;
 
     // Mix of quoted, bare, with special chars
-    let result = RawParser::parse_set_contents(r#"rs, "config.toml", "my file.txt", Cargo.toml"#).unwrap();
-    assert_eq!(result, vec!["rs", "config.toml", "my file.txt", "Cargo.toml"]);
+    let result =
+        RawParser::parse_set_contents(r#"rs, "config.toml", "my file.txt", Cargo.toml"#).unwrap();
+    assert_eq!(
+        result,
+        vec!["rs", "config.toml", "my file.txt", "Cargo.toml"]
+    );
 
     // URLs and paths with commas
-    let result = RawParser::parse_set_contents(r#""https://example.com?a=1,2,3", /path/to/file"#).unwrap();
+    let result =
+        RawParser::parse_set_contents(r#""https://example.com?a=1,2,3", /path/to/file"#).unwrap();
     assert_eq!(result, vec!["https://example.com?a=1,2,3", "/path/to/file"]);
+}
+
+#[test]
+fn test_set_parsing_edge_cases() {
+    use detect::parser::RawParser;
+
+    // Empty string in set (should be filtered out currently)
+    let result = RawParser::parse_set_contents(r#""", foo"#).unwrap();
+    assert_eq!(result, vec!["foo"], "Empty quoted strings are filtered");
+
+    // Only whitespace after first item (trailing whitespace)
+    let result = RawParser::parse_set_contents("foo  ,  bar  ").unwrap();
+    assert_eq!(
+        result,
+        vec!["foo", "bar"],
+        "Whitespace around items trimmed"
+    );
+
+    // Quoted empty string vs bare empty
+    let result = RawParser::parse_set_contents(r#""""#).unwrap();
+    assert_eq!(
+        result,
+        Vec::<String>::new(),
+        "Single empty quoted string filtered"
+    );
+
+    // Multiple commas (empty items between should be filtered)
+    let result = RawParser::parse_set_contents("foo,,,bar").unwrap();
+    assert_eq!(
+        result,
+        vec!["foo", "bar"],
+        "Multiple commas create empty items that are filtered"
+    );
+
+    // Special characters in bare items
+    let result = RawParser::parse_set_contents("foo-bar, baz_qux, file.txt").unwrap();
+    assert_eq!(result, vec!["foo-bar", "baz_qux", "file.txt"]);
+}
+
+#[test]
+fn test_set_parsing_unicode() {
+    use detect::parser::RawParser;
+
+    // Unicode in quoted strings
+    let result = RawParser::parse_set_contents(r#""测试", "файл", "🦀""#).unwrap();
+    assert_eq!(result, vec!["测试", "файл", "🦀"]);
+
+    // Unicode in bare items
+    let result = RawParser::parse_set_contents("测试, файл").unwrap();
+    assert_eq!(result, vec!["测试", "файл"]);
+}
+
+#[test]
+fn test_set_parsing_quotes_and_escapes() {
+    use detect::parser::RawParser;
+
+    // Nested quote styles
+    let result = RawParser::parse_set_contents(r#""He said 'hello'", 'She said "hi"'"#).unwrap();
+    assert_eq!(result, vec!["He said 'hello'", r#"She said "hi""#]);
+
+    // Escaped quotes (backslashes preserved in parsed output)
+    let result =
+        RawParser::parse_set_contents(r#""She said \"hello\"", 'He said \'hi\''"#).unwrap();
+    assert_eq!(result, vec![r#"She said \"hello\""#, r#"He said \'hi\'"#]);
+}
+
+#[test]
+fn test_bare_token_asymmetric_delimiters() {
+    use detect::parser::RawParser;
+
+    // Closing paren should terminate bare token (it's a structural char)
+    let result = RawParser::parse_raw_expr("name == foo)bar");
+    assert!(result.is_err(), "Closing paren should cause parse error");
+
+    // Opening brackets/parens allowed mid-token
+    let result = RawParser::parse_raw_expr("content contains foo(bar").unwrap();
+    let expected = RawTestExpr::string_predicate("content", "contains", "foo(bar");
+    assert_eq!(result.to_test_expr(), expected);
+
+    let result = RawParser::parse_raw_expr("content contains foo[bar").unwrap();
+    let expected = RawTestExpr::string_predicate("content", "contains", "foo[bar");
+    assert_eq!(result.to_test_expr(), expected);
+}
+
+#[test]
+fn test_quoted_string_with_newlines() {
+    use detect::parser::RawParser;
+
+    // Newlines inside quotes should be preserved
+    let result = RawParser::parse_raw_expr("content == \"line1\nline2\"").unwrap();
+    let expected = RawTestExpr::quoted_predicate("content", "==", "line1\nline2");
+    assert_eq!(result.to_test_expr(), expected);
+
+    // Tabs preserved
+    let result = RawParser::parse_raw_expr("content == \"col1\tcol2\"").unwrap();
+    let expected = RawTestExpr::quoted_predicate("content", "==", "col1\tcol2");
+    assert_eq!(result.to_test_expr(), expected);
 }
