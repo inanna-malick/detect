@@ -157,6 +157,12 @@ pub async fn run_mcp_server() -> Result<()> {
                         let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
                         let tool_args = params.get("arguments").cloned().unwrap_or(Value::Null);
 
+                        // Distinguish between success and error results
+                        enum ToolResult {
+                            Success(Value),
+                            Error(String),
+                        }
+
                         let result = match tool_name {
                             "detect" => {
                                 let expression =
@@ -208,25 +214,19 @@ pub async fn run_mcp_server() -> Result<()> {
                                     .await;
 
                                     match detect_result {
-                                        Ok(_) => {
-                                            serde_json::json!({
-                                                "matches": results,
-                                                "count": results.len(),
-                                                "truncated": false
-                                            })
-                                        }
-                                        Err(e) => serde_json::json!({
-                                            "error": format!("Detect failed: {}", e)
-                                        }),
+                                        Ok(_) => ToolResult::Success(serde_json::json!({
+                                            "matches": results,
+                                            "count": results.len(),
+                                            "truncated": false
+                                        })),
+                                        Err(e) => ToolResult::Error(format!("Detect failed: {}", e)),
                                     }
                                 } else {
-                                    serde_json::json!({
-                                        "error": "Missing 'expression' parameter"
-                                    })
+                                    ToolResult::Error("Missing 'expression' parameter".to_string())
                                 }
                             }
                             "detect_help" => {
-                                serde_json::json!({
+                                ToolResult::Success(serde_json::json!({
                                     "help": format!(
                                         "# Detect Query Language Reference\n\n\
                                         ## Basic Syntax\n\
@@ -266,23 +266,34 @@ pub async fn run_mcp_server() -> Result<()> {
                                         • Regex patterns use Rust regex, with automatic PCRE2 fallback if Rust regex parsing fails\n\
                                         • Use NOT instead of ! to avoid shell issues"
                                     )
-                                })
+                                }))
                             }
-                            _ => serde_json::json!({
-                                "error": format!("Unknown tool: {}", tool_name)
-                            }),
+                            _ => ToolResult::Error(format!("Unknown tool: {}", tool_name)),
                         };
 
-                        JsonRpcResponse {
-                            jsonrpc: "2.0".to_string(),
-                            id: req.id,
-                            result: Some(serde_json::json!({
-                                "content": [{
-                                    "type": "text",
-                                    "text": serde_json::to_string(&result)?
-                                }]
-                            })),
-                            error: None,
+                        // Build response based on success/error
+                        match result {
+                            ToolResult::Success(value) => JsonRpcResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id: req.id,
+                                result: Some(serde_json::json!({
+                                    "content": [{
+                                        "type": "text",
+                                        "text": serde_json::to_string(&value)?
+                                    }]
+                                })),
+                                error: None,
+                            },
+                            ToolResult::Error(msg) => JsonRpcResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id: req.id,
+                                result: None,
+                                error: Some(JsonRpcError {
+                                    code: -32000, // Application error
+                                    message: msg,
+                                    data: None,
+                                }),
+                            },
                         }
                     }
                     _ => {
