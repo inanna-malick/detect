@@ -32,7 +32,8 @@ predicate = { selector ~ operator ~ value }
 
   // Barewords exclude structural chars but allow most content
   // Note: { and } allowed to support regex quantifiers like \d{1,3}
-  bare_token = @{ (!("[" | "(" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY)+ }
+  // Note: [ and ( allowed mid-token (e.g., #[test], foo(bar)) - PEG tries bracketed/parenthesized first
+  bare_token = @{ (!("\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY)+ }
   
   quoted_string = { "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
   inner_double = @{ (!"\"" ~ (escaped | ANY))* }

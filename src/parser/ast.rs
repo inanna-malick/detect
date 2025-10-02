@@ -94,6 +94,15 @@ pub mod test_utils {
         Raw(&'a str),     // Raw token (bare word, [brackets], (parens), {curlies})
     }
 
+    impl<'a> RawTestValue<'a> {
+        /// Get the string value for testing
+        pub fn to_string(&self) -> String {
+            match self {
+                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => s.to_string(),
+            }
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq)]
     pub enum RawTestExpr<'a> {
         Not(Box<RawTestExpr<'a>>),
