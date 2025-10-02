@@ -283,3 +283,123 @@ fn test_edge_cases() {
     let expected = RawTestExpr::string_predicate("path.name_with_underscores", "==", "foo");
     assert_eq!(result.to_test_expr(), expected);
 }
+
+// Bug: Reserved word substrings in bare values
+// The grammar excludes "or", "and", "not" as substrings, not just as complete words.
+// This breaks common words like "Error", "vendor", "Android", "cannot", etc.
+
+#[test]
+fn test_bare_value_with_or_substring() {
+    // "Error" contains "or" substring - should parse but currently fails
+    let result = RawParser::parse_raw_expr("content contains Error");
+    assert!(result.is_ok(), "Should parse 'Error' as bare value");
+    let expected = RawTestExpr::string_predicate("content", "contains", "Error");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // Other common words with "or" substring
+    let result = RawParser::parse_raw_expr("name == vendor");
+    assert!(result.is_ok(), "Should parse 'vendor' as bare value");
+
+    let result = RawParser::parse_raw_expr("content contains information");
+    assert!(result.is_ok(), "Should parse 'information' as bare value");
+
+    let result = RawParser::parse_raw_expr("name == sensor");
+    assert!(result.is_ok(), "Should parse 'sensor' as bare value");
+}
+
+#[test]
+fn test_bare_value_with_and_substring() {
+    // "Android" contains "and" substring - should parse but currently fails
+    let result = RawParser::parse_raw_expr("name contains Android");
+    assert!(result.is_ok(), "Should parse 'Android' as bare value");
+    let expected = RawTestExpr::string_predicate("name", "contains", "Android");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // Other common words with "and" substring
+    let result = RawParser::parse_raw_expr("name == standard");
+    assert!(result.is_ok(), "Should parse 'standard' as bare value");
+
+    let result = RawParser::parse_raw_expr("content contains candidate");
+    assert!(result.is_ok(), "Should parse 'candidate' as bare value");
+
+    let result = RawParser::parse_raw_expr("name == expand");
+    assert!(result.is_ok(), "Should parse 'expand' as bare value");
+}
+
+#[test]
+fn test_bare_value_with_not_substring() {
+    // "cannot" contains "not" substring - should parse but currently fails
+    let result = RawParser::parse_raw_expr("content contains cannot");
+    assert!(result.is_ok(), "Should parse 'cannot' as bare value");
+    let expected = RawTestExpr::string_predicate("content", "contains", "cannot");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // Other common words with "not" substring
+    let result = RawParser::parse_raw_expr("name == another");
+    assert!(result.is_ok(), "Should parse 'another' as bare value");
+
+    let result = RawParser::parse_raw_expr("content contains notation");
+    assert!(result.is_ok(), "Should parse 'notation' as bare value");
+
+    let result = RawParser::parse_raw_expr("name == denote");
+    assert!(result.is_ok(), "Should parse 'denote' as bare value");
+}
+
+#[test]
+fn test_bare_value_case_variations() {
+    // Test case variations of words with reserved substrings
+    let result = RawParser::parse_raw_expr("content contains error");
+    assert!(result.is_ok(), "Should parse lowercase 'error'");
+
+    let result = RawParser::parse_raw_expr("content contains ERROR");
+    assert!(result.is_ok(), "Should parse uppercase 'ERROR'");
+
+    let result = RawParser::parse_raw_expr("content contains ErRoR");
+    assert!(result.is_ok(), "Should parse mixed case 'ErRoR'");
+}
+
+#[test]
+fn test_reserved_words_as_complete_tokens_work_in_value_position() {
+    // Reserved words as values should work - context disambiguates!
+    // "name == or" searches for a file named "or", not a boolean operator
+    let result = RawParser::parse_raw_expr("name == or");
+    assert!(result.is_ok(), "Reserved word 'or' in value position should work");
+    let expected = RawTestExpr::string_predicate("name", "==", "or");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    let result = RawParser::parse_raw_expr("name == and");
+    assert!(result.is_ok(), "Reserved word 'and' in value position should work");
+    let expected = RawTestExpr::string_predicate("name", "==", "and");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    let result = RawParser::parse_raw_expr("name == not");
+    assert!(result.is_ok(), "Reserved word 'not' in value position should work");
+    let expected = RawTestExpr::string_predicate("name", "==", "not");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // Case variations
+    let result = RawParser::parse_raw_expr("name == OR");
+    assert!(result.is_ok(), "Reserved word 'OR' in value position should work");
+
+    let result = RawParser::parse_raw_expr("name == AND");
+    assert!(result.is_ok(), "Reserved word 'AND' in value position should work");
+
+    let result = RawParser::parse_raw_expr("name == NOT");
+    assert!(result.is_ok(), "Reserved word 'NOT' in value position should work");
+}
+
+#[test]
+fn test_quoted_reserved_words_should_work() {
+    // Quoted versions should always work, even for actual reserved words
+    let result = RawParser::parse_raw_expr(r#"name == "or""#);
+    assert!(result.is_ok(), "Quoted 'or' should parse");
+
+    let result = RawParser::parse_raw_expr(r#"name == "and""#);
+    assert!(result.is_ok(), "Quoted 'and' should parse");
+
+    let result = RawParser::parse_raw_expr(r#"name == "not""#);
+    assert!(result.is_ok(), "Quoted 'not' should parse");
+
+    let result = RawParser::parse_raw_expr(r#"content contains "Error""#);
+    assert!(result.is_ok(), "Quoted 'Error' should parse");
+}

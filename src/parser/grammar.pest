@@ -21,7 +21,7 @@ predicate = { selector ~ operator ~ value }
   }
   
   value = { quoted_string | set_literal | bare_value }
-  bare_value = @{ (!("[" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||" | ^"and" | ^"or" | "," | "]") ~ ANY)+ }
+  bare_value = @{ (!("[" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||" | "," | "]") ~ ANY)+ }
   
   set_literal = { "[" ~ set_items? ~ "]" }
   set_items = { value ~ ("," ~ WHITESPACE* ~ value)* }
