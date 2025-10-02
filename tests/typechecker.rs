@@ -1,10 +1,10 @@
 use detect::expr::Expr;
+use detect::parser::error::DetectError as TypecheckError;
+use detect::parser::{RawParser, Typechecker};
 use detect::predicate::{
     parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
     StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
 };
-use detect::parser::error::DetectError as TypecheckError;
-use detect::parser::{RawParser, Typechecker};
 
 /// Helper function to parse and typecheck an expression
 fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {
@@ -12,21 +12,6 @@ fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {
     Typechecker::typecheck(raw_expr, expr)
 }
 
-// Helper macro to check error types, ignoring span and src fields
-macro_rules! assert_error_type {
-    ($error:expr, UnknownSelector) => {
-        matches!($error, TypecheckError::UnknownSelector { .. })
-    };
-    ($error:expr, UnknownOperator) => {
-        matches!($error, TypecheckError::UnknownOperator { .. })
-    };
-    ($error:expr, IncompatibleOperator) => {
-        matches!($error, TypecheckError::IncompatibleOperator { .. })
-    };
-    ($error:expr, InvalidValue) => {
-        matches!($error, TypecheckError::InvalidValue { .. })
-    };
-}
 use globset;
 use std::collections::HashSet;
 
@@ -348,7 +333,10 @@ fn test_operator_aliases() {
 fn test_invalid_values() {
     // Bracketed value with == now treated as literal string (operator determines intent)
     let result = parse_and_typecheck("name == [foo, bar]");
-    assert!(result.is_ok(), "With == operator, [foo, bar] is a literal string value");
+    assert!(
+        result.is_ok(),
+        "With == operator, [foo, bar] is a literal string value"
+    );
 
     // Non-numeric value for size
     let error = parse_and_typecheck("size > foo").unwrap_err();
