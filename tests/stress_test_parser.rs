@@ -283,32 +283,38 @@ fn test_value_edge_cases() {
         RawTestExpr::string_predicate("name", "==", "==")
     );
 
-    // Bare value that looks like boolean operator
+    // Reserved words as bare values work - context disambiguates
+    // "name == AND" searches for file named "AND", not a boolean operator
     let result = RawParser::parse_raw_expr("name == AND");
-    assert!(
-        result.is_err(),
-        "AND keyword as bare value should fail (infix conflict)"
+    assert_eq!(
+        result.unwrap().to_test_expr(),
+        RawTestExpr::string_predicate("name", "==", "AND")
     );
 
     let result = RawParser::parse_raw_expr("name == OR");
-    assert!(
-        result.is_err(),
-        "OR keyword as bare value should fail (infix conflict)"
+    assert_eq!(
+        result.unwrap().to_test_expr(),
+        RawTestExpr::string_predicate("name", "==", "OR")
     );
 
-    // NOT is only a prefix operator, so it can be a value - this is correct!
     let result = RawParser::parse_raw_expr("name == NOT");
     assert_eq!(
         result.unwrap().to_test_expr(),
         RawTestExpr::string_predicate("name", "==", "NOT")
     );
 
-    // Case insensitive variants
+    // Case insensitive variants also work
     let result = RawParser::parse_raw_expr("name == and");
-    assert!(result.is_err(), "and keyword as bare value should fail");
+    assert_eq!(
+        result.unwrap().to_test_expr(),
+        RawTestExpr::string_predicate("name", "==", "and")
+    );
 
     let result = RawParser::parse_raw_expr("name == or");
-    assert!(result.is_err(), "or keyword as bare value should fail");
+    assert_eq!(
+        result.unwrap().to_test_expr(),
+        RawTestExpr::string_predicate("name", "==", "or")
+    );
 
     let result = RawParser::parse_raw_expr("name == not");
     assert_eq!(
