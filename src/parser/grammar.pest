@@ -20,11 +20,19 @@ predicate = { selector ~ operator ~ value }
     (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
   }
   
-  value = { quoted_string | set_literal | bare_value }
-  bare_value = @{ (!("[" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||" | "," | "]") ~ ANY)+ }
-  
-  set_literal = { "[" ~ set_items? ~ "]" }
-  set_items = { value ~ ("," ~ WHITESPACE* ~ value)* }
+  value = { quoted_string | raw_token }
+
+  // Raw tokens - capture everything, decide meaning in typechecker based on operator context
+  raw_token = { bracketed | parenthesized | curly_braced | bare_token }
+
+  // Capture complete bracketed/parenthesized/braced content
+  bracketed = @{ "[" ~ (!"]" ~ ANY)* ~ "]" }
+  parenthesized = @{ "(" ~ (!")" ~ ANY)* ~ ")" }
+  curly_braced = @{ "{" ~ (!"}" ~ ANY)* ~ "}" }
+
+  // Barewords exclude structural chars but allow most content
+  // Note: { and } allowed to support regex quantifiers like \d{1,3}
+  bare_token = @{ (!("[" | "(" | "\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY)+ }
   
   quoted_string = { "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
   inner_double = @{ (!"\"" ~ (escaped | ANY))* }

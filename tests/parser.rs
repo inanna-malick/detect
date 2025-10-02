@@ -11,14 +11,14 @@ fn test_simple_predicate() {
 #[test]
 fn test_quoted_values() {
     let result = RawParser::parse_raw_expr(r#"filename == "my file.txt""#).unwrap();
-    let expected = RawTestExpr::string_predicate("filename", "==", "my file.txt");
+    let expected = RawTestExpr::quoted_predicate("filename", "==", "my file.txt");
     assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
 fn test_single_quoted_values() {
     let result = RawParser::parse_raw_expr("filename == 'my file.txt'").unwrap();
-    let expected = RawTestExpr::string_predicate("filename", "==", "my file.txt");
+    let expected = RawTestExpr::quoted_predicate("filename", "==", "my file.txt");
     assert_eq!(result.to_test_expr(), expected);
 }
 
@@ -26,47 +26,47 @@ fn test_single_quoted_values() {
 fn test_escape_sequences() {
     // Test double quote escapes
     let result = RawParser::parse_raw_expr(r#"name == "file\"with\"quotes""#).unwrap();
-    let expected = RawTestExpr::string_predicate("name", "==", r#"file\"with\"quotes"#);
+    let expected = RawTestExpr::quoted_predicate("name", "==", r#"file\"with\"quotes"#);
     assert_eq!(result.to_test_expr(), expected);
 
     // Test various escape sequences
     let result = RawParser::parse_raw_expr(r#"content == "line1\nline2\ttab\\backslash""#).unwrap();
     let expected =
-        RawTestExpr::string_predicate("content", "==", r#"line1\nline2\ttab\\backslash"#);
+        RawTestExpr::quoted_predicate("content", "==", r#"line1\nline2\ttab\\backslash"#);
     assert_eq!(result.to_test_expr(), expected);
 
     // Test single quote escapes
     let result = RawParser::parse_raw_expr(r"name == 'file\'with\'quotes'").unwrap();
-    let expected = RawTestExpr::string_predicate("name", "==", r"file\'with\'quotes");
+    let expected = RawTestExpr::quoted_predicate("name", "==", r"file\'with\'quotes");
     assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
 fn test_set_values() {
     let result = RawParser::parse_raw_expr("ext in [rs, js, ts]").unwrap();
-    let expected = RawTestExpr::set_predicate("ext", "in", vec!["rs", "js", "ts"]);
+    // With new parser, sets are raw tokens - spaces preserved
+    let expected = RawTestExpr::string_predicate("ext", "in", "[rs, js, ts]");
     assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
 fn test_mixed_set() {
     let result = RawParser::parse_raw_expr(r#"name in [README, "my file", config]"#).unwrap();
-    let expected = RawTestExpr::set_predicate("name", "in", vec!["README", "my file", "config"]);
+    let expected = RawTestExpr::string_predicate("name", "in", r#"[README, "my file", config]"#);
     assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
 fn test_set_with_quotes_and_escapes() {
     let result = RawParser::parse_raw_expr(r#"name in ["file\"1", 'file\'2', plain]"#).unwrap();
-    let expected =
-        RawTestExpr::set_predicate("name", "in", vec![r#"file\"1"#, r"file\'2", "plain"]);
+    let expected = RawTestExpr::string_predicate("name", "in", r#"["file\"1", 'file\'2', plain]"#);
     assert_eq!(result.to_test_expr(), expected);
 }
 
 #[test]
 fn test_empty_set() {
     let result = RawParser::parse_raw_expr("ext in []").unwrap();
-    let expected = RawTestExpr::set_predicate("ext", "in", vec![]);
+    let expected = RawTestExpr::string_predicate("ext", "in", "[]");
     assert_eq!(result.to_test_expr(), expected);
 }
 
@@ -158,8 +158,8 @@ fn test_complex_expression() {
 
     let expected = RawTestExpr::and(
         RawTestExpr::or(
-            RawTestExpr::string_predicate("name", "==", "test.rs"),
-            RawTestExpr::set_predicate("ext", "in", vec!["js", "ts"]),
+            RawTestExpr::quoted_predicate("name", "==", "test.rs"),
+            RawTestExpr::string_predicate("ext", "in", "[js, ts]"),
         ),
         RawTestExpr::not(RawTestExpr::string_predicate("size", ">", "1mb")),
     );
@@ -241,7 +241,7 @@ fn test_invalid_escape_sequences() {
     // Since we're a syntax-only parser, we preserve escape sequences without validating them
     // This previously "invalid" escape sequence is now just preserved as-is
     let result = RawParser::parse_raw_expr(r#"name == "invalid\x""#);
-    let expected = RawTestExpr::string_predicate("name", "==", r"invalid\x");
+    let expected = RawTestExpr::quoted_predicate("name", "==", r"invalid\x");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 
     // Unterminated string (this is actually a syntax error, not escape error)
@@ -262,7 +262,7 @@ fn test_whitespace_handling() {
 #[test]
 fn test_set_with_whitespace() {
     let result = RawParser::parse_raw_expr("ext in [ rs , js , ts ]").unwrap();
-    let expected = RawTestExpr::set_predicate("ext", "in", vec!["rs", "js", "ts"]);
+    let expected = RawTestExpr::string_predicate("ext", "in", "[ rs , js , ts ]");
     assert_eq!(result.to_test_expr(), expected);
 }
 
@@ -270,7 +270,7 @@ fn test_set_with_whitespace() {
 fn test_edge_cases() {
     // Empty string value
     let result = RawParser::parse_raw_expr(r#"name == """#).unwrap();
-    let expected = RawTestExpr::string_predicate("name", "==", "");
+    let expected = RawTestExpr::quoted_predicate("name", "==", "");
     assert_eq!(result.to_test_expr(), expected);
 
     // Value with special characters
@@ -402,4 +402,58 @@ fn test_quoted_reserved_words_should_work() {
 
     let result = RawParser::parse_raw_expr(r#"content contains "Error""#);
     assert!(result.is_ok(), "Quoted 'Error' should parse");
+}
+
+// New functionality: Unquoted regex patterns with special characters
+#[test]
+fn test_unquoted_regex_patterns_with_brackets() {
+    // Character classes should work unquoted
+    let result = RawParser::parse_raw_expr("content ~= [0-9]");
+    assert!(result.is_ok(), "Should parse character class [0-9]");
+    let expected = RawTestExpr::string_predicate("content", "~=", "[0-9]");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // More complex character classes
+    let result = RawParser::parse_raw_expr("name ~= [a-zA-Z_]");
+    assert!(result.is_ok(), "Should parse character class [a-zA-Z_]");
+    let expected = RawTestExpr::string_predicate("name", "~=", "[a-zA-Z_]");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+}
+
+#[test]
+fn test_unquoted_regex_patterns_with_parentheses() {
+    // Alternation groups should work unquoted
+    let result = RawParser::parse_raw_expr("content ~= (Result|Option)");
+    assert!(result.is_ok(), "Should parse alternation (Result|Option)");
+    let expected = RawTestExpr::string_predicate("content", "~=", "(Result|Option)");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // Capture groups
+    let result = RawParser::parse_raw_expr("name ~= (test)");
+    assert!(result.is_ok(), "Should parse capture group (test)");
+    let expected = RawTestExpr::string_predicate("name", "~=", "(test)");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+}
+
+#[test]
+fn test_unquoted_regex_patterns_with_curly_braces() {
+    // Quantifiers should work unquoted
+    let result = RawParser::parse_raw_expr("content ~= \\d{1,3}");
+    assert!(result.is_ok(), "Should parse quantifier \\d{{1,3}}");
+    let expected = RawTestExpr::string_predicate("content", "~=", "\\d{1,3}");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    let result = RawParser::parse_raw_expr("content ~= a{2,5}");
+    assert!(result.is_ok(), "Should parse quantifier a{{2,5}}");
+    let expected = RawTestExpr::string_predicate("content", "~=", "a{2,5}");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+}
+
+#[test]
+fn test_unquoted_bare_comma_separated_values() {
+    // Bare comma-separated values without brackets should work
+    let result = RawParser::parse_raw_expr("ext in rs,toml,md");
+    assert!(result.is_ok(), "Should parse bare comma-separated values");
+    let expected = RawTestExpr::string_predicate("ext", "in", "rs,toml,md");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
 }

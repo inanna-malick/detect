@@ -22,21 +22,21 @@ fn test_malformed_sets() {
     let result = RawParser::parse_raw_expr("name in [foo, bar");
     assert!(result.is_err(), "Unclosed set should fail");
 
-    // Set with no opening bracket
+    // Set with no opening bracket - actually just parses as "foo" bare token
     let result = RawParser::parse_raw_expr("name in foo, bar]");
-    assert!(result.is_err(), "No opening bracket should fail");
+    assert!(result.is_err(), "Malformed syntax should fail");
 
-    // Nested sets (should fail)
+    // Nested sets - grammar still rejects due to bracket matching
     let result = RawParser::parse_raw_expr("name in [foo, [bar]]");
-    assert!(result.is_err(), "Nested sets should fail");
+    assert!(result.is_err(), "Nested brackets still fail at parse time");
 
-    // Set with trailing comma
+    // Set with trailing comma - now allowed, typechecker filters empty items
     let result = RawParser::parse_raw_expr("name in [foo, bar,]");
-    assert!(result.is_err(), "Trailing comma should fail");
+    assert!(result.is_ok(), "Trailing comma is now allowed");
 
-    // Set with only commas
+    // Set with only commas - parses as empty set after filtering
     let result = RawParser::parse_raw_expr("name in [,,,]");
-    assert!(result.is_err(), "Only commas should fail");
+    assert!(result.is_ok(), "Only commas parses as empty set");
 }
 
 #[test]
@@ -71,7 +71,7 @@ fn test_escape_sequences_preserved() {
         let input = format!("name == \"test\\{}\"", ch);
         let result = RawParser::parse_raw_expr(&input);
         let expected_value = format!("test\\{}", ch);
-        let expected = RawTestExpr::string_predicate("name", "==", &expected_value);
+        let expected = RawTestExpr::quoted_predicate("name", "==", &expected_value);
         assert_eq!(result.unwrap().to_test_expr(), expected);
     }
 }
@@ -273,7 +273,7 @@ fn test_value_edge_cases() {
     let result = RawParser::parse_raw_expr(r#"name == "!@#$%^&*()_+-=[]{}|;:,.<>?""#);
     assert_eq!(
         result.unwrap().to_test_expr(),
-        RawTestExpr::string_predicate("name", "==", "!@#$%^&*()_+-=[]{}|;:,.<>?")
+        RawTestExpr::quoted_predicate("name", "==", "!@#$%^&*()_+-=[]{}|;:,.<>?")
     );
 
     // Bare value that looks like operator
@@ -376,8 +376,9 @@ fn test_parser_robustness() {
     let large_set_items: Vec<String> = (0..1000).map(|i| format!("item{}", i)).collect();
     let large_set = format!("name in [{}]", large_set_items.join(", "));
     let result = RawParser::parse_raw_expr(&large_set);
-    let large_set_vec: Vec<&str> = large_set_items.iter().map(|s| s.as_str()).collect();
-    let expected = RawTestExpr::set_predicate("name", "in", large_set_vec);
+    // With new parser, sets are stored as raw token strings
+    let expected_token = format!("[{}]", large_set_items.join(", "));
+    let expected = RawTestExpr::string_predicate("name", "in", &expected_token);
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
 
@@ -420,8 +421,8 @@ fn test_unicode_boundary_conditions() {
         ), // Cyrillic
         (
             r#"content == "🚀🌟⭐""#,
-            RawTestExpr::string_predicate("content", "==", "🚀🌟⭐"),
-        ), // Emoji
+            RawTestExpr::quoted_predicate("content", "==", "🚀🌟⭐"),
+        ), // Emoji - quoted
         (
             "name == \u{1F4A9}",
             RawTestExpr::string_predicate("name", "==", "\u{1F4A9}"),
@@ -444,7 +445,7 @@ fn test_pathological_whitespace() {
     // Test every kind of whitespace
     let whitespace_expr = "name\t\t==\n\n\t'value with\ttabs\nand newlines'";
     let result = RawParser::parse_raw_expr(whitespace_expr);
-    let expected = RawTestExpr::string_predicate("name", "==", "value with\ttabs\nand newlines");
+    let expected = RawTestExpr::quoted_predicate("name", "==", "value with\ttabs\nand newlines");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
 
@@ -513,15 +514,16 @@ fn test_memory_stress_large_inputs() {
     let large_string = "x".repeat(50000);
     let input = format!(r#"name == "{}""#, large_string);
     let result = RawParser::parse_raw_expr(&input);
-    let expected = RawTestExpr::string_predicate("name", "==", &large_string);
+    let expected = RawTestExpr::quoted_predicate("name", "==", &large_string);
     assert_eq!(result.unwrap().to_test_expr(), expected);
 
-    // Test very large sets - more extreme than basic robustness test
+    // Test very large sets - now stored as raw token string
     let large_set_items: Vec<String> = (0..5000).map(|i| format!("item{}", i)).collect();
     let large_set = format!("name in [{}]", large_set_items.join(", "));
     let result = RawParser::parse_raw_expr(&large_set);
-    let large_set_vec: Vec<&str> = large_set_items.iter().map(|s| s.as_str()).collect();
-    let expected = RawTestExpr::set_predicate("name", "in", large_set_vec);
+    // With new parser, sets are stored as raw token strings
+    let expected_token = format!("[{}]", large_set_items.join(", "));
+    let expected = RawTestExpr::string_predicate("name", "in", &expected_token);
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
 
@@ -531,8 +533,8 @@ fn test_empty_set_values() {
     let result = RawParser::parse_raw_expr("ext in []");
     assert!(result.is_ok());
 
-    // Verify it parses as a set operation with empty items
-    let expected = RawTestExpr::set_predicate("ext", "in", vec![]);
+    // Verify it parses as raw token
+    let expected = RawTestExpr::string_predicate("ext", "in", "[]");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
 

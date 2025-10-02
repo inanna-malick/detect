@@ -127,46 +127,22 @@ impl RawParser {
                 })?;
                 Self::parse_value(inner)
             }
-            Rule::bare_value => Ok(RawValue::String(pair.as_str())),
             Rule::quoted_string => {
                 // Grammar already parsed inner content without quotes
                 let inner = pair.into_inner().next().ok_or_else(|| {
                     RawParseError::internal("Grammar guarantees quoted_string has inner content")
                 })?;
-                Ok(RawValue::String(inner.as_str()))
+                Ok(RawValue::Quoted(inner.as_str()))
             }
-            Rule::set_literal => {
-                let items = Self::parse_set_literal(pair)?;
-                Ok(RawValue::Set(items))
+            Rule::raw_token | Rule::bracketed | Rule::parenthesized |
+            Rule::curly_braced | Rule::bare_token => {
+                // All raw tokens stored as-is, typechecker decides meaning based on operator
+                Ok(RawValue::Raw(pair.as_str()))
             }
             rule => Err(RawParseError::internal(format!(
                 "Unexpected value rule: {:?}",
                 rule
             ))),
         }
-    }
-
-    fn parse_set_literal(pair: Pair<'_, Rule>) -> Result<Vec<&str>, RawParseError> {
-        let mut items = Vec::new();
-
-        // set_literal = { "[" ~ set_items? ~ "]" }
-        for inner in pair.into_inner() {
-            if inner.as_rule() == Rule::set_items {
-                // set_items = { value ~ ("," ~ WHITESPACE* ~ value)* }
-                for item in inner.into_inner() {
-                    if item.as_rule() == Rule::value {
-                        let value = Self::parse_value(item)?;
-                        match value {
-                            RawValue::String(s) => items.push(s),
-                            RawValue::Set(_) => {
-                                return Err(RawParseError::internal("Nested sets not supported"))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(items)
     }
 }

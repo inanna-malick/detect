@@ -12,8 +12,9 @@ pub struct RawPredicate<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RawValue<'a> {
-    String(&'a str),   // Content with quotes stripped but escapes preserved
-    Set(Vec<&'a str>), // Set of strings with quotes stripped but escapes preserved
+    Quoted(&'a str),  // Explicitly quoted by user (quotes stripped, escapes preserved)
+    Raw(&'a str),     // Raw token - could be bare word, [set], (group), {curly}, etc.
+                      // Typechecker interprets based on operator context
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,27 +59,23 @@ impl<'a> RawPredicate<'a> {
 }
 
 impl<'a> RawValue<'a> {
-    /// Get the string value for single string values
-    pub fn as_string(&self) -> Option<&'a str> {
+    /// Get the string value (works for both Quoted and Raw)
+    pub fn as_string(&self) -> &'a str {
         match self {
-            RawValue::String(s) => Some(s),
-            RawValue::Set(_) => None,
+            RawValue::Quoted(s) | RawValue::Raw(s) => s,
         }
     }
 
-    /// Get the set values for set values
-    pub fn as_set(&self) -> Option<&[&'a str]> {
-        match self {
-            RawValue::String(_) => None,
-            RawValue::Set(items) => Some(items),
-        }
+    /// Check if this is a quoted value (user explicitly quoted it)
+    pub fn is_quoted(&self) -> bool {
+        matches!(self, RawValue::Quoted(_))
     }
 
     /// Convert to test-friendly value without spans
     pub fn to_test_value(&self) -> test_utils::RawTestValue<'a> {
         match self {
-            RawValue::String(s) => test_utils::RawTestValue::String(s),
-            RawValue::Set(items) => test_utils::RawTestValue::Set(items.clone()),
+            RawValue::Quoted(s) => test_utils::RawTestValue::Quoted(s),
+            RawValue::Raw(s) => test_utils::RawTestValue::Raw(s),
         }
     }
 }
@@ -93,8 +90,8 @@ pub mod test_utils {
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum RawTestValue<'a> {
-        String(&'a str),   // Content with quotes stripped but escapes preserved
-        Set(Vec<&'a str>), // Set of strings with quotes stripped but escapes preserved
+        Quoted(&'a str),  // Explicitly quoted by user
+        Raw(&'a str),     // Raw token (bare word, [brackets], (parens), {curlies})
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -107,21 +104,32 @@ pub mod test_utils {
     }
 
     impl<'a> RawTestExpr<'a> {
-        /// Helper constructor for creating a string predicate
+        /// Helper constructor for creating a raw token predicate
         pub fn string_predicate(selector: &'a str, operator: &'a str, value: &'a str) -> Self {
             RawTestExpr::Predicate(RawTestPredicate {
                 selector,
                 operator,
-                value: RawTestValue::String(value),
+                value: RawTestValue::Raw(value),
             })
         }
 
-        /// Helper constructor for creating a set predicate
-        pub fn set_predicate(selector: &'a str, operator: &'a str, values: Vec<&'a str>) -> Self {
+        /// Helper constructor for creating a quoted value predicate
+        pub fn quoted_predicate(selector: &'a str, operator: &'a str, value: &'a str) -> Self {
             RawTestExpr::Predicate(RawTestPredicate {
                 selector,
                 operator,
-                value: RawTestValue::Set(values),
+                value: RawTestValue::Quoted(value),
+            })
+        }
+
+        /// Helper constructor for creating a set predicate (now just raw token with brackets)
+        pub fn set_predicate(selector: &'a str, operator: &'a str, values: Vec<&'a str>) -> Self {
+            // Format as bracketed list
+            let value = format!("[{}]", values.join(","));
+            RawTestExpr::Predicate(RawTestPredicate {
+                selector,
+                operator,
+                value: RawTestValue::Raw(Box::leak(value.into_boxed_str())),
             })
         }
 

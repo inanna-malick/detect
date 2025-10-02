@@ -237,39 +237,69 @@ impl Typechecker {
         value_span: pest::Span,
         source: &str,
     ) -> Result<StringMatcher, DetectError> {
-        match value {
-            RawValue::String(s) => match operator {
-                StringOperator::Equals => Ok(StringMatcher::Equals(s.to_string())),
-                StringOperator::NotEquals => Ok(StringMatcher::NotEquals(s.to_string())),
-                StringOperator::Matches => {
-                    StringMatcher::regex(s).map_err(|e| DetectError::InvalidValue {
-                        expected: "valid regex pattern".to_string(),
-                        found: format!("{}: {}", s, e),
-                        span: value_span.to_source_span(),
-                        src: source.to_string(),
-                    })
-                }
-                StringOperator::Contains => Ok(StringMatcher::Contains(s.to_string())),
-                StringOperator::In => {
-                    // Single value for 'in' operator
-                    let mut set = std::collections::HashSet::new();
-                    set.insert(s.to_string());
-                    Ok(StringMatcher::In(set))
-                }
-            },
-            RawValue::Set(items) => {
-                if !matches!(operator, StringOperator::In) {
-                    return Err(DetectError::InvalidValue {
-                        expected: "single string value".to_string(),
-                        found: "set".to_string(),
-                        span: value_span.to_source_span(),
-                        src: source.to_string(),
-                    });
-                }
-                let set: std::collections::HashSet<String> =
-                    items.iter().map(|s| s.to_string()).collect();
-                Ok(StringMatcher::In(set))
+        // Extract the raw string regardless of Quoted or Raw variant
+        let value_str = match value {
+            RawValue::Quoted(s) | RawValue::Raw(s) => s,
+        };
+
+        // For 'in' operator, parse as set
+        if matches!(operator, StringOperator::In) {
+            return Self::parse_as_set(value_str, value_span, source);
+        }
+
+        // For other operators, use as string pattern (literal or regex)
+        match operator {
+            StringOperator::Equals => Ok(StringMatcher::Equals(value_str.to_string())),
+            StringOperator::NotEquals => Ok(StringMatcher::NotEquals(value_str.to_string())),
+            StringOperator::Matches => {
+                StringMatcher::regex(value_str).map_err(|e| DetectError::InvalidValue {
+                    expected: "valid regex pattern".to_string(),
+                    found: format!("{}: {}", value_str, e),
+                    span: value_span.to_source_span(),
+                    src: source.to_string(),
+                })
             }
+            StringOperator::Contains => Ok(StringMatcher::Contains(value_str.to_string())),
+            StringOperator::In => unreachable!("Handled above"),
+        }
+    }
+
+    /// Parse a value as a set - handles bracketed syntax and comma separation
+    fn parse_as_set(
+        value_str: &str,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<StringMatcher, DetectError> {
+        // Strip brackets if present, otherwise use whole string
+        let inner = if value_str.starts_with('[') && value_str.ends_with(']') {
+            &value_str[1..value_str.len() - 1]
+        } else {
+            value_str
+        };
+
+        // Split on commas and trim whitespace
+        let items: Vec<String> = inner
+            .split(',')
+            .map(|s| {
+                let trimmed = s.trim();
+                // Handle quoted items in sets: "foo bar" or 'baz'
+                if (trimmed.starts_with('"') && trimmed.ends_with('"'))
+                    || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
+                {
+                    trimmed[1..trimmed.len() - 1].to_string()
+                } else {
+                    trimmed.to_string()
+                }
+            })
+            .filter(|s| !s.is_empty()) // Filter out empty strings from trailing commas
+            .collect();
+
+        if items.is_empty() {
+            // Empty set is valid but matches nothing
+            Ok(StringMatcher::In(std::collections::HashSet::new()))
+        } else {
+            let set: std::collections::HashSet<String> = items.into_iter().collect();
+            Ok(StringMatcher::In(set))
         }
     }
 
@@ -280,16 +310,9 @@ impl Typechecker {
         value_span: pest::Span,
         source: &str,
     ) -> Result<String, DetectError> {
+        // Extract string value
         let s = match value {
-            RawValue::String(s) => s,
-            RawValue::Set(_) => {
-                return Err(DetectError::InvalidValue {
-                    expected: "string value for contents".to_string(),
-                    found: "set".to_string(),
-                    span: value_span.to_source_span(),
-                    src: source.to_string(),
-                });
-            }
+            RawValue::Quoted(s) | RawValue::Raw(s) => s,
         };
 
         let pattern = match operator {
@@ -315,15 +338,7 @@ impl Typechecker {
         source: &str,
     ) -> Result<u64, DetectError> {
         let s = match value {
-            RawValue::String(s) => s,
-            RawValue::Set(_) => {
-                return Err(DetectError::InvalidValue {
-                    expected: "numeric value".to_string(),
-                    found: "set".to_string(),
-                    span: value_span.to_source_span(),
-                    src: source.to_string(),
-                });
-            }
+            RawValue::Quoted(s) | RawValue::Raw(s) => s,
         };
 
         if matches!(selector, NumericSelector::Size) && s.chars().any(|c| c.is_alphabetic()) {
@@ -359,15 +374,7 @@ impl Typechecker {
         source: &str,
     ) -> Result<chrono::DateTime<chrono::Local>, DetectError> {
         let s = match value {
-            RawValue::String(s) => s,
-            RawValue::Set(_) => {
-                return Err(DetectError::InvalidValue {
-                    expected: "time value".to_string(),
-                    found: "set".to_string(),
-                    span: value_span.to_source_span(),
-                    src: source.to_string(),
-                });
-            }
+            RawValue::Quoted(s) | RawValue::Raw(s) => s,
         };
 
         parse_time_value(s).map_err(|e| DetectError::InvalidValue {

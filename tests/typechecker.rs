@@ -346,10 +346,9 @@ fn test_operator_aliases() {
 
 #[test]
 fn test_invalid_values() {
-    // Set value for non-in operator
-    let error = parse_and_typecheck("name == [foo, bar]").unwrap_err();
-    // With the new typechecker, using a set with == returns InvalidValue
-    assert!(matches!(error, TypecheckError::InvalidValue { .. }));
+    // Bracketed value with == now treated as literal string (operator determines intent)
+    let result = parse_and_typecheck("name == [foo, bar]");
+    assert!(result.is_ok(), "With == operator, [foo, bar] is a literal string value");
 
     // Non-numeric value for size
     let error = parse_and_typecheck("size > foo").unwrap_err();
