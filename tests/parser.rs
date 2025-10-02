@@ -645,3 +645,71 @@ fn test_mixed_bracket_scenarios() {
         _ => panic!("Expected AND expression"),
     }
 }
+
+// Tests for proper set parsing with dedicated grammar
+#[test]
+fn test_set_parsing_with_commas_in_quotes() {
+    use detect::parser::RawParser;
+
+    // Quoted items with commas
+    let result = RawParser::parse_set_contents(r#""foo, bar", baz"#).unwrap();
+    assert_eq!(result, vec!["foo, bar", "baz"]);
+
+    // Single quoted
+    let result = RawParser::parse_set_contents(r#"'foo, bar', "baz, qux", plain"#).unwrap();
+    assert_eq!(result, vec!["foo, bar", "baz, qux", "plain"]);
+}
+
+#[test]
+fn test_set_parsing_escaped_quotes() {
+    use detect::parser::RawParser;
+
+    // Escaped quotes in items
+    let result = RawParser::parse_set_contents(r#""foo\"bar", 'baz\'qux'"#).unwrap();
+    assert_eq!(result, vec![r#"foo\"bar"#, r#"baz\'qux"#]);
+}
+
+#[test]
+fn test_set_parsing_trailing_commas() {
+    use detect::parser::RawParser;
+
+    let result = RawParser::parse_set_contents("rs, js, ts,").unwrap();
+    assert_eq!(result, vec!["rs", "js", "ts"]);
+
+    let result = RawParser::parse_set_contents("rs,").unwrap();
+    assert_eq!(result, vec!["rs"]);
+}
+
+#[test]
+fn test_set_parsing_empty_set() {
+    use detect::parser::RawParser;
+
+    let result = RawParser::parse_set_contents("").unwrap();
+    assert_eq!(result, Vec::<String>::new());
+}
+
+#[test]
+fn test_set_parsing_whitespace_handling() {
+    use detect::parser::RawParser;
+
+    // Extra whitespace should be trimmed from bare items
+    let result = RawParser::parse_set_contents("rs  ,  js  ,  ts").unwrap();
+    assert_eq!(result, vec!["rs", "js", "ts"]);
+
+    // But preserved inside quotes
+    let result = RawParser::parse_set_contents(r#""  spaces  ", bare"#).unwrap();
+    assert_eq!(result, vec!["  spaces  ", "bare"]);
+}
+
+#[test]
+fn test_set_parsing_complex_real_world() {
+    use detect::parser::RawParser;
+
+    // Mix of quoted, bare, with special chars
+    let result = RawParser::parse_set_contents(r#"rs, "config.toml", "my file.txt", Cargo.toml"#).unwrap();
+    assert_eq!(result, vec!["rs", "config.toml", "my file.txt", "Cargo.toml"]);
+
+    // URLs and paths with commas
+    let result = RawParser::parse_set_contents(r#""https://example.com?a=1,2,3", /path/to/file"#).unwrap();
+    assert_eq!(result, vec!["https://example.com?a=1,2,3", "/path/to/file"]);
+}

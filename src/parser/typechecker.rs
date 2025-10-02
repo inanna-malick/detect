@@ -265,6 +265,12 @@ impl Typechecker {
     }
 
     /// Parse a value as a set - handles bracketed syntax and comma separation
+    ///
+    /// Uses dedicated Pest parser to properly handle:
+    /// - Quoted items with commas: `["foo, bar", baz]`
+    /// - Escaped quotes: `["foo\"bar", 'baz\'qux']`
+    /// - Trailing commas: `[rs, js,]`
+    /// - Bare comma-separated: `rs,js,ts`
     fn parse_as_set(
         value_str: &str,
         value_span: pest::Span,
@@ -277,37 +283,25 @@ impl Typechecker {
             value_str
         };
 
-        // Split on commas and trim whitespace
-        let items: Vec<String> = inner
-            .split(',')
-            .map(|s| {
-                let trimmed = s.trim();
-                // Handle quoted items in sets: "foo bar" or 'baz'
-                if (trimmed.starts_with('"') && trimmed.ends_with('"'))
-                    || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
-                {
-                    trimmed[1..trimmed.len() - 1].to_string()
-                } else {
-                    trimmed.to_string()
-                }
-            })
-            .filter(|s| !s.is_empty()) // Filter out empty strings from trailing commas
-            .collect();
+        // Use dedicated set parser for proper handling
+        use crate::parser::RawParser;
+        let items = RawParser::parse_set_contents(inner)
+            .map_err(|e| DetectError::InvalidValue {
+                expected: "valid set items (e.g., [rs, js] or \"foo, bar\", baz)".to_string(),
+                found: format!("parse error: {}", e),
+                span: value_span.to_source_span(),
+                src: source.to_string(),
+            })?;
 
-        if items.is_empty() {
-            // Empty set is valid but matches nothing
-            Ok(StringMatcher::In(std::collections::HashSet::new()))
-        } else {
-            let set: std::collections::HashSet<String> = items.into_iter().collect();
-            Ok(StringMatcher::In(set))
-        }
+        let set: std::collections::HashSet<String> = items.into_iter().collect();
+        Ok(StringMatcher::In(set))
     }
 
     /// Build content pattern based on operator
     fn build_content_pattern(
         value: &RawValue,
         operator: StringOperator,
-        value_span: pest::Span,
+        _value_span: pest::Span,
         source: &str,
     ) -> Result<String, DetectError> {
         // Extract string value

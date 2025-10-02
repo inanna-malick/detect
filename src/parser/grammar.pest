@@ -35,10 +35,18 @@ predicate = { selector ~ operator ~ value }
   // Note: [ and ( allowed mid-token (e.g., #[test], foo(bar)) - PEG tries bracketed/parenthesized first
   bare_token = @{ (!("\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY)+ }
   
-  quoted_string = { "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
+  quoted_string = ${ "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
   inner_double = @{ (!"\"" ~ (escaped | ANY))* }
   inner_single = @{ (!"'" ~ (escaped | ANY))* }
   
   escaped = { "\\" ~ ("\"" | "'" | "\\" | "n" | "t" | "r") }
 
 glob_pattern = @{ (ASCII_ALPHANUMERIC | "*" | "/" | "." | "_" | "-" | "?" | "[" | "]")+ }
+
+// Separate entry point for parsing set contents
+// Used by typechecker when operator is 'in'
+set_contents = { SOI ~ set_items? ~ EOI }
+set_items = { set_item ~ ("," ~ set_item)* ~ ","? }
+set_item = { quoted_string | bare_set_item }
+// Bare items in sets: stop at comma, whitespace, or quotes
+bare_set_item = @{ (!("," | "\"" | "'" | WHITESPACE) ~ ANY)+ }

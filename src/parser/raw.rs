@@ -32,6 +32,50 @@ impl RawParser {
         Self::parse_expr(expr_pair)
     }
 
+    /// Parse set contents from a string like "rs, js, ts" or "foo, \"bar, baz\", qux"
+    /// Used by typechecker for 'in' operator
+    ///
+    /// Properly handles:
+    /// - Quoted items with commas: `"foo, bar", baz`
+    /// - Bare items: `rs, js, ts`
+    /// - Mixed: `foo, "bar baz", qux`
+    /// - Trailing commas: `rs, js,`
+    /// - Empty sets: ``
+    pub fn parse_set_contents(input: &str) -> Result<Vec<String>, RawParseError> {
+        let pairs = Self::parse(Rule::set_contents, input)
+            .map_err(|e| RawParseError::from_pest(Box::new(e), input.to_string()))?;
+
+        let items: Vec<String> = pairs
+            .flat_map(|pair| pair.into_inner()) // set_contents -> set_items or EOI
+            .filter(|pair| pair.as_rule() == Rule::set_items)
+            .flat_map(|pair| pair.into_inner()) // set_items -> set_item*
+            .filter_map(|item_pair| {
+                // set_item -> quoted_string | bare_set_item
+                item_pair.into_inner().next()
+            })
+            .map(|inner| {
+                match inner.as_rule() {
+                    Rule::quoted_string => {
+                        // quoted_string -> inner_double | inner_single (quotes stripped)
+                        // Preserve all whitespace inside quotes
+                        inner.into_inner()
+                            .next()
+                            .map(|s| s.as_str().to_string())
+                            .unwrap_or_default()
+                    }
+                    Rule::bare_set_item => {
+                        // Trim whitespace from bare items
+                        inner.as_str().trim().to_string()
+                    }
+                    _ => String::new(), // Should never happen
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        Ok(items)
+    }
+
     fn parse_expr(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, RawParseError> {
         let pratt = PrattParser::new()
             .op(Op::infix(Rule::or, Left))
