@@ -477,3 +477,197 @@ fn test_truly_unknown_operators() {
         );
     }
 }
+
+// ==============================================================================
+// Cross-layer edge case tests (formerly in stress_test_parser.rs)
+// These tests verify parse→typecheck pipeline behavior
+// ==============================================================================
+
+#[test]
+fn test_operator_edge_cases() {
+    use detect::parser::test_utils::RawTestExpr;
+
+    // Single = is now valid (alias for ==)
+    let expr = "name = foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "=", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it typechecks successfully as an alias for ==
+    let typecheck_result = Typechecker::typecheck(result, expr);
+    assert!(
+        typecheck_result.is_ok(),
+        "Single = should typecheck as valid alias for =="
+    );
+
+    // Single ! now parses but will fail at typecheck (needs to be != or NOT)
+    let expr = "name ! foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "!", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it fails at typecheck with UnknownOperator
+    let typecheck_result = Typechecker::typecheck(result, expr);
+    assert!(
+        matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == "!"),
+        "Single ! should fail typecheck with UnknownOperator"
+    );
+
+    // Single ~ is now valid (alias for ~=)
+    let expr = "name ~ foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "~", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it typechecks successfully as an alias for ~=
+    let typecheck_result = Typechecker::typecheck(result, expr);
+    assert!(
+        typecheck_result.is_ok(),
+        "Single ~ should typecheck as valid alias"
+    );
+
+    // Spaced operators will parse as separate tokens and fail
+    let result = RawParser::parse_raw_expr("name < = foo");
+    assert!(
+        result.is_err(),
+        "Spaced <= should still fail due to grammar structure"
+    );
+
+    // Non-existent operators now parse but will fail at typecheck
+    let expr = "name === foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "===", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it fails at typecheck with UnknownOperator
+    let typecheck_result = Typechecker::typecheck(result, expr);
+    assert!(
+        matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == "==="),
+        "Triple equals should fail typecheck with UnknownOperator"
+    );
+
+    // <> is now valid (alias for !=)
+    let expr = "name <> foo";
+    let result = RawParser::parse_raw_expr(expr).unwrap();
+    let expected = RawTestExpr::string_predicate("name", "<>", "foo");
+    assert_eq!(result.to_test_expr(), expected);
+    // Verify it typechecks successfully as an alias for !=
+    let typecheck_result = Typechecker::typecheck(result, expr);
+    assert!(
+        typecheck_result.is_ok(),
+        "SQL-style <> should typecheck as valid alias for !="
+    );
+}
+
+#[test]
+fn test_unknown_operators_parse_but_fail_typecheck() {
+    use detect::parser::test_utils::RawTestExpr;
+
+    // Test that various unknown operators parse successfully but fail at typecheck
+    let test_cases = vec![
+        ("name ! foo", "!", "name", "foo"),
+        ("size === 100", "===", "size", "100"),
+        ("path <=> test", "<=>", "path", "test"),
+        ("content ~~ pattern", "~~", "content", "pattern"),
+        ("depth >>> 3", ">>>", "depth", "3"),
+        ("type !! file", "!!", "type", "file"),
+        ("ext !== rs", "!==", "ext", "rs"),
+    ];
+
+    for (expr, expected_op, expected_selector, expected_value) in test_cases {
+        // Parse should succeed
+        let result = RawParser::parse_raw_expr(expr).unwrap_or_else(|e| {
+            panic!("Failed to parse '{}': {:?}", expr, e);
+        });
+
+        // Verify parsed structure
+        let expected =
+            RawTestExpr::string_predicate(expected_selector, expected_op, expected_value);
+        assert_eq!(
+            result.to_test_expr(),
+            expected,
+            "Parsed structure mismatch for '{}'",
+            expr
+        );
+
+        // Typecheck should fail with UnknownOperator
+        let typecheck_result = Typechecker::typecheck(result, expr);
+        assert!(
+            matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == expected_op),
+            "Expected UnknownOperator({}) for '{}', got {:?}",
+            expected_op,
+            expr,
+            typecheck_result
+        );
+    }
+}
+
+#[test]
+fn test_very_large_numeric_values() {
+    use detect::parser::typechecker::Typechecker;
+
+    // Test numbers at the edge of u64
+    let cases = vec![
+        "size == 18446744073709551615", // u64::MAX
+        "size > 9999999999999999999",
+        "filesize < 1000000000000000000",
+    ];
+
+    for expr in cases {
+        let result = RawParser::parse_raw_expr(expr);
+        assert!(result.is_ok(), "Failed to parse: {}", expr);
+    }
+
+    // Test numbers beyond u64 range (should parse but fail typecheck)
+    let overflow = "size > 99999999999999999999999999999";
+    let parse_result = RawParser::parse_raw_expr(overflow);
+    assert!(parse_result.is_ok());
+
+    // Should fail during typecheck
+    let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), overflow);
+    assert!(typecheck_result.is_err());
+}
+
+#[test]
+fn test_special_regex_characters() {
+    use detect::parser::typechecker::Typechecker;
+
+    // Test regex patterns with special characters that require proper handling
+    // These patterns test the hybrid regex engine's ability to handle both
+    // Rust regex and PCRE2 patterns correctly
+    let cases = vec![
+        // Escaped literal characters
+        (r#"name ~= "test\\.rs""#, "Escaped dot in regex"),
+        (r#"path ~= "src/main\\.rs""#, "Path with escaped dot"),
+        // Word boundaries (PCRE2 feature, should fallback)
+        (r#"content ~= "\\bword\\b""#, "Word boundary anchors"),
+        // Character classes and quantifiers
+        (
+            r#"path ~= "[a-z]+\\.rs$""#,
+            "Character class with quantifier",
+        ),
+        (
+            r#"name ~= "^test_[0-9]{3}""#,
+            "Anchored pattern with repetition",
+        ),
+        // Case insensitive flag
+        (
+            r#"text ~= "(?i)case.*insensitive""#,
+            "Case insensitive flag",
+        ),
+    ];
+
+    for (expr, description) in cases {
+        let parse_result = RawParser::parse_raw_expr(expr);
+        assert!(
+            parse_result.is_ok(),
+            "Failed to parse {}: {}",
+            description,
+            expr
+        );
+
+        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr);
+        assert!(
+            typecheck_result.is_ok(),
+            "Failed to typecheck {}: {}",
+            description,
+            expr
+        );
+    }
+}

@@ -1,10 +1,6 @@
 /// Type-safe typechecker using the new typed selector/operator system
 use crate::{
     expr::Expr,
-    predicate::{
-        parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
-        StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
-    },
     parser::{
         error::{DetectError, SpanExt},
         typed::{
@@ -12,6 +8,10 @@ use crate::{
             TemporalOperator, TemporalSelector, TypedSelector,
         },
         RawExpr, RawPredicate, RawValue,
+    },
+    predicate::{
+        parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
+        StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
     },
 };
 
@@ -285,8 +285,8 @@ impl Typechecker {
 
         // Use dedicated set parser for proper handling
         use crate::parser::RawParser;
-        let items = RawParser::parse_set_contents(inner)
-            .map_err(|e| DetectError::InvalidValue {
+        let items =
+            RawParser::parse_set_contents(inner).map_err(|e| DetectError::InvalidValue {
                 expected: "valid set items (e.g., [rs, js] or \"foo, bar\", baz)".to_string(),
                 found: format!("parse error: {}", e),
                 span: value_span.to_source_span(),

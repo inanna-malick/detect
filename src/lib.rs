@@ -2,19 +2,19 @@ mod eval;
 pub mod expr;
 mod hybrid_regex;
 pub mod mcp_server;
+pub mod parser;
 pub mod predicate;
 mod predicate_error;
 mod util;
-pub mod parser;
 
 use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use ignore::WalkBuilder;
 // use parse_error::DetectError; // Replaced by parser error
+use parser::{error::DetectError, RawParser, Typechecker};
 use predicate::Predicate;
 use slog::{debug, info, Logger};
-use parser::{error::DetectError, RawParser, Typechecker};
 
 pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     logger: Logger,

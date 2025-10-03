@@ -12,9 +12,9 @@ pub struct RawPredicate<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RawValue<'a> {
-    Quoted(&'a str),  // Explicitly quoted by user (quotes stripped, escapes preserved)
-    Raw(&'a str),     // Raw token - could be bare word, [set], (group), {curly}, etc.
-                      // Typechecker interprets based on operator context
+    Quoted(&'a str), // Explicitly quoted by user (quotes stripped, escapes preserved)
+    Raw(&'a str),    // Raw token - could be bare word, [set], (group), {curly}, etc.
+                     // Typechecker interprets based on operator context
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,8 +90,8 @@ pub mod test_utils {
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum RawTestValue<'a> {
-        Quoted(&'a str),  // Explicitly quoted by user
-        Raw(&'a str),     // Raw token (bare word, [brackets], (parens), {curlies})
+        Quoted(&'a str), // Explicitly quoted by user
+        Raw(&'a str),    // Raw token (bare word, [brackets], (parens), {curlies})
     }
 
     impl<'a> RawTestValue<'a> {

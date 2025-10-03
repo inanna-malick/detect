@@ -219,55 +219,55 @@ pub async fn run_mcp_server() -> Result<()> {
                                             "count": results.len(),
                                             "truncated": false
                                         })),
-                                        Err(e) => ToolResult::Error(format!("Detect failed: {}", e)),
+                                        Err(e) => {
+                                            ToolResult::Error(format!("Detect failed: {}", e))
+                                        }
                                     }
                                 } else {
                                     ToolResult::Error("Missing 'expression' parameter".to_string())
                                 }
                             }
-                            "detect_help" => {
-                                ToolResult::Success(serde_json::json!({
-                                    "help": format!(
-                                        "# Detect Query Language Reference\n\n\
-                                        ## Basic Syntax\n\
-                                        `selector operator value` OR glob patterns like `*.rs`\n\n\
-                                        ## Common Selectors\n\
-                                        • **Path**: name (filename), ext (extension), stem, parent, path (full)\n\
-                                        • **Content**: contents, content, text (all equivalent)\n\
-                                        • **Metadata**: size, type, modified (mtime/mdate), created (ctime/cdate), accessed (atime/adate)\n\n\
-                                        ## Operators\n\
-                                        • **Comparison**: == != > < >= <=\n\
-                                        • **Pattern**: ~= (regex), contains (substring)\n\
-                                        • **Membership**: in [value1, value2, ...]\n\
-                                        • **Boolean**: AND OR NOT ( )\n\n\
-                                        ## Size Units\n\
-                                        b, kb (k), mb (m), gb (g), tb (t)\n\n\
-                                        ## Time Formats\n\
-                                        • Relative: -7d, -1h, -30m (negative = past)\n\
-                                        • Keywords: now, today, yesterday\n\
-                                        • Absolute: 2024-01-15\n\n\
-                                        ## Examples\n\
-                                        ```\n\
-                                        # Find Rust files with async code\n\
-                                        ext == rs AND contents ~= async\n\n\
-                                        # Large files modified recently\n\
-                                        size > 5mb AND modified > -7days\n\n\
-                                        # Test files without 'skip' markers\n\
-                                        name contains test AND NOT contents contains skip\n\n\
-                                        # Config files with potential secrets\n\
-                                        ext in [json, yml, env] AND contents ~= (password|secret|api_key)\n\n\
-                                        # Using glob patterns\n\
-                                        *.{{js,ts}} AND size > 10kb\n\
-                                        **/*.md AND modified > yesterday\n\
-                                        ```\n\n\
-                                        ## Tips\n\
-                                        • Glob patterns can be mixed with boolean expressions\n\
-                                        • Path filters are evaluated first for performance\n\
-                                        • Regex patterns use Rust regex, with automatic PCRE2 fallback if Rust regex parsing fails\n\
-                                        • Use NOT instead of ! to avoid shell issues"
-                                    )
-                                }))
-                            }
+                            "detect_help" => ToolResult::Success(serde_json::json!({
+                                "help": format!(
+                                    "# Detect Query Language Reference\n\n\
+                                    ## Basic Syntax\n\
+                                    `selector operator value` OR glob patterns like `*.rs`\n\n\
+                                    ## Common Selectors\n\
+                                    • **Path**: name (filename), ext (extension), stem, parent, path (full)\n\
+                                    • **Content**: contents, content, text (all equivalent)\n\
+                                    • **Metadata**: size, type, modified (mtime/mdate), created (ctime/cdate), accessed (atime/adate)\n\n\
+                                    ## Operators\n\
+                                    • **Comparison**: == != > < >= <=\n\
+                                    • **Pattern**: ~= (regex), contains (substring)\n\
+                                    • **Membership**: in [value1, value2, ...]\n\
+                                    • **Boolean**: AND OR NOT ( )\n\n\
+                                    ## Size Units\n\
+                                    b, kb (k), mb (m), gb (g), tb (t)\n\n\
+                                    ## Time Formats\n\
+                                    • Relative: -7d, -1h, -30m (negative = past)\n\
+                                    • Keywords: now, today, yesterday\n\
+                                    • Absolute: 2024-01-15\n\n\
+                                    ## Examples\n\
+                                    ```\n\
+                                    # Find Rust files with async code\n\
+                                    ext == rs AND contents ~= async\n\n\
+                                    # Large files modified recently\n\
+                                    size > 5mb AND modified > -7days\n\n\
+                                    # Test files without 'skip' markers\n\
+                                    name contains test AND NOT contents contains skip\n\n\
+                                    # Config files with potential secrets\n\
+                                    ext in [json, yml, env] AND contents ~= (password|secret|api_key)\n\n\
+                                    # Using glob patterns\n\
+                                    *.{{js,ts}} AND size > 10kb\n\
+                                    **/*.md AND modified > yesterday\n\
+                                    ```\n\n\
+                                    ## Tips\n\
+                                    • Glob patterns can be mixed with boolean expressions\n\
+                                    • Path filters are evaluated first for performance\n\
+                                    • Regex patterns use Rust regex, with automatic PCRE2 fallback if Rust regex parsing fails\n\
+                                    • Use NOT instead of ! to avoid shell issues"
+                                )
+                            })),
                             _ => ToolResult::Error(format!("Unknown tool: {}", tool_name)),
                         };
 

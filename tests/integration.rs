@@ -595,7 +595,7 @@ async fn test_alias_smoke_test() {
         // Test filesize alias
         (
             "filesize > 10",
-            &["", "large.txt"][..],  // Empty string is the directory itself
+            &["", "large.txt"][..], // Empty string is the directory itself
             vec![f("small.txt", "x"), f("large.txt", "xxxxxxxxxxxxxxxxxxxx")],
         ),
         // Test filetype alias
@@ -607,7 +607,7 @@ async fn test_alias_smoke_test() {
         // Test mtime alias (all files are recently created)
         (
             "mtime > -1h",
-            &["", "recent.txt"][..],  // All files match, including directory
+            &["", "recent.txt"][..], // All files match, including directory
             vec![f("recent.txt", "new")],
         ),
         // Test contents alias
@@ -620,13 +620,20 @@ async fn test_alias_smoke_test() {
         (
             "text ~= FIXME",
             &["broken.rs"][..],
-            vec![f("broken.rs", "// FIXME: bug here"), f("working.rs", "// works")],
+            vec![
+                f("broken.rs", "// FIXME: bug here"),
+                f("working.rs", "// works"),
+            ],
         ),
         // Test stem alias
         (
             "stem == config",
             &["config.json", "config.toml"][..],
-            vec![f("config.json", "{}"), f("config.toml", ""), f("other.txt", "")],
+            vec![
+                f("config.json", "{}"),
+                f("config.toml", ""),
+                f("other.txt", ""),
+            ],
         ),
         // Test directory alias
         (
