@@ -110,6 +110,152 @@ fn test_regex_parsing() {
 }
 
 #[test]
+fn test_simple_unquoted_quantifiers_typecheck() {
+    // Test that unquoted patterns with quantifiers compile to valid regex predicates
+    let test_cases = vec![
+        ("content ~= [0-9]+", "[0-9]+"),
+        ("content ~= [a-z]*", "[a-z]*"),
+        ("content ~= [A-Z]?", "[A-Z]?"),
+        ("content ~= [0-9]{2,4}", "[0-9]{2,4}"),
+        ("content ~= (foo|bar)+", "(foo|bar)+"),
+        ("content ~= (test)*", "(test)*"),
+        ("content ~= (a|b){2,3}", "(a|b){2,3}"),
+    ];
+
+    for (expr, expected_pattern) in test_cases {
+        let typed = parse_and_typecheck(expr).unwrap();
+        let expected = Expr::Predicate(Predicate::contents(
+            StreamingCompiledContentPredicate::new(expected_pattern.to_string()).unwrap(),
+        ));
+        assert_eq!(typed, expected, "Mismatch for: {}", expr);
+    }
+}
+
+#[test]
+fn test_complex_unquoted_patterns_typecheck() {
+    // Test complex multi-bracket patterns and patterns with trailing chars
+    let test_cases = vec![
+        ("content ~= [a-z]+[A-Z]+", "[a-z]+[A-Z]+"),
+        ("content ~= [0-9]+\\.[0-9]+", "[0-9]+\\.[0-9]+"),
+        ("content ~= [a-z]+[A-Z]+[0-9]+", "[a-z]+[A-Z]+[0-9]+"),
+        ("content ~= [0-9]+@domain", "[0-9]+@domain"),
+        ("content ~= [0-9]+-[0-9]+", "[0-9]+-[0-9]+"),
+        ("content ~= [a-z]+_suffix", "[a-z]+_suffix"),
+        ("content ~= [0-9]+:port", "[0-9]+:port"),
+        ("content ~= [a-z]+@[a-z]+\\.[a-z]+", "[a-z]+@[a-z]+\\.[a-z]+"),
+        (
+            "content ~= \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
+            "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
+        ),
+    ];
+
+    for (expr, expected_pattern) in test_cases {
+        let typed = parse_and_typecheck(expr).unwrap();
+        let expected = Expr::Predicate(Predicate::contents(
+            StreamingCompiledContentPredicate::new(expected_pattern.to_string()).unwrap(),
+        ));
+        assert_eq!(typed, expected, "Mismatch for: {}", expr);
+    }
+}
+
+#[test]
+fn test_quoted_unquoted_equivalence() {
+    // Verify that quoted and unquoted patterns produce identical results
+    let test_cases = vec![
+        ("content ~= [0-9]+", r#"content ~= "[0-9]+""#),
+        ("content ~= [a-z]+[A-Z]+", r#"content ~= "[a-z]+[A-Z]+""#),
+        ("content ~= (foo|bar)+", r#"content ~= "(foo|bar)+""#),
+        ("content ~= [0-9]+@domain", r#"content ~= "[0-9]+@domain""#),
+    ];
+
+    for (unquoted_expr, quoted_expr) in test_cases {
+        let unquoted = parse_and_typecheck(unquoted_expr).unwrap();
+        let quoted = parse_and_typecheck(quoted_expr).unwrap();
+        assert_eq!(
+            unquoted, quoted,
+            "Quoted/unquoted mismatch for: {}",
+            unquoted_expr
+        );
+    }
+}
+
+#[test]
+fn test_unquoted_quantifiers_in_boolean_expressions() {
+    // Test that unquoted quantifiers work correctly in boolean context
+
+    // Simple AND expression
+    let typed = parse_and_typecheck("content ~= [0-9]+ AND size > 1kb").unwrap();
+    let left = Expr::Predicate(Predicate::contents(
+        StreamingCompiledContentPredicate::new("[0-9]+".to_string()).unwrap(),
+    ));
+    let right = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+        NumberMatcher::In(Bound::Left(1025..)), // 1kb + 1
+    )));
+    let expected = Expr::and(left, right);
+    assert_eq!(typed, expected);
+
+    // OR expression with complex pattern
+    let typed = parse_and_typecheck("content ~= [a-z]+[A-Z]+ OR name == test").unwrap();
+    let left = Expr::Predicate(Predicate::contents(
+        StreamingCompiledContentPredicate::new("[a-z]+[A-Z]+".to_string()).unwrap(),
+    ));
+    let right = Expr::Predicate(Predicate::name(NamePredicate::FileName(
+        StringMatcher::Equals("test".to_string()),
+    )));
+    let expected = Expr::or(left, right);
+    assert_eq!(typed, expected);
+
+    // NOT expression
+    let typed = parse_and_typecheck("NOT content ~= [0-9]+").unwrap();
+    let inner = Expr::Predicate(Predicate::contents(
+        StreamingCompiledContentPredicate::new("[0-9]+".to_string()).unwrap(),
+    ));
+    let expected = Expr::negate(inner);
+    assert_eq!(typed, expected);
+
+    // Complex nested expression
+    let typed = parse_and_typecheck(
+        "(content ~= [0-9]+ OR content ~= [a-z]+) AND NOT type == dir",
+    )
+    .unwrap();
+    let lhs_left = Expr::Predicate(Predicate::contents(
+        StreamingCompiledContentPredicate::new("[0-9]+".to_string()).unwrap(),
+    ));
+    let lhs_right = Expr::Predicate(Predicate::contents(
+        StreamingCompiledContentPredicate::new("[a-z]+".to_string()).unwrap(),
+    ));
+    let lhs = Expr::or(lhs_left, lhs_right);
+    let rhs_inner = Expr::Predicate(Predicate::meta(MetadataPredicate::Type(
+        StringMatcher::Equals("dir".to_string()),
+    )));
+    let rhs = Expr::negate(rhs_inner);
+    let expected = Expr::and(lhs, rhs);
+    assert_eq!(typed, expected);
+}
+
+#[test]
+fn test_invalid_regex_patterns_fail_typecheck() {
+    // Parser accepts these, but typechecker should reject when regex compilation fails
+    // Note: Many "malformed" patterns like [0-9]++ are actually valid - the second +
+    // is interpreted as a literal character. Only truly invalid regex syntax fails.
+    let invalid_patterns = vec![
+        "content ~= [z-a]",         // Invalid character class range (reversed)
+        "content ~= (?P<>test)",    // Empty capture group name
+        "content ~= (?#",           // Unclosed comment
+    ];
+
+    for expr in invalid_patterns {
+        let result = parse_and_typecheck(expr);
+        assert!(
+            matches!(result, Err(TypecheckError::InvalidValue { .. })),
+            "Should fail with InvalidValue error for: {}, got: {:?}",
+            expr,
+            result
+        );
+    }
+}
+
+#[test]
 fn test_size_value_parsing() {
     // Plain number (size > 1000 becomes range 1001..)
     let typed = parse_and_typecheck("size > 1000").unwrap();
