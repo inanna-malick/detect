@@ -528,6 +528,180 @@ fn test_unquoted_regex_patterns_with_quantifiers() {
 }
 
 #[test]
+fn test_escape_sequences_in_bare_tokens() {
+    // Verify parser captures escape sequences literally without interpretation
+    // Tests critical regex escape sequences reported as broken: \(, \w{n,m}, \b
+    let test_cases = vec![
+        // Basic escape sequences
+        (r"content ~= \d+", r"\d+"),
+        (r"content ~= \s+", r"\s+"),
+        (r"content ~= \w+", r"\w+"),
+        (r"content ~= \t", r"\t"),
+        (r"content ~= \n", r"\n"),
+
+        // CRITICAL: Escaped parentheses (reported as broken - "missing closing parenthesis")
+        (r"content ~= \(", r"\("),
+        (r"content ~= \)", r"\)"),
+        (r"content ~= \\(", r"\\("),  // Backslash followed by paren
+
+        // Complex patterns with escaped parens
+        (r"content ~= fn\s+\w+\(", r"fn\s+\w+\("),
+        (r"content ~= \w+\(\)", r"\w+\(\)"),
+
+        // Literal backslash
+        (r"content ~= \\", r"\\"),
+        (r"content ~= \\\\", r"\\\\"),
+
+        // Word boundaries (reported as broken - returns 0 matches)
+        (r"content ~= \b\w+\b", r"\b\w+\b"),
+        (r"content ~= \bfn\b", r"\bfn\b"),
+        (r"content ~= \B", r"\B"),
+
+        // Anchors (reported as broken)
+        (r"content ~= ^\s*use", r"^\s*use"),
+        (r"content ~= \A\w+", r"\A\w+"),
+        (r"content ~= \z", r"\z"),
+        (r"content ~= \Z", r"\Z"),
+        (r"content ~= \G", r"\G"),
+
+        // Unicode and hex escapes (reported as broken)
+        (r"content ~= \p{L}+", r"\p{L}+"),
+        (r"content ~= \p{Nd}+", r"\p{Nd}+"),
+        (r"content ~= \x{41}", r"\x{41}"),
+        (r"content ~= \x41", r"\x41"),
+
+        // Special escapes
+        (r"content ~= \Q...\E", r"\Q...\E"),
+        (r"content ~= \K", r"\K"),
+        (r"content ~= \X", r"\X"),
+    ];
+
+    for (expr, expected_value) in test_cases {
+        let result = RawParser::parse_raw_expr(expr);
+        assert!(result.is_ok(), "Failed to parse: {}", expr);
+
+        let pred = match result.unwrap().to_test_expr() {
+            RawTestExpr::Predicate(p) => p,
+            _ => panic!("Expected predicate for: {}", expr),
+        };
+
+        assert_eq!(
+            pred.value.to_string(),
+            expected_value,
+            "Parser mangled escape sequence in: {}",
+            expr
+        );
+    }
+}
+
+#[test]
+fn test_curly_brace_quantifiers_on_escapes() {
+    // CRITICAL: Verify \w{n,m} style quantifiers aren't split by grammar
+    // Reported issue: \w{5,10} and \w{3} return 0 matches
+    let test_cases = vec![
+        // Exact count quantifiers
+        (r"content ~= \w{3}", r"\w{3}"),
+        (r"content ~= \d{5}", r"\d{5}"),
+        (r"content ~= \s{2}", r"\s{2}"),
+
+        // Range quantifiers (reported as broken - returns 0 matches)
+        (r"content ~= \w{5,10}", r"\w{5,10}"),
+        (r"content ~= \d{1,3}", r"\d{1,3}"),
+        (r"content ~= \s{2,4}", r"\s{2,4}"),
+        (r"content ~= \w{3,}", r"\w{3,}"),  // Open-ended
+
+        // Complex patterns with curly quantifiers
+        (r"content ~= \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
+        (r"content ~= \w{3,5}_\w{2,4}", r"\w{3,5}_\w{2,4}"),
+        (r"content ~= fn\w{1,20}\(", r"fn\w{1,20}\("),
+
+        // Character classes with quantifiers (already tested elsewhere, verify consistency)
+        (r"content ~= [a-z]{2,4}", "[a-z]{2,4}"),
+        (r"content ~= [0-9]{3}", "[0-9]{3}"),
+    ];
+
+    for (expr, expected_value) in test_cases {
+        let result = RawParser::parse_raw_expr(expr);
+        assert!(result.is_ok(), "Failed to parse: {}", expr);
+
+        let pred = match result.unwrap().to_test_expr() {
+            RawTestExpr::Predicate(p) => p,
+            _ => panic!("Expected predicate for: {}", expr),
+        };
+
+        assert_eq!(
+            pred.value.to_string(),
+            expected_value,
+            "Curly brace quantifier was split or mangled: {}",
+            expr
+        );
+    }
+}
+
+#[test]
+fn test_quoted_vs_unquoted_escape_handling() {
+    // Verify quoted and unquoted forms produce identical values for escape sequences
+    let test_cases = vec![
+        // Escaped parentheses
+        (r"content ~= \(", r#"content ~= "\(""#, r"\("),
+        (r"content ~= \)", r#"content ~= "\)""#, r"\)"),
+
+        // Escape sequences
+        (r"content ~= \s+", r#"content ~= "\s+""#, r"\s+"),
+        (r"content ~= \d{3}", r#"content ~= "\d{3}""#, r"\d{3}"),
+        (r"content ~= \w{5,10}", r#"content ~= "\w{5,10}""#, r"\w{5,10}"),
+
+        // Backslash handling
+        (r"content ~= \\", r#"content ~= "\\""#, r"\\"),
+        (r"content ~= \\\(", r#"content ~= "\\\(""#, r"\\\("),
+
+        // Complex patterns
+        (r"content ~= fn\s+\w+\(", r#"content ~= "fn\s+\w+\(""#, r"fn\s+\w+\("),
+    ];
+
+    for (unquoted_expr, quoted_expr, expected_value) in test_cases {
+        // Test unquoted
+        let unquoted_result = RawParser::parse_raw_expr(unquoted_expr);
+        assert!(unquoted_result.is_ok(), "Failed to parse unquoted: {}", unquoted_expr);
+        let unquoted_pred = match unquoted_result.unwrap().to_test_expr() {
+            RawTestExpr::Predicate(p) => p,
+            _ => panic!("Expected predicate"),
+        };
+
+        // Test quoted
+        let quoted_result = RawParser::parse_raw_expr(quoted_expr);
+        assert!(quoted_result.is_ok(), "Failed to parse quoted: {}", quoted_expr);
+        let quoted_pred = match quoted_result.unwrap().to_test_expr() {
+            RawTestExpr::Predicate(p) => p,
+            _ => panic!("Expected predicate"),
+        };
+
+        // Both should produce same value
+        assert_eq!(
+            unquoted_pred.value.to_string(),
+            expected_value,
+            "Unquoted value mismatch: {}",
+            unquoted_expr
+        );
+
+        assert_eq!(
+            quoted_pred.value.to_string(),
+            expected_value,
+            "Quoted value mismatch: {}",
+            quoted_expr
+        );
+
+        assert_eq!(
+            unquoted_pred.value.to_string(),
+            quoted_pred.value.to_string(),
+            "Quoted/unquoted mismatch between {} and {}",
+            unquoted_expr,
+            quoted_expr
+        );
+    }
+}
+
+#[test]
 fn test_regex_quantifiers_in_boolean_expressions() {
     // Category 1: Operator boundaries - quantified patterns followed by AND/OR
     // These test that the parser correctly terminates pattern matching at boolean operators

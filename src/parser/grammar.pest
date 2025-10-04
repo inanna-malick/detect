@@ -51,7 +51,8 @@ predicate = { selector ~ operator ~ value }
   curly_braced = @{ "{" ~ (!"}" ~ ANY)* ~ "}" ~ (!WHITESPACE ~ !"&&" ~ !"||" ~ !")" ~ ANY)* }
 
   // Barewords exclude structural chars but allow most content
-  bare_token = @{ (!("\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY)+ }
+  // Backslash escapes the next character (e.g., \), \&&, \d, \s for regex)
+  bare_token = @{ (("\\" ~ ANY) | (!("\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY))+ }
   
   quoted_string = ${ "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
   inner_double = @{ (!"\"" ~ (escaped | ANY))* }
