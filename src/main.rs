@@ -98,10 +98,19 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => current_dir()?,
     };
 
+    // Canonicalize root path for relative path computation
+    let canonical_root = root_path.canonicalize().unwrap_or_else(|_| root_path.clone());
+
     let mut output = std::io::stdout();
 
     let result = parse_and_run_fs(logger, &root_path, !args.visit_gitignored, expr, |s| {
-        if let Err(e) = writeln!(output, "{}", &s.to_string_lossy()) {
+        // Convert to relative path for cleaner output
+        let display_path = s
+            .strip_prefix(&canonical_root)
+            .unwrap_or(s)
+            .to_string_lossy();
+
+        if let Err(e) = writeln!(output, "{}", display_path) {
             if e.kind() == std::io::ErrorKind::BrokenPipe {
                 // Unix convention: exit 0 on SIGPIPE/BrokenPipe
                 std::process::exit(0);

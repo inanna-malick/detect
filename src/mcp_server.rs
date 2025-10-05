@@ -197,6 +197,11 @@ pub async fn run_mcp_server() -> Result<()> {
                                         directory
                                     );
 
+                                    // Canonicalize directory for relative path computation
+                                    let canonical_dir = directory
+                                        .canonicalize()
+                                        .unwrap_or_else(|_| directory.clone());
+
                                     // Run detect directly with await since we're in an async function
                                     let logger = detect_logger.clone();
                                     let mut results = Vec::new();
@@ -207,7 +212,13 @@ pub async fn run_mcp_server() -> Result<()> {
                                         expression,
                                         |path| {
                                             if max_results == 0 || results.len() < max_results {
-                                                results.push(path.to_string_lossy().to_string());
+                                                // Convert to relative path for cleaner output
+                                                let display_path = path
+                                                    .strip_prefix(&canonical_dir)
+                                                    .unwrap_or(path)
+                                                    .to_string_lossy()
+                                                    .to_string();
+                                                results.push(display_path);
                                             }
                                         },
                                     )
