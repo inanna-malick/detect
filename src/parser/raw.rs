@@ -179,11 +179,7 @@ impl RawParser {
                 })?;
                 Ok(RawValue::Quoted(inner.as_str()))
             }
-            Rule::raw_token
-            | Rule::bracketed
-            | Rule::parenthesized
-            | Rule::curly_braced
-            | Rule::bare_token => {
+            Rule::raw_token => {
                 // All raw tokens stored as-is, typechecker decides meaning based on operator
                 Ok(RawValue::Raw(pair.as_str()))
             }

@@ -1,6 +1,10 @@
 use detect::parser::test_utils::RawTestExpr;
 use detect::parser::*;
 
+// ==============================================================================
+// Basic Syntax Tests - Predicates, Values, Quotes
+// ==============================================================================
+
 #[test]
 fn test_simple_predicate() {
     let result = RawParser::parse_raw_expr("name == foo").unwrap();
@@ -69,6 +73,10 @@ fn test_empty_set() {
     let expected = RawTestExpr::string_predicate("ext", "in", "[]");
     assert_eq!(result.to_test_expr(), expected);
 }
+
+// ==============================================================================
+// Boolean Logic Tests - AND, OR, NOT, Precedence
+// ==============================================================================
 
 #[test]
 fn test_boolean_logic() {
@@ -254,16 +262,15 @@ fn test_invalid_escape_sequences() {
 
 #[test]
 fn test_whitespace_handling() {
+    // Basic predicate whitespace tolerance
     let result1 = RawParser::parse_raw_expr("name==foo").unwrap();
     let result2 = RawParser::parse_raw_expr("name == foo").unwrap();
     let result3 = RawParser::parse_raw_expr("  name   ==   foo  ").unwrap();
 
     assert_eq!(result1.to_test_expr(), result2.to_test_expr());
     assert_eq!(result2.to_test_expr(), result3.to_test_expr());
-}
 
-#[test]
-fn test_set_with_whitespace() {
+    // Whitespace in sets (preserved as raw token)
     let result = RawParser::parse_raw_expr("ext in [ rs , js , ts ]").unwrap();
     let expected = RawTestExpr::string_predicate("ext", "in", "[ rs , js , ts ]");
     assert_eq!(result.to_test_expr(), expected);
@@ -448,55 +455,18 @@ fn test_quoted_reserved_words_should_work() {
     }
 }
 
-// New functionality: Unquoted regex patterns with special characters
-#[test]
-fn test_unquoted_regex_patterns_with_brackets() {
-    // Character classes should work unquoted
-    let result = RawParser::parse_raw_expr("content ~= [0-9]");
-    assert!(result.is_ok(), "Should parse character class [0-9]");
-    let expected = RawTestExpr::string_predicate("content", "~=", "[0-9]");
-    assert_eq!(result.unwrap().to_test_expr(), expected);
-
-    // More complex character classes
-    let result = RawParser::parse_raw_expr("name ~= [a-zA-Z_]");
-    assert!(result.is_ok(), "Should parse character class [a-zA-Z_]");
-    let expected = RawTestExpr::string_predicate("name", "~=", "[a-zA-Z_]");
-    assert_eq!(result.unwrap().to_test_expr(), expected);
-}
+// ==============================================================================
+// Regex Pattern Tests - Quantifiers, Escapes, Delimiters
+// ==============================================================================
 
 #[test]
-fn test_unquoted_regex_patterns_with_parentheses() {
-    // Alternation groups should work unquoted
-    let result = RawParser::parse_raw_expr("content ~= (Result|Option)");
-    assert!(result.is_ok(), "Should parse alternation (Result|Option)");
-    let expected = RawTestExpr::string_predicate("content", "~=", "(Result|Option)");
-    assert_eq!(result.unwrap().to_test_expr(), expected);
-
-    // Capture groups
-    let result = RawParser::parse_raw_expr("name ~= (test)");
-    assert!(result.is_ok(), "Should parse capture group (test)");
-    let expected = RawTestExpr::string_predicate("name", "~=", "(test)");
-    assert_eq!(result.unwrap().to_test_expr(), expected);
-}
-
-#[test]
-fn test_unquoted_regex_patterns_with_curly_braces() {
-    // Quantifiers should work unquoted
-    let result = RawParser::parse_raw_expr("content ~= \\d{1,3}");
-    assert!(result.is_ok(), "Should parse quantifier \\d{{1,3}}");
-    let expected = RawTestExpr::string_predicate("content", "~=", "\\d{1,3}");
-    assert_eq!(result.unwrap().to_test_expr(), expected);
-
-    let result = RawParser::parse_raw_expr("content ~= a{2,5}");
-    assert!(result.is_ok(), "Should parse quantifier a{{2,5}}");
-    let expected = RawTestExpr::string_predicate("content", "~=", "a{2,5}");
-    assert_eq!(result.unwrap().to_test_expr(), expected);
-}
-
-#[test]
-fn test_unquoted_regex_patterns_with_quantifiers() {
-    // Character classes with quantifiers - the key use case
+fn test_unquoted_regex_patterns() {
+    // Comprehensive test for unquoted regex patterns with various delimiters and quantifiers
     let test_cases = vec![
+        // Basic bracket patterns
+        ("content ~= [0-9]", "[0-9]"),
+        ("content ~= [a-zA-Z_]", "[a-zA-Z_]"),
+        // Brackets with quantifiers
         ("content ~= [0-9]+", "[0-9]+"),
         ("content ~= [a-z]*", "[a-z]*"),
         ("content ~= [A-Z]?", "[A-Z]?"),
@@ -505,10 +475,16 @@ fn test_unquoted_regex_patterns_with_quantifiers() {
         ("content ~= [a-z]+[A-Z]+", "[a-z]+[A-Z]+"),
         ("content ~= [A-Z][a-z]+", "[A-Z][a-z]+"),
         ("content ~= [0-9]+\\.[0-9]+", "[0-9]+\\.[0-9]+"),
+        // Basic paren patterns
+        ("content ~= (Result|Option)", "(Result|Option)"),
+        ("content ~= (test)", "(test)"),
         // Parentheses with quantifiers
         ("content ~= (foo|bar)+", "(foo|bar)+"),
         ("content ~= (test)*", "(test)*"),
         ("content ~= (a|b){2,3}", "(a|b){2,3}"),
+        // Basic curly brace quantifiers
+        ("content ~= \\d{1,3}", "\\d{1,3}"),
+        ("content ~= a{2,5}", "a{2,5}"),
         // Mixed patterns
         ("content ~= [a-z]+@[a-z]+\\.[a-z]+", "[a-z]+@[a-z]+\\.[a-z]+"),
         ("content ~= \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}", "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"),
@@ -1199,141 +1175,59 @@ fn test_mixed_bracket_scenarios() {
     }
 }
 
-// Tests for proper set parsing with dedicated grammar
-#[test]
-fn test_set_parsing_with_commas_in_quotes() {
-    use detect::parser::RawParser;
-
-    // Quoted items with commas
-    let result = RawParser::parse_set_contents(r#""foo, bar", baz"#).unwrap();
-    assert_eq!(result, vec!["foo, bar", "baz"]);
-
-    // Single quoted
-    let result = RawParser::parse_set_contents(r#"'foo, bar', "baz, qux", plain"#).unwrap();
-    assert_eq!(result, vec!["foo, bar", "baz, qux", "plain"]);
-}
+// ==============================================================================
+// Set Parsing Tests
+// ==============================================================================
 
 #[test]
-fn test_set_parsing_escaped_quotes() {
+fn test_set_parsing() {
     use detect::parser::RawParser;
 
-    // Escaped quotes in items
-    let result = RawParser::parse_set_contents(r#""foo\"bar", 'baz\'qux'"#).unwrap();
-    assert_eq!(result, vec![r#"foo\"bar"#, r#"baz\'qux"#]);
-}
+    // Comprehensive set parsing test covering all edge cases
+    let test_cases: Vec<(&str, Vec<&str>, &str)> = vec![
+        // Basic bare items
+        ("rs, js, ts", vec!["rs", "js", "ts"], "basic bare items"),
 
-#[test]
-fn test_set_parsing_trailing_commas() {
-    use detect::parser::RawParser;
+        // Commas in quoted strings
+        (r#""foo, bar", baz"#, vec!["foo, bar", "baz"], "commas in double quotes"),
+        (r#"'foo, bar', "baz, qux", plain"#, vec!["foo, bar", "baz, qux", "plain"], "mixed quotes with commas"),
 
-    let result = RawParser::parse_set_contents("rs, js, ts,").unwrap();
-    assert_eq!(result, vec!["rs", "js", "ts"]);
+        // Escaped quotes
+        (r#""foo\"bar", 'baz\'qux'"#, vec![r#"foo\"bar"#, r#"baz\'qux"#], "escaped quotes"),
+        (r#""He said 'hello'", 'She said "hi"'"#, vec!["He said 'hello'", r#"She said "hi""#], "nested quote styles"),
+        (r#""She said \"hello\"", 'He said \'hi\''"#, vec![r#"She said \"hello\""#, r#"He said \'hi\'"#], "escaped nested quotes"),
 
-    let result = RawParser::parse_set_contents("rs,").unwrap();
-    assert_eq!(result, vec!["rs"]);
-}
+        // Trailing commas
+        ("rs, js, ts,", vec!["rs", "js", "ts"], "trailing comma"),
+        ("rs,", vec!["rs"], "single item with trailing comma"),
 
-#[test]
-fn test_set_parsing_empty_set() {
-    use detect::parser::RawParser;
+        // Empty sets
+        ("", vec![], "empty set"),
+        (r#""""#, vec![], "empty quoted string"),
 
-    let result = RawParser::parse_set_contents("").unwrap();
-    assert_eq!(result, Vec::<String>::new());
-}
+        // Whitespace handling
+        ("rs  ,  js  ,  ts", vec!["rs", "js", "ts"], "extra whitespace around bare items"),
+        (r#""  spaces  ", bare"#, vec!["  spaces  ", "bare"], "whitespace preserved in quotes"),
+        ("foo  ,  bar  ", vec!["foo", "bar"], "trailing whitespace"),
 
-#[test]
-fn test_set_parsing_whitespace_handling() {
-    use detect::parser::RawParser;
+        // Edge cases
+        (r#""", foo"#, vec!["foo"], "empty quoted string filtered"),
+        ("foo,,,bar", vec!["foo", "bar"], "multiple commas filtered"),
+        ("foo-bar, baz_qux, file.txt", vec!["foo-bar", "baz_qux", "file.txt"], "special chars in bare items"),
 
-    // Extra whitespace should be trimmed from bare items
-    let result = RawParser::parse_set_contents("rs  ,  js  ,  ts").unwrap();
-    assert_eq!(result, vec!["rs", "js", "ts"]);
+        // Unicode
+        (r#""测试", "файл", "🦀""#, vec!["测试", "файл", "🦀"], "unicode in quotes"),
+        ("测试, файл", vec!["测试", "файл"], "unicode in bare items"),
 
-    // But preserved inside quotes
-    let result = RawParser::parse_set_contents(r#""  spaces  ", bare"#).unwrap();
-    assert_eq!(result, vec!["  spaces  ", "bare"]);
-}
+        // Real-world examples
+        (r#"rs, "config.toml", "my file.txt", Cargo.toml"#, vec!["rs", "config.toml", "my file.txt", "Cargo.toml"], "mix of quoted and bare"),
+        (r#""https://example.com?a=1,2,3", /path/to/file"#, vec!["https://example.com?a=1,2,3", "/path/to/file"], "URLs and paths"),
+    ];
 
-#[test]
-fn test_set_parsing_complex_real_world() {
-    use detect::parser::RawParser;
-
-    // Mix of quoted, bare, with special chars
-    let result =
-        RawParser::parse_set_contents(r#"rs, "config.toml", "my file.txt", Cargo.toml"#).unwrap();
-    assert_eq!(
-        result,
-        vec!["rs", "config.toml", "my file.txt", "Cargo.toml"]
-    );
-
-    // URLs and paths with commas
-    let result =
-        RawParser::parse_set_contents(r#""https://example.com?a=1,2,3", /path/to/file"#).unwrap();
-    assert_eq!(result, vec!["https://example.com?a=1,2,3", "/path/to/file"]);
-}
-
-#[test]
-fn test_set_parsing_edge_cases() {
-    use detect::parser::RawParser;
-
-    // Empty string in set (should be filtered out currently)
-    let result = RawParser::parse_set_contents(r#""", foo"#).unwrap();
-    assert_eq!(result, vec!["foo"], "Empty quoted strings are filtered");
-
-    // Only whitespace after first item (trailing whitespace)
-    let result = RawParser::parse_set_contents("foo  ,  bar  ").unwrap();
-    assert_eq!(
-        result,
-        vec!["foo", "bar"],
-        "Whitespace around items trimmed"
-    );
-
-    // Quoted empty string vs bare empty
-    let result = RawParser::parse_set_contents(r#""""#).unwrap();
-    assert_eq!(
-        result,
-        Vec::<String>::new(),
-        "Single empty quoted string filtered"
-    );
-
-    // Multiple commas (empty items between should be filtered)
-    let result = RawParser::parse_set_contents("foo,,,bar").unwrap();
-    assert_eq!(
-        result,
-        vec!["foo", "bar"],
-        "Multiple commas create empty items that are filtered"
-    );
-
-    // Special characters in bare items
-    let result = RawParser::parse_set_contents("foo-bar, baz_qux, file.txt").unwrap();
-    assert_eq!(result, vec!["foo-bar", "baz_qux", "file.txt"]);
-}
-
-#[test]
-fn test_set_parsing_unicode() {
-    use detect::parser::RawParser;
-
-    // Unicode in quoted strings
-    let result = RawParser::parse_set_contents(r#""测试", "файл", "🦀""#).unwrap();
-    assert_eq!(result, vec!["测试", "файл", "🦀"]);
-
-    // Unicode in bare items
-    let result = RawParser::parse_set_contents("测试, файл").unwrap();
-    assert_eq!(result, vec!["测试", "файл"]);
-}
-
-#[test]
-fn test_set_parsing_quotes_and_escapes() {
-    use detect::parser::RawParser;
-
-    // Nested quote styles
-    let result = RawParser::parse_set_contents(r#""He said 'hello'", 'She said "hi"'"#).unwrap();
-    assert_eq!(result, vec!["He said 'hello'", r#"She said "hi""#]);
-
-    // Escaped quotes (backslashes preserved in parsed output)
-    let result =
-        RawParser::parse_set_contents(r#""She said \"hello\"", 'He said \'hi\''"#).unwrap();
-    assert_eq!(result, vec![r#"She said \"hello\""#, r#"He said \'hi\'"#]);
+    for (input, expected, description) in test_cases {
+        let result = RawParser::parse_set_contents(input).unwrap();
+        assert_eq!(result, expected, "Failed: {}", description);
+    }
 }
 
 #[test]
@@ -1398,9 +1292,9 @@ fn test_malformed_sets() {
     let result = RawParser::parse_raw_expr("name in foo, bar]");
     assert!(result.is_err(), "Malformed syntax should fail");
 
-    // Nested sets - grammar still rejects due to bracket matching
+    // Nested sets - simplified grammar now allows this to parse (will fail at typecheck)
     let result = RawParser::parse_raw_expr("name in [foo, [bar]]");
-    assert!(result.is_err(), "Nested brackets still fail at parse time");
+    assert!(result.is_ok(), "Simplified grammar allows nested brackets (typecheck will handle validity)");
 
     // Set with trailing comma - now allowed, typechecker filters empty items
     let result = RawParser::parse_raw_expr("name in [foo, bar,]");

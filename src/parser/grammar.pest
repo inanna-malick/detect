@@ -22,37 +22,21 @@ predicate = { selector ~ operator ~ value }
   
   value = { quoted_string | raw_token }
 
-  // Raw tokens - capture everything, decide meaning in typechecker based on operator context
-  raw_token = { bracketed | parenthesized | curly_braced | bare_token }
+  // Raw tokens with recursive balanced delimiter matching
+  // Supports nested structures like ((pub|async)\s+)* or [[a-z]]
+  raw_token = @{ raw_char+ }
 
-  // Bracketed/parenthesized/braced content with optional quantifiers and repeated groups
-  // Matches: [rs, js, ts], [0-9]+, [0-9]{2,4}, [a-z]+[A-Z]+, [0-9]+\.[0-9]+
-  // Supports +, *, ?, {n,m} quantifiers and repeated bracket/paren groups
-  bracketed = @{
-    "[" ~ (!"]" ~ ANY)* ~ "]" ~
-    ("+" | "*" | "?" | ("{" ~ ASCII_DIGIT+ ~ ("," ~ ASCII_DIGIT*)? ~ "}"))? ~
-    (
-      (!("[" | "(" | "{" | "]") ~ !WHITESPACE ~ !"&&" ~ !"||" ~ !")" ~ ANY)* ~
-      "[" ~ (!"]" ~ ANY)* ~ "]" ~
-      ("+" | "*" | "?" | ("{" ~ ASCII_DIGIT+ ~ ("," ~ ASCII_DIGIT*)? ~ "}"))?
-    )* ~
-    (!("[" | "(" | "{" | "]") ~ !WHITESPACE ~ !"&&" ~ !"||" ~ !")" ~ ANY)*
+  raw_char = _{
+    "\\" ~ ANY |                                              // Escaped character
+    balanced_paren |                                          // Recursive paren matching
+    balanced_bracket |                                        // Recursive bracket matching
+    balanced_curly |                                          // Recursive curly matching
+    !WHITESPACE ~ !"&&" ~ !"||" ~ !")" ~ !"\"" ~ !"'" ~ ANY  // Regular character
   }
-  parenthesized = @{
-    "(" ~ (!")" ~ ANY)* ~ ")" ~
-    ("+" | "*" | "?" | ("{" ~ ASCII_DIGIT+ ~ ("," ~ ASCII_DIGIT*)? ~ "}"))? ~
-    (
-      (!("[" | "(" | "{" | ")") ~ !WHITESPACE ~ !"&&" ~ !"||" ~ ANY)* ~
-      "(" ~ (!")" ~ ANY)* ~ ")" ~
-      ("+" | "*" | "?" | ("{" ~ ASCII_DIGIT+ ~ ("," ~ ASCII_DIGIT*)? ~ "}"))?
-    )* ~
-    (!("[" | "(" | "{" | ")") ~ !WHITESPACE ~ !"&&" ~ !"||" ~ ANY)*
-  }
-  curly_braced = @{ "{" ~ (!"}" ~ ANY)* ~ "}" ~ (!WHITESPACE ~ !"&&" ~ !"||" ~ !")" ~ ANY)* }
 
-  // Barewords exclude structural chars but allow most content
-  // Backslash escapes the next character (e.g., \), \&&, \d, \s for regex)
-  bare_token = @{ (("\\" ~ ANY) | (!("\"" | "'" | WHITESPACE | ")" | "&&" | "||") ~ ANY))+ }
+  balanced_paren   = { "(" ~ ( "\\" ~ ANY | balanced_paren | balanced_bracket | balanced_curly | !")" ~ ANY )* ~ ")" }
+  balanced_bracket = { "[" ~ ( "\\" ~ ANY | balanced_paren | balanced_bracket | balanced_curly | !"]" ~ ANY )* ~ "]" }
+  balanced_curly   = { "{" ~ ( "\\" ~ ANY | balanced_paren | balanced_bracket | balanced_curly | !"}" ~ ANY )* ~ "}" }
   
   quoted_string = ${ "\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'" }
   inner_double = @{ (!"\"" ~ (escaped | ANY))* }
