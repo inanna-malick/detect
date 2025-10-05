@@ -17,6 +17,7 @@ const OPERATORS: &str = include_str!("docs/operators.md");
 )]
 struct Args {
     /// Run as MCP server for AI assistants
+    #[cfg(feature = "mcp")]
     #[arg(long = "mcp")]
     mcp: bool,
 
@@ -33,7 +34,11 @@ struct Args {
     operators: bool,
 
     /// filtering expr
+    #[cfg(feature = "mcp")]
     #[clap(index = 1, required_unless_present_any = ["mcp", "examples", "predicates", "operators"])]
+    expr: Option<String>,
+    #[cfg(not(feature = "mcp"))]
+    #[clap(index = 1, required_unless_present_any = ["examples", "predicates", "operators"])]
     expr: Option<String>,
     /// target dir
     #[clap(index = 2)]
@@ -67,6 +72,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // If --mcp flag is set, run as MCP server
+    #[cfg(feature = "mcp")]
     if args.mcp {
         return match detect::mcp_server::run_mcp_server().await {
             Ok(()) => Ok(()),

@@ -11,6 +11,8 @@ path = "src/main.rs"
 
 
 [features]
+default = ["mcp"]
+mcp = ["dep:serde", "dep:serde_json", "dep:env_logger", "dep:log"]
 viz = ["dep:recursion-visualize"]
 
 [dependencies]
@@ -33,10 +35,10 @@ slog-term = "2.9"
 slog = "2.7"
 tokio = {version = "1.19", features = ["rt", "rt-multi-thread", "fs", "macros"]}
 tokio-util = {version ="0.7.11", features = ["io"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-env_logger = "0.11"
-log = "0.4"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+env_logger = { version = "0.11", optional = true }
+log = { version = "0.4", optional = true }
 chrono = "0.4"
 thiserror = "1.0"
 miette = { version = "7.6.0", features = ["fancy"] }

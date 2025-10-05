@@ -18,9 +18,6 @@ pub enum PredicateParseError {
     #[error("Incompatible: {0}")]
     Incompatible(String),
 
-    #[error("Invalid set literal")]
-    SetParse(#[from] serde_json::Error),
-
     #[error("Unknown selector: {0}")]
     UnknownSelector(String),
 }

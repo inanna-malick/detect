@@ -1,6 +1,7 @@
 mod eval;
 pub mod expr;
 mod hybrid_regex;
+#[cfg(feature = "mcp")]
 pub mod mcp_server;
 pub mod parser;
 pub mod predicate;
