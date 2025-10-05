@@ -656,3 +656,283 @@ async fn test_alias_smoke_test() {
 
     run_test_cases(cases).await;
 }
+// REGEX ENGINE TESTS - Isolate broken regex features
+// These tests verify end-to-end regex compilation and matching
+// Tests currently failing indicate issues in the regex engine layer
+
+#[tokio::test]
+async fn test_regex_escaped_parentheses() {
+    // CRITICAL: Escaped parentheses should match literal parens in content
+    // Current status: BROKEN - "missing closing parenthesis" error
+    let test_files = vec![
+        f("func.rs", "fn main() {"),
+        f("call.rs", "foo(bar)"),
+        f("generic.rs", "Vec<T>(item)"),
+        f("no_parens.txt", "no parentheses here"),
+    ];
+
+    let cases = vec![
+        // Basic escaped open paren
+        (
+            r"content ~= \(",
+            &["func.rs", "call.rs", "generic.rs"][..],
+            test_files.clone(),
+        ),
+        // Basic escaped close paren
+        (
+            r"content ~= \)",
+            &["func.rs", "call.rs", "generic.rs"][..],
+            test_files.clone(),
+        ),
+        // Both parens
+        (
+            r"content ~= \(\)",
+            &["func.rs"][..],
+            test_files.clone(),
+        ),
+        // Function pattern: fn followed by parens
+        (
+            r"content ~= fn\s+\w+\(",
+            &["func.rs"][..],
+            test_files.clone(),
+        ),
+        // Workaround with character class (should also work)
+        (
+            r"content ~= [(]",
+            &["func.rs", "call.rs", "generic.rs"][..],
+            test_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_regex_word_boundaries() {
+    // CRITICAL: Word boundary anchors should isolate whole words
+    // Current status: BROKEN - returns 0 matches
+    let test_files = vec![
+        f("use.rs", "use std::fs;"),
+        f("reuse.rs", "reuse this code"),
+        f("unused.rs", "unused variable"),
+        f("user.txt", "username field"),
+    ];
+
+    let cases = vec![
+        // Exact word "use" with boundaries
+        (
+            r"content ~= \buse\b",
+            &["use.rs"][..],
+            test_files.clone(),
+        ),
+        // Word boundary + pattern
+        (
+            r"content ~= \b\w+\b",
+            &["use.rs", "reuse.rs", "unused.rs", "user.txt"][..],
+            test_files.clone(),
+        ),
+        // Negated word boundary
+        (
+            r"content ~= \Buse",
+            &["reuse.rs", "unused.rs"][..],
+            test_files.clone(),
+        ),
+        // Function name pattern
+        (
+            r"content ~= \bfn\b",
+            &["func.rs"][..],
+            vec![
+                f("func.rs", "fn main() {}"),
+                f("confn.rs", "confusing name"),
+            ],
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_regex_shorthand_class_quantifiers() {
+    // CRITICAL: Curly brace quantifiers on \d, \w, \s should work
+    // Current status: BROKEN - returns 0 matches
+    // Note: [a-z]{3} works, but \w{3} doesn't
+    let test_files = vec![
+        f("port.txt", "localhost:8080"),
+        f("var.rs", "let foo_bar = 42;"),
+        f("spaces.txt", "a    b"),
+        f("short.txt", "ab"),
+    ];
+
+    let cases = vec![
+        // Exact digit count
+        (
+            r"content ~= \d{4}",
+            &["port.txt"][..],
+            test_files.clone(),
+        ),
+        // Digit range quantifier
+        (
+            r"content ~= \d{2,4}",
+            &["port.txt", "var.rs"][..],
+            test_files.clone(),
+        ),
+        // Word character quantifier
+        (
+            r"content ~= \w{3}",
+            &["port.txt", "var.rs"][..],
+            test_files.clone(),
+        ),
+        // Open-ended quantifier
+        (
+            r"content ~= \w{3,}",
+            &["port.txt", "var.rs"][..],  // spaces.txt has only single letters
+            test_files.clone(),
+        ),
+        // Whitespace quantifier
+        (
+            r"content ~= \s{2,}",
+            &["spaces.txt"][..],
+            test_files.clone(),
+        ),
+        // Complex IP-like pattern
+        (
+            r"content ~= \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
+            &["ip.txt"][..],
+            vec![
+                f("ip.txt", "192.168.1.1"),
+                f("port.txt", "localhost:8080"),
+            ],
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_regex_unicode_properties() {
+    // CRITICAL: Unicode property escapes should match character classes
+    // Current status: BROKEN - returns 0 matches
+    let test_files = vec![
+        f("ascii.txt", "Hello123"),
+        f("unicode.txt", "Привет мир"),
+        f("mixed.txt", "Hello мир 123"),
+        f("digits.txt", "12345"),
+    ];
+
+    let cases = vec![
+        // Unicode letters
+        (
+            r"content ~= \p{L}+",
+            &["ascii.txt", "unicode.txt", "mixed.txt"][..],
+            test_files.clone(),
+        ),
+        // Unicode digits
+        (
+            r"content ~= \p{Nd}+",
+            &["ascii.txt", "mixed.txt", "digits.txt"][..],
+            test_files.clone(),
+        ),
+        // General category
+        (
+            r"content ~= \p{Letter}+",
+            &["ascii.txt", "unicode.txt", "mixed.txt"][..],
+            test_files.clone(),
+        ),
+        // Negated property
+        (
+            r"content ~= \P{Nd}+",
+            &["ascii.txt", "unicode.txt", "mixed.txt"][..],
+            test_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_regex_hex_octal_escapes() {
+    // CRITICAL: Hex and octal character codes should match
+    // Current status: BROKEN - returns 0 matches
+    let test_files = vec![
+        f("letter_a.txt", "ABC"),
+        f("space.txt", "a b"),
+        f("newline.txt", "line1\nline2"),
+        f("other.txt", "xyz"),
+    ];
+
+    let cases = vec![
+        // Hex escape (2 digits)
+        (
+            r"content ~= \x41",  // Matches 'A'
+            &["letter_a.txt"][..],
+            test_files.clone(),
+        ),
+        // Hex escape (braces)
+        (
+            r"content ~= \x{41}",  // Matches 'A'
+            &["letter_a.txt"][..],
+            test_files.clone(),
+        ),
+        // Hex space
+        (
+            r"content ~= \x20",  // Matches space
+            &["space.txt"][..],
+            test_files.clone(),
+        ),
+        // Unicode escape (4 digits)
+        (
+            r"content ~= \u0041",  // Matches 'A'
+            &["letter_a.txt"][..],
+            test_files.clone(),
+        ),
+        // Octal escape
+        (
+            r"content ~= \101",  // Matches 'A'
+            &["letter_a.txt"][..],
+            test_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_regex_special_escapes() {
+    // CRITICAL: Special regex escapes should function correctly
+    // Current status: BROKEN - returns 0 matches
+    let test_files = vec![
+        f("start.txt", "use std::fs;"),
+        f("middle.txt", "// use this"),
+        f("literal.txt", "a.b.c"),
+        f("regex.txt", "a*b+c?"),
+    ];
+
+    let cases = vec![
+        // Absolute string start
+        (
+            r"content ~= \Ause",
+            &["start.txt"][..],
+            test_files.clone(),
+        ),
+        // Absolute string end
+        (
+            r"content ~= ;\z",
+            &["start.txt"][..],
+            test_files.clone(),
+        ),
+        // Literal quoting
+        (
+            r"content ~= \Qa.b\E",
+            &["literal.txt"][..],
+            test_files.clone(),
+        ),
+        // Literal quoting with regex metacharacters
+        (
+            r"content ~= \Qa*b+c?\E",
+            &["regex.txt"][..],
+            test_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
