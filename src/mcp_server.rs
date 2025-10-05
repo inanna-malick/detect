@@ -92,7 +92,7 @@ pub async fn run_mcp_server() -> Result<()> {
                                 "tools": [
                                     {
                                         "name": "detect",
-                                        "description": "Search filesystem using expressive queries. Combines file metadata and content search in a single command.\n\nExamples:\n• 'ext == rs' - All Rust files\n• 'size > 1mb AND modified > -7d' - Large recent files\n• 'contents contains TODO' - Files with TODOs\n• 'name ~= test AND NOT contents contains skip' - Test files without skip\n• '*.{js,ts} AND contents ~= import.*React' - JS/TS files importing React\n\nSupports: path patterns, content search, size/date filters, regex, boolean logic (AND/OR/NOT)",
+                                        "description": "Search filesystem using expressive queries. Combines file metadata and content search in a single command.\n\n## Selectors\n• name/filename - full filename with extension (e.g., \"main.rs\")\n• ext/extension - file extension without dot (e.g., \"rs\")\n• stem - filename without extension (e.g., \"main\")\n• parent/dir - parent directory name\n• path - full relative path from search root\n• contents/content/text - file contents\n• size - file size in bytes\n• type - file type (file, dir, symlink)\n• modified/mtime, created/ctime, accessed/atime - timestamps\n\n## Operators\n• Comparison: ==, !=, >, <, >=, <=\n• Pattern: ~= (regex), contains (substring)\n• Membership: in [value1, value2]\n• Boolean: AND, OR, NOT, ( )\n\n## Units & Formats\n• Size: b, kb, mb, gb (case-insensitive, e.g., 10MB == 10mb)\n• Time: -7d, -1h, yesterday, 2024-01-15\n\n## Quoting Rules\n• Required: patterns with spaces\n• Optional: most patterns (name ~= (foo|bar) works unquoted)\n• Backslash works unquoted: \\d+, \\w{3}, \\(\n\n## Examples\n• ext == rs - All Rust files\n• size > 5mb AND modified > -7d - Large recent files\n• contents ~= async.*fn - Files with async functions\n• name ~= test AND NOT contents contains skip - Test files without skip\n• ext in [js,ts] AND contents ~= import.*React - JS/TS importing React\n• (ext == rs OR ext == toml) AND size > 10kb - Precedence with parentheses\n• content contains \"TODO: fix this\" - Quoted strings with spaces\n• modified > -7d - Files modified in last 7 days\n• path ~= src/parser/.* - Path-based filtering",
                                         "inputSchema": {
                                             "type": "object",
                                             "properties": {
@@ -117,14 +117,6 @@ pub async fn run_mcp_server() -> Result<()> {
                                                 }
                                             },
                                             "required": ["expression"]
-                                        }
-                                    },
-                                    {
-                                        "name": "detect_help",
-                                        "description": "Get help for detect's query language, including all operators, selectors, and examples",
-                                        "inputSchema": {
-                                            "type": "object",
-                                            "properties": {}
                                         }
                                     }
                                 ]
@@ -238,47 +230,6 @@ pub async fn run_mcp_server() -> Result<()> {
                                     ToolResult::Error("Missing 'expression' parameter".to_string())
                                 }
                             }
-                            "detect_help" => ToolResult::Success(serde_json::json!({
-                                "help": format!(
-                                    "# Detect Query Language Reference\n\n\
-                                    ## Basic Syntax\n\
-                                    `selector operator value` OR glob patterns like `*.rs`\n\n\
-                                    ## Common Selectors\n\
-                                    • **Path**: name (filename), ext (extension), stem, parent, path (full)\n\
-                                    • **Content**: contents, content, text (all equivalent)\n\
-                                    • **Metadata**: size, type, modified (mtime/mdate), created (ctime/cdate), accessed (atime/adate)\n\n\
-                                    ## Operators\n\
-                                    • **Comparison**: == != > < >= <=\n\
-                                    • **Pattern**: ~= (regex), contains (substring)\n\
-                                    • **Membership**: in [value1, value2, ...]\n\
-                                    • **Boolean**: AND OR NOT ( )\n\n\
-                                    ## Size Units\n\
-                                    b, kb (k), mb (m), gb (g), tb (t)\n\n\
-                                    ## Time Formats\n\
-                                    • Relative: -7d, -1h, -30m (negative = past)\n\
-                                    • Keywords: now, today, yesterday\n\
-                                    • Absolute: 2024-01-15\n\n\
-                                    ## Examples\n\
-                                    ```\n\
-                                    # Find Rust files with async code\n\
-                                    ext == rs AND contents ~= async\n\n\
-                                    # Large files modified recently\n\
-                                    size > 5mb AND modified > -7days\n\n\
-                                    # Test files without 'skip' markers\n\
-                                    name contains test AND NOT contents contains skip\n\n\
-                                    # Config files with potential secrets\n\
-                                    ext in [json, yml, env] AND contents ~= (password|secret|api_key)\n\n\
-                                    # Using glob patterns\n\
-                                    *.{{js,ts}} AND size > 10kb\n\
-                                    **/*.md AND modified > yesterday\n\
-                                    ```\n\n\
-                                    ## Tips\n\
-                                    • Glob patterns can be mixed with boolean expressions\n\
-                                    • Path filters are evaluated first for performance\n\
-                                    • Regex patterns use Rust regex, with automatic PCRE2 fallback if Rust regex parsing fails\n\
-                                    • Use NOT instead of ! to avoid shell issues"
-                                )
-                            })),
                             _ => ToolResult::Error(format!("Unknown tool: {}", tool_name)),
                         };
 
