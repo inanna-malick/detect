@@ -110,7 +110,10 @@ pub enum DetectError {
     },
 
     #[error("Stray {quote} quote")]
-    #[diagnostic(code(detect::stray_quote), help("Remove the quote or add matching opening quote"))]
+    #[diagnostic(
+        code(detect::stray_quote),
+        help("Remove the quote or add matching opening quote")
+    )]
     StrayQuote {
         #[label("unexpected quote")]
         span: SourceSpan,
@@ -121,16 +124,18 @@ pub enum DetectError {
 
     // Filesystem errors
     #[error("Directory not found: {path}")]
-    #[diagnostic(code(detect::directory_not_found), help("Check that the directory path exists and is accessible"))]
-    DirectoryNotFound {
-        path: String,
-    },
+    #[diagnostic(
+        code(detect::directory_not_found),
+        help("Check that the directory path exists and is accessible")
+    )]
+    DirectoryNotFound { path: String },
 
     #[error("Path is not a directory: {path}")]
-    #[diagnostic(code(detect::not_a_directory), help("The path must be a directory, not a file"))]
-    NotADirectory {
-        path: String,
-    },
+    #[diagnostic(
+        code(detect::not_a_directory),
+        help("The path must be a directory, not a file")
+    )]
+    NotADirectory { path: String },
 
     // Internal errors
     #[error("Internal parser error: {message}")]
@@ -225,11 +230,12 @@ fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
         }
     }
 
-    if positives.contains(&Rule::expr) || positives.contains(&Rule::predicate) {
-        if found_eoi {
-            return Some("Expression is incomplete. Add a predicate after the operator.".to_string());
+    if (positives.contains(&Rule::expr) || positives.contains(&Rule::predicate))
+        && found_eoi {
+            return Some(
+                "Expression is incomplete. Add a predicate after the operator.".to_string(),
+            );
         }
-    }
 
     if positives.contains(&Rule::EOI) {
         return Some("Unexpected input. Check for unbalanced parentheses or quotes.".to_string());
@@ -271,7 +277,10 @@ impl DetectError {
 
         // Extract expected tokens and generate user-friendly message
         let (expected_msg, help) = match &pest_err.variant {
-            ErrorVariant::ParsingError { positives, negatives: _ } => {
+            ErrorVariant::ParsingError {
+                positives,
+                negatives: _,
+            } => {
                 let found_eoi = match pest_err.location {
                     InputLocation::Pos(p) => p >= src.len(),
                     InputLocation::Span((_, end)) => end >= src.len(),
@@ -282,9 +291,7 @@ impl DetectError {
                 } else if positives.len() == 1 {
                     format!("Expected {}", rule_to_friendly_name(&positives[0]))
                 } else {
-                    let names: Vec<&str> = positives.iter()
-                        .map(rule_to_friendly_name)
-                        .collect();
+                    let names: Vec<&str> = positives.iter().map(rule_to_friendly_name).collect();
                     if names.len() <= 3 {
                         format!("Expected one of: {}", names.join(", "))
                     } else {
@@ -295,9 +302,7 @@ impl DetectError {
                 let help = generate_help_text(positives, found_eoi);
                 (expected_msg, help)
             }
-            ErrorVariant::CustomError { message } => {
-                (message.clone(), None)
-            }
+            ErrorVariant::CustomError { message } => (message.clone(), None),
         };
 
         DetectError::Syntax {
@@ -353,8 +358,7 @@ impl DetectError {
                 *s = src;
             }
             // Filesystem errors don't have source code
-            DetectError::DirectoryNotFound { .. }
-            | DetectError::NotADirectory { .. } => {}
+            DetectError::DirectoryNotFound { .. } | DetectError::NotADirectory { .. } => {}
         }
         self
     }

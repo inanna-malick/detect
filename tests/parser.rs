@@ -304,7 +304,12 @@ fn test_bare_value_with_or_substring() {
     let test_cases = vec![
         ("content contains Error", "content", "contains", "Error"),
         ("name == vendor", "name", "==", "vendor"),
-        ("content contains information", "content", "contains", "information"),
+        (
+            "content contains information",
+            "content",
+            "contains",
+            "information",
+        ),
         ("name == sensor", "name", "==", "sensor"),
     ];
 
@@ -326,7 +331,12 @@ fn test_bare_value_with_and_substring() {
     let test_cases = vec![
         ("name contains Android", "name", "contains", "Android"),
         ("name == standard", "name", "==", "standard"),
-        ("content contains candidate", "content", "contains", "candidate"),
+        (
+            "content contains candidate",
+            "content",
+            "contains",
+            "candidate",
+        ),
         ("name == expand", "name", "==", "expand"),
     ];
 
@@ -348,7 +358,12 @@ fn test_bare_value_with_not_substring() {
     let test_cases = vec![
         ("content contains cannot", "content", "contains", "cannot"),
         ("name == another", "name", "==", "another"),
-        ("content contains notation", "content", "contains", "notation"),
+        (
+            "content contains notation",
+            "content",
+            "contains",
+            "notation",
+        ),
         ("name == denote", "name", "==", "denote"),
     ];
 
@@ -440,7 +455,12 @@ fn test_quoted_reserved_words_should_work() {
         (r#"name == "or""#, "name", "==", "or"),
         (r#"name == "and""#, "name", "==", "and"),
         (r#"name == "not""#, "name", "==", "not"),
-        (r#"content contains "Error""#, "content", "contains", "Error"),
+        (
+            r#"content contains "Error""#,
+            "content",
+            "contains",
+            "Error",
+        ),
     ];
 
     for (expr, selector, op, value) in test_cases {
@@ -486,8 +506,14 @@ fn test_unquoted_regex_patterns() {
         ("content ~= \\d{1,3}", "\\d{1,3}"),
         ("content ~= a{2,5}", "a{2,5}"),
         // Mixed patterns
-        ("content ~= [a-z]+@[a-z]+\\.[a-z]+", "[a-z]+@[a-z]+\\.[a-z]+"),
-        ("content ~= \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}", "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"),
+        (
+            "content ~= [a-z]+@[a-z]+\\.[a-z]+",
+            "[a-z]+@[a-z]+\\.[a-z]+",
+        ),
+        (
+            "content ~= \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
+            "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
+        ),
     ];
 
     for (expr, expected_value) in test_cases {
@@ -514,38 +540,31 @@ fn test_escape_sequences_in_bare_tokens() {
         (r"content ~= \w+", r"\w+"),
         (r"content ~= \t", r"\t"),
         (r"content ~= \n", r"\n"),
-
         // CRITICAL: Escaped parentheses (reported as broken - "missing closing parenthesis")
         (r"content ~= \(", r"\("),
         (r"content ~= \)", r"\)"),
-        (r"content ~= \\(", r"\\("),  // Backslash followed by paren
-
+        (r"content ~= \\(", r"\\("), // Backslash followed by paren
         // Complex patterns with escaped parens
         (r"content ~= fn\s+\w+\(", r"fn\s+\w+\("),
         (r"content ~= \w+\(\)", r"\w+\(\)"),
-
         // Literal backslash
         (r"content ~= \\", r"\\"),
         (r"content ~= \\\\", r"\\\\"),
-
         // Word boundaries (reported as broken - returns 0 matches)
         (r"content ~= \b\w+\b", r"\b\w+\b"),
         (r"content ~= \bfn\b", r"\bfn\b"),
         (r"content ~= \B", r"\B"),
-
         // Anchors (reported as broken)
         (r"content ~= ^\s*use", r"^\s*use"),
         (r"content ~= \A\w+", r"\A\w+"),
         (r"content ~= \z", r"\z"),
         (r"content ~= \Z", r"\Z"),
         (r"content ~= \G", r"\G"),
-
         // Unicode and hex escapes (reported as broken)
         (r"content ~= \p{L}+", r"\p{L}+"),
         (r"content ~= \p{Nd}+", r"\p{Nd}+"),
         (r"content ~= \x{41}", r"\x{41}"),
         (r"content ~= \x41", r"\x41"),
-
         // Special escapes
         (r"content ~= \Q...\E", r"\Q...\E"),
         (r"content ~= \K", r"\K"),
@@ -579,18 +598,18 @@ fn test_curly_brace_quantifiers_on_escapes() {
         (r"content ~= \w{3}", r"\w{3}"),
         (r"content ~= \d{5}", r"\d{5}"),
         (r"content ~= \s{2}", r"\s{2}"),
-
         // Range quantifiers (reported as broken - returns 0 matches)
         (r"content ~= \w{5,10}", r"\w{5,10}"),
         (r"content ~= \d{1,3}", r"\d{1,3}"),
         (r"content ~= \s{2,4}", r"\s{2,4}"),
-        (r"content ~= \w{3,}", r"\w{3,}"),  // Open-ended
-
+        (r"content ~= \w{3,}", r"\w{3,}"), // Open-ended
         // Complex patterns with curly quantifiers
-        (r"content ~= \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
+        (
+            r"content ~= \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
+            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
+        ),
         (r"content ~= \w{3,5}_\w{2,4}", r"\w{3,5}_\w{2,4}"),
         (r"content ~= fn\w{1,20}\(", r"fn\w{1,20}\("),
-
         // Character classes with quantifiers (already tested elsewhere, verify consistency)
         (r"content ~= [a-z]{2,4}", "[a-z]{2,4}"),
         (r"content ~= [0-9]{3}", "[0-9]{3}"),
@@ -621,24 +640,33 @@ fn test_quoted_vs_unquoted_escape_handling() {
         // Escaped parentheses
         (r"content ~= \(", r#"content ~= "\(""#, r"\("),
         (r"content ~= \)", r#"content ~= "\)""#, r"\)"),
-
         // Escape sequences
         (r"content ~= \s+", r#"content ~= "\s+""#, r"\s+"),
         (r"content ~= \d{3}", r#"content ~= "\d{3}""#, r"\d{3}"),
-        (r"content ~= \w{5,10}", r#"content ~= "\w{5,10}""#, r"\w{5,10}"),
-
+        (
+            r"content ~= \w{5,10}",
+            r#"content ~= "\w{5,10}""#,
+            r"\w{5,10}",
+        ),
         // Backslash handling
         (r"content ~= \\", r#"content ~= "\\""#, r"\\"),
         (r"content ~= \\\(", r#"content ~= "\\\(""#, r"\\\("),
-
         // Complex patterns
-        (r"content ~= fn\s+\w+\(", r#"content ~= "fn\s+\w+\(""#, r"fn\s+\w+\("),
+        (
+            r"content ~= fn\s+\w+\(",
+            r#"content ~= "fn\s+\w+\(""#,
+            r"fn\s+\w+\(",
+        ),
     ];
 
     for (unquoted_expr, quoted_expr, expected_value) in test_cases {
         // Test unquoted
         let unquoted_result = RawParser::parse_raw_expr(unquoted_expr);
-        assert!(unquoted_result.is_ok(), "Failed to parse unquoted: {}", unquoted_expr);
+        assert!(
+            unquoted_result.is_ok(),
+            "Failed to parse unquoted: {}",
+            unquoted_expr
+        );
         let unquoted_pred = match unquoted_result.unwrap().to_test_expr() {
             RawTestExpr::Predicate(p) => p,
             _ => panic!("Expected predicate"),
@@ -646,7 +674,11 @@ fn test_quoted_vs_unquoted_escape_handling() {
 
         // Test quoted
         let quoted_result = RawParser::parse_raw_expr(quoted_expr);
-        assert!(quoted_result.is_ok(), "Failed to parse quoted: {}", quoted_expr);
+        assert!(
+            quoted_result.is_ok(),
+            "Failed to parse quoted: {}",
+            quoted_expr
+        );
         let quoted_pred = match quoted_result.unwrap().to_test_expr() {
             RawTestExpr::Predicate(p) => p,
             _ => panic!("Expected predicate"),
@@ -815,7 +847,11 @@ fn test_regex_quantifiers_in_boolean_expressions() {
         (
             "content ~= \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3} AND name == config",
             RawTestExpr::and(
-                RawTestExpr::string_predicate("content", "~=", "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"),
+                RawTestExpr::string_predicate(
+                    "content",
+                    "~=",
+                    "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
+                ),
                 RawTestExpr::string_predicate("name", "==", "config"),
             ),
         ),
@@ -868,7 +904,11 @@ fn test_regex_quantifiers_in_boolean_expressions() {
         (
             "NOT (content ~= [a-z]+[A-Z]+) OR size > 1kb",
             RawTestExpr::or(
-                RawTestExpr::not(RawTestExpr::string_predicate("content", "~=", "[a-z]+[A-Z]+")),
+                RawTestExpr::not(RawTestExpr::string_predicate(
+                    "content",
+                    "~=",
+                    "[a-z]+[A-Z]+",
+                )),
                 RawTestExpr::string_predicate("size", ">", "1kb"),
             ),
         ),
@@ -1187,41 +1227,77 @@ fn test_set_parsing() {
     let test_cases: Vec<(&str, Vec<&str>, &str)> = vec![
         // Basic bare items
         ("rs, js, ts", vec!["rs", "js", "ts"], "basic bare items"),
-
         // Commas in quoted strings
-        (r#""foo, bar", baz"#, vec!["foo, bar", "baz"], "commas in double quotes"),
-        (r#"'foo, bar', "baz, qux", plain"#, vec!["foo, bar", "baz, qux", "plain"], "mixed quotes with commas"),
-
+        (
+            r#""foo, bar", baz"#,
+            vec!["foo, bar", "baz"],
+            "commas in double quotes",
+        ),
+        (
+            r#"'foo, bar', "baz, qux", plain"#,
+            vec!["foo, bar", "baz, qux", "plain"],
+            "mixed quotes with commas",
+        ),
         // Escaped quotes
-        (r#""foo\"bar", 'baz\'qux'"#, vec![r#"foo\"bar"#, r#"baz\'qux"#], "escaped quotes"),
-        (r#""He said 'hello'", 'She said "hi"'"#, vec!["He said 'hello'", r#"She said "hi""#], "nested quote styles"),
-        (r#""She said \"hello\"", 'He said \'hi\''"#, vec![r#"She said \"hello\""#, r#"He said \'hi\'"#], "escaped nested quotes"),
-
+        (
+            r#""foo\"bar", 'baz\'qux'"#,
+            vec![r#"foo\"bar"#, r#"baz\'qux"#],
+            "escaped quotes",
+        ),
+        (
+            r#""He said 'hello'", 'She said "hi"'"#,
+            vec!["He said 'hello'", r#"She said "hi""#],
+            "nested quote styles",
+        ),
+        (
+            r#""She said \"hello\"", 'He said \'hi\''"#,
+            vec![r#"She said \"hello\""#, r#"He said \'hi\'"#],
+            "escaped nested quotes",
+        ),
         // Trailing commas
         ("rs, js, ts,", vec!["rs", "js", "ts"], "trailing comma"),
         ("rs,", vec!["rs"], "single item with trailing comma"),
-
         // Empty sets
         ("", vec![], "empty set"),
         (r#""""#, vec![], "empty quoted string"),
-
         // Whitespace handling
-        ("rs  ,  js  ,  ts", vec!["rs", "js", "ts"], "extra whitespace around bare items"),
-        (r#""  spaces  ", bare"#, vec!["  spaces  ", "bare"], "whitespace preserved in quotes"),
+        (
+            "rs  ,  js  ,  ts",
+            vec!["rs", "js", "ts"],
+            "extra whitespace around bare items",
+        ),
+        (
+            r#""  spaces  ", bare"#,
+            vec!["  spaces  ", "bare"],
+            "whitespace preserved in quotes",
+        ),
         ("foo  ,  bar  ", vec!["foo", "bar"], "trailing whitespace"),
-
         // Edge cases
         (r#""", foo"#, vec!["foo"], "empty quoted string filtered"),
         ("foo,,,bar", vec!["foo", "bar"], "multiple commas filtered"),
-        ("foo-bar, baz_qux, file.txt", vec!["foo-bar", "baz_qux", "file.txt"], "special chars in bare items"),
-
+        (
+            "foo-bar, baz_qux, file.txt",
+            vec!["foo-bar", "baz_qux", "file.txt"],
+            "special chars in bare items",
+        ),
         // Unicode
-        (r#""测试", "файл", "🦀""#, vec!["测试", "файл", "🦀"], "unicode in quotes"),
+        (
+            r#""测试", "файл", "🦀""#,
+            vec!["测试", "файл", "🦀"],
+            "unicode in quotes",
+        ),
         ("测试, файл", vec!["测试", "файл"], "unicode in bare items"),
-
         // Real-world examples
-        (r#"rs, "config.toml", "my file.txt", Cargo.toml"#, vec!["rs", "config.toml", "my file.txt", "Cargo.toml"], "mix of quoted and bare"),
-        (r#""https://example.com?a=1,2,3", /path/to/file"#, vec!["https://example.com?a=1,2,3", "/path/to/file"], "URLs and paths"),
+        (
+            r#"rs, "config.toml", "my file.txt", Cargo.toml"#,
+            vec!["rs", "config.toml", "my file.txt", "Cargo.toml"],
+            "mix of quoted and bare",
+        ),
+        (
+            r#""https://example.com?a=1,2,3", /path/to/file"#,
+            vec!["https://example.com?a=1,2,3", "/path/to/file"],
+            "URLs and paths",
+        ),
     ];
 
     for (input, expected, description) in test_cases {
@@ -1294,7 +1370,10 @@ fn test_malformed_sets() {
 
     // Nested sets - simplified grammar now allows this to parse (will fail at typecheck)
     let result = RawParser::parse_raw_expr("name in [foo, [bar]]");
-    assert!(result.is_ok(), "Simplified grammar allows nested brackets (typecheck will handle validity)");
+    assert!(
+        result.is_ok(),
+        "Simplified grammar allows nested brackets (typecheck will handle validity)"
+    );
 
     // Set with trailing comma - now allowed, typechecker filters empty items
     let result = RawParser::parse_raw_expr("name in [foo, bar,]");

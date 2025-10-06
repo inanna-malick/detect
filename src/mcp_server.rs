@@ -173,73 +173,76 @@ pub async fn run_mcp_server() -> Result<()> {
                                         .unwrap_or(false);
 
                                     // Validate max_results parameter
-                                    let max_results_validation: Result<usize, String> = match tool_args.get("max_results") {
-                                        Some(val) => {
-                                            // Check if it's a number (could be negative)
-                                            if let Some(num) = val.as_i64() {
-                                                if num < 0 {
-                                                    Err(format!("max_results must be non-negative, got: {}", num))
-                                                } else {
+                                    let max_results_validation: Result<usize, String> =
+                                        match tool_args.get("max_results") {
+                                            Some(val) => {
+                                                // Check if it's a number (could be negative)
+                                                if let Some(num) = val.as_i64() {
+                                                    if num < 0 {
+                                                        Err(format!("max_results must be non-negative, got: {}", num))
+                                                    } else {
+                                                        Ok(num as usize)
+                                                    }
+                                                } else if let Some(num) = val.as_u64() {
                                                     Ok(num as usize)
+                                                } else {
+                                                    Err("max_results must be a number".to_string())
                                                 }
-                                            } else if let Some(num) = val.as_u64() {
-                                                Ok(num as usize)
-                                            } else {
-                                                Err("max_results must be a number".to_string())
                                             }
-                                        }
-                                        None => Ok(20), // Default value
-                                    };
+                                            None => Ok(20), // Default value
+                                        };
 
                                     // Check if validation failed
                                     match max_results_validation {
                                         Err(err_msg) => ToolResult::Error(err_msg),
                                         Ok(max_results) => {
-
-                                    info!(
+                                            info!(
                                         logger,
                                         "Running detect with expression: {} in directory: {:?}",
                                         expression,
                                         directory
                                     );
 
-                                    // Canonicalize directory for relative path computation
-                                    let canonical_dir = directory
-                                        .canonicalize()
-                                        .unwrap_or_else(|_| directory.clone());
+                                            // Canonicalize directory for relative path computation
+                                            let canonical_dir = directory
+                                                .canonicalize()
+                                                .unwrap_or_else(|_| directory.clone());
 
-                                    // Run detect directly with await since we're in an async function
-                                    let detect_logger = logger.clone();
-                                    let mut results = Vec::new();
-                                    let detect_result = parse_and_run_fs(
-                                        detect_logger,
-                                        &directory,
-                                        !include_gitignored,
-                                        expression,
-                                        |path| {
-                                            if max_results == 0 || results.len() < max_results {
-                                                // Convert to relative path for cleaner output
-                                                let display_path = path
-                                                    .strip_prefix(&canonical_dir)
-                                                    .unwrap_or(path)
-                                                    .to_string_lossy()
-                                                    .to_string();
-                                                results.push(display_path);
+                                            // Run detect directly with await since we're in an async function
+                                            let detect_logger = logger.clone();
+                                            let mut results = Vec::new();
+                                            let detect_result = parse_and_run_fs(
+                                                detect_logger,
+                                                &directory,
+                                                !include_gitignored,
+                                                expression,
+                                                |path| {
+                                                    if max_results == 0
+                                                        || results.len() < max_results
+                                                    {
+                                                        // Convert to relative path for cleaner output
+                                                        let display_path = path
+                                                            .strip_prefix(&canonical_dir)
+                                                            .unwrap_or(path)
+                                                            .to_string_lossy()
+                                                            .to_string();
+                                                        results.push(display_path);
+                                                    }
+                                                },
+                                            )
+                                            .await;
+
+                                            match detect_result {
+                                                Ok(_) => ToolResult::Success(serde_json::json!({
+                                                    "matches": results,
+                                                    "count": results.len(),
+                                                    "truncated": false
+                                                })),
+                                                Err(e) => ToolResult::Error(format!(
+                                                    "Detect failed: {}",
+                                                    e
+                                                )),
                                             }
-                                        },
-                                    )
-                                    .await;
-
-                                    match detect_result {
-                                        Ok(_) => ToolResult::Success(serde_json::json!({
-                                            "matches": results,
-                                            "count": results.len(),
-                                            "truncated": false
-                                        })),
-                                        Err(e) => {
-                                            ToolResult::Error(format!("Detect failed: {}", e))
-                                        }
-                                    }
                                         }
                                     }
                                 } else {

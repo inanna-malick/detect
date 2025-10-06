@@ -142,7 +142,10 @@ fn test_complex_unquoted_patterns_typecheck() {
         ("content ~= [0-9]+-[0-9]+", "[0-9]+-[0-9]+"),
         ("content ~= [a-z]+_suffix", "[a-z]+_suffix"),
         ("content ~= [0-9]+:port", "[0-9]+:port"),
-        ("content ~= [a-z]+@[a-z]+\\.[a-z]+", "[a-z]+@[a-z]+\\.[a-z]+"),
+        (
+            "content ~= [a-z]+@[a-z]+\\.[a-z]+",
+            "[a-z]+@[a-z]+\\.[a-z]+",
+        ),
         (
             "content ~= \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
             "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",
@@ -214,10 +217,8 @@ fn test_unquoted_quantifiers_in_boolean_expressions() {
     assert_eq!(typed, expected);
 
     // Complex nested expression
-    let typed = parse_and_typecheck(
-        "(content ~= [0-9]+ OR content ~= [a-z]+) AND NOT type == dir",
-    )
-    .unwrap();
+    let typed = parse_and_typecheck("(content ~= [0-9]+ OR content ~= [a-z]+) AND NOT type == dir")
+        .unwrap();
     let lhs_left = Expr::Predicate(Predicate::contents(
         StreamingCompiledContentPredicate::new("[0-9]+".to_string()).unwrap(),
     ));
@@ -239,9 +240,9 @@ fn test_invalid_regex_patterns_fail_typecheck() {
     // Note: Many "malformed" patterns like [0-9]++ are actually valid - the second +
     // is interpreted as a literal character. Only truly invalid regex syntax fails.
     let invalid_patterns = vec![
-        "content ~= [z-a]",         // Invalid character class range (reversed)
-        "content ~= (?P<>test)",    // Empty capture group name
-        "content ~= (?#",           // Unclosed comment
+        "content ~= [z-a]",      // Invalid character class range (reversed)
+        "content ~= (?P<>test)", // Empty capture group name
+        "content ~= (?#",        // Unclosed comment
     ];
 
     for expr in invalid_patterns {

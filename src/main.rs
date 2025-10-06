@@ -105,7 +105,9 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Canonicalize root path for relative path computation
-    let canonical_root = root_path.canonicalize().unwrap_or_else(|_| root_path.clone());
+    let canonical_root = root_path
+        .canonicalize()
+        .unwrap_or_else(|_| root_path.clone());
 
     let mut output = std::io::stdout();
 

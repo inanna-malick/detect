@@ -685,11 +685,7 @@ async fn test_regex_escaped_parentheses() {
             test_files.clone(),
         ),
         // Both parens
-        (
-            r"content ~= \(\)",
-            &["func.rs"][..],
-            test_files.clone(),
-        ),
+        (r"content ~= \(\)", &["func.rs"][..], test_files.clone()),
         // Function pattern: fn followed by parens
         (
             r"content ~= fn\s+\w+\(",
@@ -720,11 +716,7 @@ async fn test_regex_word_boundaries() {
 
     let cases = vec![
         // Exact word "use" with boundaries
-        (
-            r"content ~= \buse\b",
-            &["use.rs"][..],
-            test_files.clone(),
-        ),
+        (r"content ~= \buse\b", &["use.rs"][..], test_files.clone()),
         // Word boundary + pattern
         (
             r"content ~= \b\w+\b",
@@ -765,11 +757,7 @@ async fn test_regex_shorthand_class_quantifiers() {
 
     let cases = vec![
         // Exact digit count
-        (
-            r"content ~= \d{4}",
-            &["port.txt"][..],
-            test_files.clone(),
-        ),
+        (r"content ~= \d{4}", &["port.txt"][..], test_files.clone()),
         // Digit range quantifier
         (
             r"content ~= \d{2,4}",
@@ -785,7 +773,7 @@ async fn test_regex_shorthand_class_quantifiers() {
         // Open-ended quantifier
         (
             r"content ~= \w{3,}",
-            &["port.txt", "var.rs"][..],  // spaces.txt has only single letters
+            &["port.txt", "var.rs"][..], // spaces.txt has only single letters
             test_files.clone(),
         ),
         // Whitespace quantifier
@@ -798,10 +786,7 @@ async fn test_regex_shorthand_class_quantifiers() {
         (
             r"content ~= \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
             &["ip.txt"][..],
-            vec![
-                f("ip.txt", "192.168.1.1"),
-                f("port.txt", "localhost:8080"),
-            ],
+            vec![f("ip.txt", "192.168.1.1"), f("port.txt", "localhost:8080")],
         ),
     ];
 
@@ -863,31 +848,31 @@ async fn test_regex_hex_octal_escapes() {
     let cases = vec![
         // Hex escape (2 digits)
         (
-            r"content ~= \x41",  // Matches 'A'
+            r"content ~= \x41", // Matches 'A'
             &["letter_a.txt"][..],
             test_files.clone(),
         ),
         // Hex escape (braces)
         (
-            r"content ~= \x{41}",  // Matches 'A'
+            r"content ~= \x{41}", // Matches 'A'
             &["letter_a.txt"][..],
             test_files.clone(),
         ),
         // Hex space
         (
-            r"content ~= \x20",  // Matches space
+            r"content ~= \x20", // Matches space
             &["space.txt"][..],
             test_files.clone(),
         ),
         // Unicode escape (4 digits)
         (
-            r"content ~= \u0041",  // Matches 'A'
+            r"content ~= \u0041", // Matches 'A'
             &["letter_a.txt"][..],
             test_files.clone(),
         ),
         // Octal escape
         (
-            r"content ~= \101",  // Matches 'A'
+            r"content ~= \101", // Matches 'A'
             &["letter_a.txt"][..],
             test_files.clone(),
         ),
@@ -909,17 +894,9 @@ async fn test_regex_special_escapes() {
 
     let cases = vec![
         // Absolute string start
-        (
-            r"content ~= \Ause",
-            &["start.txt"][..],
-            test_files.clone(),
-        ),
+        (r"content ~= \Ause", &["start.txt"][..], test_files.clone()),
         // Absolute string end
-        (
-            r"content ~= ;\z",
-            &["start.txt"][..],
-            test_files.clone(),
-        ),
+        (r"content ~= ;\z", &["start.txt"][..], test_files.clone()),
         // Literal quoting
         (
             r"content ~= \Qa.b\E",
