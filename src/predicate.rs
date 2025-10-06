@@ -1,4 +1,4 @@
-use crate::hybrid_regex::{HybridRegex, HybridRegexRef, HybridStringRegex};
+use crate::hybrid_regex::{HybridRegex, HybridStringRegex};
 use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
 use std::fs::FileType;
@@ -833,7 +833,7 @@ impl StreamingCompiledContentPredicate {
 
     pub(crate) fn as_ref(&self) -> StreamingCompiledContentPredicateRef<'_> {
         StreamingCompiledContentPredicateRef {
-            inner: self.inner.as_ref(),
+            inner: &self.inner,
             source: &self.source,
         }
     }
@@ -847,6 +847,6 @@ impl PartialEq for StreamingCompiledContentPredicate {
 
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    pub inner: HybridRegexRef<'a>,
+    pub inner: &'a HybridRegex,
     pub source: &'a str,
 }

@@ -28,30 +28,13 @@ impl HybridRegex {
         }
     }
 
-    /// Get a borrowed reference version for streaming
-    pub fn as_ref(&self) -> HybridRegexRef<'_> {
-        match self {
-            HybridRegex::RustDFA(dfa) => HybridRegexRef::RustDFA(dfa.as_ref().as_ref()),
-            HybridRegex::Pcre2(re) => HybridRegexRef::Pcre2(re),
-        }
-    }
-}
-
-/// Borrowed version of HybridRegex for streaming operations
-#[derive(Clone, Debug)]
-pub enum HybridRegexRef<'a> {
-    RustDFA(DFA<&'a [u32]>),
-    Pcre2(&'a pcre2::bytes::Regex),
-}
-
-impl<'a> HybridRegexRef<'a> {
     pub fn is_match(&self, text: &[u8]) -> bool {
         match self {
-            HybridRegexRef::RustDFA(dfa) => {
+            HybridRegex::RustDFA(dfa) => {
                 let input = Input::new(text);
                 matches!(dfa.try_search_fwd(&input), Ok(Some(_)))
             }
-            HybridRegexRef::Pcre2(re) => re.is_match(text).unwrap_or(false),
+            HybridRegex::Pcre2(re) => re.is_match(text).unwrap_or(false),
         }
     }
 }

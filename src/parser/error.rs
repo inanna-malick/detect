@@ -230,12 +230,9 @@ fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
         }
     }
 
-    if (positives.contains(&Rule::expr) || positives.contains(&Rule::predicate))
-        && found_eoi {
-            return Some(
-                "Expression is incomplete. Add a predicate after the operator.".to_string(),
-            );
-        }
+    if (positives.contains(&Rule::expr) || positives.contains(&Rule::predicate)) && found_eoi {
+        return Some("Expression is incomplete. Add a predicate after the operator.".to_string());
+    }
 
     if positives.contains(&Rule::EOI) {
         return Some("Unexpected input. Check for unbalanced parentheses or quotes.".to_string());

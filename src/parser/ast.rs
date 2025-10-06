@@ -94,11 +94,10 @@ pub mod test_utils {
         Raw(&'a str),    // Raw token (bare word, [brackets], (parens), {curlies})
     }
 
-    impl<'a> RawTestValue<'a> {
-        /// Get the string value for testing
-        pub fn to_string(&self) -> String {
+    impl<'a> std::fmt::Display for RawTestValue<'a> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => s.to_string(),
+                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => write!(f, "{}", s),
             }
         }
     }
@@ -158,6 +157,7 @@ pub mod test_utils {
         }
 
         /// Helper constructor for creating a NOT expression
+        #[allow(clippy::should_implement_trait)]
         pub fn not(expr: RawTestExpr<'a>) -> Self {
             RawTestExpr::Not(Box::new(expr))
         }

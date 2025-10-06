@@ -320,10 +320,16 @@ fn test_stray_single_quote_after_value() {
 fn test_quote_errors_in_complex_expressions() {
     // Unterminated quote in boolean expressions
     let result = RawParser::parse_raw_expr(r#"ext == rs AND name == "unterminated"#);
-    assert!(result.is_err(), "Unterminated quote in AND expression should fail");
+    assert!(
+        result.is_err(),
+        "Unterminated quote in AND expression should fail"
+    );
 
     let result = RawParser::parse_raw_expr(r#"ext == rs OR name == 'foo"#);
-    assert!(result.is_err(), "Unterminated quote in OR expression should fail");
+    assert!(
+        result.is_err(),
+        "Unterminated quote in OR expression should fail"
+    );
 
     // Stray quote in boolean expressions
     let result = RawParser::parse_raw_expr(r#"ext == rs AND name == foo""#);

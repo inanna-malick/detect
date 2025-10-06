@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
+    #[allow(dead_code)]
     jsonrpc: String,
     method: String,
     id: Option<Value>,
