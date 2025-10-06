@@ -13,7 +13,6 @@ path = "src/main.rs"
 [features]
 default = ["mcp"]
 mcp = ["dep:serde", "dep:serde_json", "dep:env_logger", "dep:log"]
-viz = ["dep:recursion-visualize"]
 
 [dependencies]
 anyhow = "1"
@@ -28,7 +27,6 @@ pest_derive = "2.7.15"
 pest-ast = "0.3.5"
 from-pest = "0.3.1"
 recursion = {version = "0.5", features = ["experimental"]}
-recursion-visualize = {version = "0.5", optional = true}
 regex = "1.6.0"
 regex-automata = "0.4.7"
 slog-term = "2.9"
