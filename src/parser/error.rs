@@ -7,14 +7,18 @@ use super::raw::Rule;
 #[derive(Debug, Clone, Diagnostic, Error)]
 pub enum DetectError {
     // Syntax errors from pest
-    #[error("Syntax error in expression")]
-    #[diagnostic(code(detect::syntax), help("Check your expression syntax"))]
+    #[error("Syntax error at line {line}, column {col}")]
+    #[diagnostic(code(detect::syntax))]
     Syntax {
-        #[label("error occurred here")]
-        span: Option<SourceSpan>,
-        message: String,
         #[source_code]
         src: String,
+        #[label("{expected_msg}")]
+        span: SourceSpan,
+        #[help]
+        help: Option<String>,
+        expected_msg: String,
+        line: usize,
+        col: usize,
     },
 
     // Typechecker errors with spans
@@ -94,6 +98,27 @@ pub enum DetectError {
         src: String,
     },
 
+    // Quote errors
+    #[error("Unterminated string literal")]
+    #[diagnostic(code(detect::unterminated_string))]
+    UnterminatedString {
+        #[label("missing closing {quote} quote")]
+        span: SourceSpan,
+        quote: char,
+        #[source_code]
+        src: String,
+    },
+
+    #[error("Stray {quote} quote")]
+    #[diagnostic(code(detect::stray_quote), help("Remove the quote or add matching opening quote"))]
+    StrayQuote {
+        #[label("unexpected quote")]
+        span: SourceSpan,
+        quote: char,
+        #[source_code]
+        src: String,
+    },
+
     // Filesystem errors
     #[error("Directory not found: {path}")]
     #[diagnostic(code(detect::directory_not_found), help("Check that the directory path exists and is accessible"))]
@@ -148,18 +173,140 @@ impl SpanExt for pest::Span<'_> {
     }
 }
 
+/// Convert pest Rule enum to user-friendly names
+fn rule_to_friendly_name(rule: &Rule) -> &'static str {
+    match rule {
+        Rule::program => "program",
+        Rule::expr => "expression",
+        Rule::infix => "operator (AND/OR)",
+        Rule::and => "AND",
+        Rule::or => "OR",
+        Rule::prefix => "prefix operator (NOT)",
+        Rule::neg => "NOT",
+        Rule::primary => "predicate or expression",
+        Rule::predicate => "predicate",
+        Rule::selector => "selector",
+        Rule::operator => "operator",
+        Rule::value => "value",
+        Rule::value_content => "value",
+        Rule::raw_token => "value",
+        Rule::quoted_string => "quoted string",
+        Rule::unterminated_string => "unterminated string",
+        Rule::trailing_quote => "trailing quote",
+        Rule::glob_pattern => "glob pattern",
+        Rule::set_contents => "set contents",
+        Rule::set_items => "set items",
+        Rule::set_item => "set item",
+        Rule::bare_set_item => "item",
+        Rule::inner_double => "string content",
+        Rule::inner_single => "string content",
+        Rule::escaped => "escape sequence",
+        Rule::raw_char => "character",
+        Rule::balanced_paren => "balanced parentheses",
+        Rule::balanced_bracket => "balanced brackets",
+        Rule::balanced_curly => "balanced braces",
+        Rule::WHITESPACE => "whitespace",
+        Rule::EOI => "end of input",
+    }
+}
+
+/// Generate contextual help text based on error patterns
+fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
+    if positives.is_empty() {
+        return None;
+    }
+
+    // Check for common patterns
+    if positives.contains(&Rule::value) {
+        if found_eoi {
+            return Some("Try adding a value after the operator, like: ext == rs".to_string());
+        } else {
+            return Some("Expected a value here (e.g., a string, number, or [set])".to_string());
+        }
+    }
+
+    if positives.contains(&Rule::expr) || positives.contains(&Rule::predicate) {
+        if found_eoi {
+            return Some("Expression is incomplete. Add a predicate after the operator.".to_string());
+        }
+    }
+
+    if positives.contains(&Rule::EOI) {
+        return Some("Unexpected input. Check for unbalanced parentheses or quotes.".to_string());
+    }
+
+    None
+}
+
 impl DetectError {
-    /// Create a syntax error from pest error
+    /// Create a syntax error from pest error with rich diagnostic information
     pub fn from_pest(pest_err: Box<pest::error::Error<Rule>>, src: String) -> Self {
-        let span = match pest_err.location {
-            pest::error::InputLocation::Pos(pos) => Some((pos, 0).into()),
-            pest::error::InputLocation::Span((start, end)) => Some((start, end - start).into()),
+        use pest::error::{ErrorVariant, InputLocation};
+
+        // Extract position information with non-zero width for miette arrow rendering
+        let (span, _pos) = match pest_err.location {
+            InputLocation::Pos(pos) => {
+                // For point locations, ensure non-zero width for miette arrow
+                // If at/past EOI, point backwards at last char; otherwise point at current position
+                if pos >= src.len() && pos > 0 {
+                    ((pos - 1, 1).into(), pos)
+                } else if pos < src.len() {
+                    ((pos, 1).into(), pos)
+                } else {
+                    // Empty input
+                    ((0, 0).into(), pos)
+                }
+            }
+            InputLocation::Span((start, end)) => {
+                let width = end.saturating_sub(start).max(1); // Ensure at least width 1
+                ((start, width).into(), start)
+            }
+        };
+
+        // Get line and column
+        let (line, col) = match pest_err.line_col {
+            pest::error::LineColLocation::Pos((line, col)) => (line, col),
+            pest::error::LineColLocation::Span((line, col), _) => (line, col),
+        };
+
+        // Extract expected tokens and generate user-friendly message
+        let (expected_msg, help) = match &pest_err.variant {
+            ErrorVariant::ParsingError { positives, negatives: _ } => {
+                let found_eoi = match pest_err.location {
+                    InputLocation::Pos(p) => p >= src.len(),
+                    InputLocation::Span((_, end)) => end >= src.len(),
+                };
+
+                let expected_msg = if positives.is_empty() {
+                    "Unexpected input".to_string()
+                } else if positives.len() == 1 {
+                    format!("Expected {}", rule_to_friendly_name(&positives[0]))
+                } else {
+                    let names: Vec<&str> = positives.iter()
+                        .map(rule_to_friendly_name)
+                        .collect();
+                    if names.len() <= 3 {
+                        format!("Expected one of: {}", names.join(", "))
+                    } else {
+                        format!("Expected one of: {}, ...", names[..3].join(", "))
+                    }
+                };
+
+                let help = generate_help_text(positives, found_eoi);
+                (expected_msg, help)
+            }
+            ErrorVariant::CustomError { message } => {
+                (message.clone(), None)
+            }
         };
 
         DetectError::Syntax {
-            span,
-            message: pest_err.to_string(),
             src,
+            span,
+            help,
+            expected_msg,
+            line,
+            col,
         }
     }
 
@@ -200,6 +347,8 @@ impl DetectError {
             | DetectError::InvalidValue { src: s, .. }
             | DetectError::InvalidEscape { src: s, .. }
             | DetectError::UnterminatedEscape { src: s, .. }
+            | DetectError::UnterminatedString { src: s, .. }
+            | DetectError::StrayQuote { src: s, .. }
             | DetectError::Internal { src: s, .. } => {
                 *s = src;
             }

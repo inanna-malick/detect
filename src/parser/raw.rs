@@ -7,7 +7,7 @@ use pest_derive::Parser;
 
 use super::{
     ast::{RawExpr, RawPredicate, RawValue},
-    error::RawParseError,
+    error::{RawParseError, SpanExt},
 };
 
 #[derive(Parser)]
@@ -29,7 +29,7 @@ impl RawParser {
             .next()
             .ok_or_else(|| RawParseError::internal("Grammar guarantees program contains expr"))?;
 
-        Self::parse_expr(expr_pair)
+        Self::parse_expr(expr_pair).map_err(|e| e.with_source(input.to_string()))
     }
 
     /// Parse set contents from a string like "rs, js, ts" or "foo, \"bar, baz\", qux"
@@ -166,11 +166,28 @@ impl RawParser {
     fn parse_value(pair: Pair<'_, Rule>) -> Result<RawValue<'_>, RawParseError> {
         match pair.as_rule() {
             Rule::value => {
-                // value wraps the actual value type, so parse the inner content
-                let inner = pair.into_inner().next().ok_or_else(|| {
+                // value = { value_content ~ trailing_quote? }
+                // Check if there's a trailing quote error
+                let mut inner = pair.into_inner();
+                let value_content = inner.next().ok_or_else(|| {
                     RawParseError::internal("Grammar guarantees value has content")
                 })?;
-                Self::parse_value(inner)
+
+                // Check for trailing quote
+                if let Some(trailing) = inner.next() {
+                    if trailing.as_rule() == Rule::trailing_quote {
+                        let span = trailing.as_span();
+                        let quote = span.as_str().chars().next().unwrap_or('"');
+                        return Err(RawParseError::StrayQuote {
+                            span: span.to_source_span(),
+                            quote,
+                            src: String::new(), // Will be filled by with_source()
+                        });
+                    }
+                }
+
+                // No trailing quote, parse the value content
+                Self::parse_value(value_content)
             }
             Rule::quoted_string => {
                 // Grammar already parsed inner content without quotes
@@ -178,6 +195,23 @@ impl RawParser {
                     RawParseError::internal("Grammar guarantees quoted_string has inner content")
                 })?;
                 Ok(RawValue::Quoted(inner.as_str()))
+            }
+            Rule::unterminated_string => {
+                // Matched an unterminated string literal - return error with proper span
+                let span = pair.as_span();
+                let text = span.as_str();
+                let quote = text.chars().next().unwrap_or('"');
+
+                // Point span at just the opening quote and a few chars (not extending to EOI)
+                let start = span.start();
+                let length = text.len().min(10); // Show first 10 chars max
+                let error_span = (start, length).into();
+
+                Err(RawParseError::UnterminatedString {
+                    span: error_span,
+                    quote,
+                    src: String::new(), // Will be filled by with_source()
+                })
             }
             Rule::raw_token => {
                 // All raw tokens stored as-is, typechecker decides meaning based on operator

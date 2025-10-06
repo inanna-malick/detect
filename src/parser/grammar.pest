@@ -20,7 +20,19 @@ predicate = { selector ~ operator ~ value }
     (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
   }
   
-  value = { quoted_string | raw_token }
+  value = { value_content ~ trailing_quote? }
+
+  value_content = _{ quoted_string | unterminated_string | raw_token }
+
+  // Error detection: unterminated string literals
+  // Matches opening quote without closing quote before EOI/newline
+  unterminated_string = @{
+    ("\"" ~ (!"\"" ~ (escaped | ANY))* ~ (EOI | &NEWLINE)) |
+    ("'" ~ (!"'" ~ (escaped | ANY))* ~ (EOI | &NEWLINE))
+  }
+
+  // Error detection: trailing quote after value content
+  trailing_quote = @{ "\"" | "'" }
 
   // Raw tokens with recursive balanced delimiter matching
   // Supports nested structures like ((pub|async)\s+)* or [[a-z]]
