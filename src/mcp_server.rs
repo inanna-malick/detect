@@ -172,11 +172,29 @@ pub async fn run_mcp_server() -> Result<()> {
                                         .and_then(|i| i.as_bool())
                                         .unwrap_or(false);
 
-                                    let max_results = tool_args
-                                        .get("max_results")
-                                        .and_then(|m| m.as_u64())
-                                        .unwrap_or(20)
-                                        as usize;
+                                    // Validate max_results parameter
+                                    let max_results_validation: Result<usize, String> = match tool_args.get("max_results") {
+                                        Some(val) => {
+                                            // Check if it's a number (could be negative)
+                                            if let Some(num) = val.as_i64() {
+                                                if num < 0 {
+                                                    Err(format!("max_results must be non-negative, got: {}", num))
+                                                } else {
+                                                    Ok(num as usize)
+                                                }
+                                            } else if let Some(num) = val.as_u64() {
+                                                Ok(num as usize)
+                                            } else {
+                                                Err("max_results must be a number".to_string())
+                                            }
+                                        }
+                                        None => Ok(20), // Default value
+                                    };
+
+                                    // Check if validation failed
+                                    match max_results_validation {
+                                        Err(err_msg) => ToolResult::Error(err_msg),
+                                        Ok(max_results) => {
 
                                     info!(
                                         logger,
@@ -220,6 +238,8 @@ pub async fn run_mcp_server() -> Result<()> {
                                         })),
                                         Err(e) => {
                                             ToolResult::Error(format!("Detect failed: {}", e))
+                                        }
+                                    }
                                         }
                                     }
                                 } else {

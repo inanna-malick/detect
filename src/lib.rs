@@ -31,6 +31,18 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
     match parse_result {
         Ok(parsed_expr) => {
+            // Validate root path exists and is a directory
+            if !root.exists() {
+                return Err(DetectError::DirectoryNotFound {
+                    path: root.display().to_string(),
+                });
+            }
+            if !root.is_dir() {
+                return Err(DetectError::NotADirectory {
+                    path: root.display().to_string(),
+                });
+            }
+
             let walker = WalkBuilder::new(root)
                 .hidden(false)
                 .git_ignore(respect_gitignore)

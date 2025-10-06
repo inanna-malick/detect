@@ -94,6 +94,19 @@ pub enum DetectError {
         src: String,
     },
 
+    // Filesystem errors
+    #[error("Directory not found: {path}")]
+    #[diagnostic(code(detect::directory_not_found), help("Check that the directory path exists and is accessible"))]
+    DirectoryNotFound {
+        path: String,
+    },
+
+    #[error("Path is not a directory: {path}")]
+    #[diagnostic(code(detect::not_a_directory), help("The path must be a directory, not a file"))]
+    NotADirectory {
+        path: String,
+    },
+
     // Internal errors
     #[error("Internal parser error: {message}")]
     #[diagnostic(code(detect::internal))]
@@ -190,6 +203,9 @@ impl DetectError {
             | DetectError::Internal { src: s, .. } => {
                 *s = src;
             }
+            // Filesystem errors don't have source code
+            DetectError::DirectoryNotFound { .. }
+            | DetectError::NotADirectory { .. } => {}
         }
         self
     }
