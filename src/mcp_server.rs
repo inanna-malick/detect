@@ -4,7 +4,7 @@ use crate::parse_and_run_fs;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use slog::{o, Drain, Logger};
+use slog::{debug, error, info, o, Drain, Logger};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
@@ -36,15 +36,10 @@ struct JsonRpcError {
 
 pub async fn run_mcp_server() -> Result<()> {
     // Set up logging to stderr for MCP mode
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .target(env_logger::Target::Stderr)
-        .init();
-
-    log::info!("Detect MCP server starting...");
-
-    // Create a logger for detect operations
     let plain = slog_term::PlainSyncDecorator::new(std::io::stderr());
-    let detect_logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+    let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+
+    info!(logger, "Detect MCP server starting...");
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -56,16 +51,16 @@ pub async fn run_mcp_server() -> Result<()> {
             continue;
         }
 
-        log::debug!("Received: {}", line);
+        debug!(logger, "Received: {}", line);
 
         // Parse the JSON-RPC message
         match serde_json::from_str::<JsonRpcRequest>(&line) {
             Ok(req) => {
-                log::info!("Request: {} (id: {:?})", req.method, req.id);
+                info!(logger, "Request: {} (id: {:?})", req.method, req.id);
 
                 let response = match req.method.as_str() {
                     "initialize" => {
-                        log::debug!("Handling initialization");
+                        debug!(logger, "Handling initialization");
                         JsonRpcResponse {
                             jsonrpc: "2.0".to_string(),
                             id: req.id,
@@ -83,7 +78,7 @@ pub async fn run_mcp_server() -> Result<()> {
                         }
                     }
                     "tools/list" => {
-                        log::debug!("Handling tools/list");
+                        debug!(logger, "Handling tools/list");
 
                         JsonRpcResponse {
                             jsonrpc: "2.0".to_string(),
@@ -125,7 +120,7 @@ pub async fn run_mcp_server() -> Result<()> {
                         }
                     }
                     "resources/list" => {
-                        log::debug!("Handling resources/list");
+                        debug!(logger, "Handling resources/list");
                         JsonRpcResponse {
                             jsonrpc: "2.0".to_string(),
                             id: req.id,
@@ -134,7 +129,7 @@ pub async fn run_mcp_server() -> Result<()> {
                         }
                     }
                     "prompts/list" => {
-                        log::debug!("Handling prompts/list");
+                        debug!(logger, "Handling prompts/list");
                         JsonRpcResponse {
                             jsonrpc: "2.0".to_string(),
                             id: req.id,
@@ -143,7 +138,7 @@ pub async fn run_mcp_server() -> Result<()> {
                         }
                     }
                     "tools/call" => {
-                        log::debug!("Tool call params: {:?}", req.params);
+                        debug!(logger, "Tool call params: {:?}", req.params);
 
                         let params = req.params.unwrap_or(Value::Null);
                         let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
@@ -183,7 +178,8 @@ pub async fn run_mcp_server() -> Result<()> {
                                         .unwrap_or(20)
                                         as usize;
 
-                                    log::info!(
+                                    info!(
+                                        logger,
                                         "Running detect with expression: {} in directory: {:?}",
                                         expression,
                                         directory
@@ -195,10 +191,10 @@ pub async fn run_mcp_server() -> Result<()> {
                                         .unwrap_or_else(|_| directory.clone());
 
                                     // Run detect directly with await since we're in an async function
-                                    let logger = detect_logger.clone();
+                                    let detect_logger = logger.clone();
                                     let mut results = Vec::new();
                                     let detect_result = parse_and_run_fs(
-                                        logger,
+                                        detect_logger,
                                         &directory,
                                         !include_gitignored,
                                         expression,
@@ -259,7 +255,7 @@ pub async fn run_mcp_server() -> Result<()> {
                         }
                     }
                     _ => {
-                        log::debug!("Unknown method: {}", req.method);
+                        debug!(logger, "Unknown method: {}", req.method);
                         continue;
                     }
                 };
@@ -269,14 +265,14 @@ pub async fn run_mcp_server() -> Result<()> {
                 stdout.write_all(response_str.as_bytes())?;
                 stdout.write_all(b"\n")?;
                 stdout.flush()?;
-                log::debug!("Sent response for {}", req.method);
+                debug!(logger, "Sent response for {}", req.method);
             }
             Err(e) => {
-                log::error!("Parse error: {}", e);
+                error!(logger, "Parse error: {}", e);
             }
         }
     }
 
-    log::info!("Server exiting");
+    info!(logger, "Server exiting");
     Ok(())
 }

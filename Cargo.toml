@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 default = ["mcp"]
-mcp = ["dep:serde", "dep:serde_json", "dep:env_logger", "dep:log"]
+mcp = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 anyhow = "1"
@@ -32,10 +32,8 @@ tokio = {version = "1.19", features = ["rt", "rt-multi-thread", "fs", "macros"]}
 tokio-util = {version ="0.7.11", features = ["io"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
-env_logger = { version = "0.11", optional = true }
-log = { version = "0.4", optional = true }
 chrono = "0.4"
-thiserror = "1.0"
+thiserror = "2.0"
 miette = { version = "7.6.0", features = ["fancy"] }
 
 [dev-dependencies]
