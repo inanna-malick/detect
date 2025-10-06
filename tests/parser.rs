@@ -260,6 +260,109 @@ fn test_invalid_escape_sequences() {
     assert!(result.is_err());
 }
 
+// ==============================================================================
+// Quote Error Detection Tests - Unterminated and Stray Quotes
+// ==============================================================================
+
+#[test]
+fn test_unterminated_double_quote() {
+    // Unterminated double quote at various positions
+    let result = RawParser::parse_raw_expr(r#"contents ~= "a"#);
+    assert!(result.is_err(), "Unterminated double quote should fail");
+
+    let result = RawParser::parse_raw_expr(r#"name == "test"#);
+    assert!(result.is_err(), "Unterminated double quote should fail");
+
+    let result = RawParser::parse_raw_expr(r#"ext == "some long string"#);
+    assert!(result.is_err(), "Unterminated double quote should fail");
+}
+
+#[test]
+fn test_unterminated_single_quote() {
+    // Unterminated single quote at various positions
+    let result = RawParser::parse_raw_expr("contents ~= 'a");
+    assert!(result.is_err(), "Unterminated single quote should fail");
+
+    let result = RawParser::parse_raw_expr("name == 'test");
+    assert!(result.is_err(), "Unterminated single quote should fail");
+
+    let result = RawParser::parse_raw_expr("ext == 'foo bar baz");
+    assert!(result.is_err(), "Unterminated single quote should fail");
+}
+
+#[test]
+fn test_stray_double_quote_after_value() {
+    // Stray double quote immediately after valid bare token
+    let result = RawParser::parse_raw_expr(r#"contents ~= a""#);
+    assert!(result.is_err(), "Stray double quote should fail");
+
+    let result = RawParser::parse_raw_expr(r#"name == foo""#);
+    assert!(result.is_err(), "Stray double quote should fail");
+
+    let result = RawParser::parse_raw_expr(r#"ext == test.rs""#);
+    assert!(result.is_err(), "Stray double quote should fail");
+}
+
+#[test]
+fn test_stray_single_quote_after_value() {
+    // Stray single quote immediately after valid bare token
+    let result = RawParser::parse_raw_expr("contents ~= a'");
+    assert!(result.is_err(), "Stray single quote should fail");
+
+    let result = RawParser::parse_raw_expr("name == foo'");
+    assert!(result.is_err(), "Stray single quote should fail");
+
+    let result = RawParser::parse_raw_expr("ext == test.rs'");
+    assert!(result.is_err(), "Stray single quote should fail");
+}
+
+#[test]
+fn test_quote_errors_in_complex_expressions() {
+    // Unterminated quote in boolean expressions
+    let result = RawParser::parse_raw_expr(r#"ext == rs AND name == "unterminated"#);
+    assert!(result.is_err(), "Unterminated quote in AND expression should fail");
+
+    let result = RawParser::parse_raw_expr(r#"ext == rs OR name == 'foo"#);
+    assert!(result.is_err(), "Unterminated quote in OR expression should fail");
+
+    // Stray quote in boolean expressions
+    let result = RawParser::parse_raw_expr(r#"ext == rs AND name == foo""#);
+    assert!(result.is_err(), "Stray quote in AND expression should fail");
+
+    let result = RawParser::parse_raw_expr(r#"ext == rs OR name == bar'"#);
+    assert!(result.is_err(), "Stray quote in OR expression should fail");
+}
+
+#[test]
+fn test_lone_quote_as_value() {
+    // Single quote character alone should be unterminated
+    let result = RawParser::parse_raw_expr(r#"contents ~= ""#);
+    assert!(result.is_err(), "Lone double quote should fail");
+
+    let result = RawParser::parse_raw_expr("contents ~= '");
+    assert!(result.is_err(), "Lone single quote should fail");
+}
+
+#[test]
+fn test_properly_quoted_strings_still_work() {
+    // Verify that proper quotes continue to work after adding error detection
+    let result = RawParser::parse_raw_expr(r#"name == "properly quoted""#);
+    assert!(result.is_ok(), "Properly quoted double quotes should work");
+    let expected = RawTestExpr::quoted_predicate("name", "==", "properly quoted");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    let result = RawParser::parse_raw_expr("name == 'properly quoted'");
+    assert!(result.is_ok(), "Properly quoted single quotes should work");
+    let expected = RawTestExpr::quoted_predicate("name", "==", "properly quoted");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+
+    // With spaces
+    let result = RawParser::parse_raw_expr(r#"content ~= "test string with spaces""#);
+    assert!(result.is_ok(), "Quoted string with spaces should work");
+    let expected = RawTestExpr::quoted_predicate("content", "~=", "test string with spaces");
+    assert_eq!(result.unwrap().to_test_expr(), expected);
+}
+
 #[test]
 fn test_whitespace_handling() {
     // Basic predicate whitespace tolerance
