@@ -575,21 +575,6 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
     }
 }
 
-// impl<'dfa, A, B> Predicate<A, B, ContentPredicate<'dfa>> {
-//     pub fn eval_file_content_predicate(
-//         self,
-//         contents: Option<&String>,
-//     ) -> ShortCircuit<Predicate<A, B, Done>> {
-//         match self {
-//             Predicate::Content(p) => ShortCircuit::Known(match contents {
-//                 Some(contents) => p.is_match(contents),
-//                 None => false,
-//             }),
-//             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-//             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePredicate {

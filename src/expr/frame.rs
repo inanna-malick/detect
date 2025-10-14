@@ -103,11 +103,6 @@ impl<'a, P> Collapsible for MapPredicateRef<'a, P> {
     }
 }
 
-// impl<'a, P: Clone + Send + Sync + 'static> CollapsibleAsync for &'a Expr<P> {
-//     type AsyncFrameToken = ExprFrame<PartiallyApplied, P>;
-// }
-
-// for use in recursion visualizations
 impl<P: Display> Display for ExprFrame<(), P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

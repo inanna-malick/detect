@@ -4,6 +4,10 @@ description = "Detect files on your filesystem using arbitrary expression langua
 license = "MIT OR Apache-2.0"
 version = "0.2.0"
 edition = "2021"
+repository = "https://github.com/inanna-malick/detect/"
+homepage = "https://github.com/inanna-malick/detect/"
+keywords = ["egrep", "grep", "pattern", "regex", "search"]
+categories = ["command-line-utilities", "filesystem"]
 
 [[bin]]
 name = "detect"

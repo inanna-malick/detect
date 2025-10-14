@@ -12,7 +12,6 @@ use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context;
 use ignore::WalkBuilder;
-// use parse_error::DetectError; // Replaced by parser error
 use parser::{error::DetectError, RawParser, Typechecker};
 use predicate::Predicate;
 use slog::{debug, info, Logger};

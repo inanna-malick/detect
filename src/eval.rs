@@ -13,7 +13,6 @@ pub async fn run_contents_predicate_stream(
     e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'_>>>,
     mut s: impl Stream<Item = io::Result<Vec<u8>>> + std::marker::Unpin,
 ) -> io::Result<Expr<Predicate<Done, Done, Done>>> {
-    // TODO: customize config, probably
     let config = regex_automata::util::start::Config::new();
 
     // Initialize state for DFA patterns
@@ -22,7 +21,7 @@ pub async fn run_contents_predicate_stream(
             HybridRegex::RustDFA(dfa) => {
                 let s = dfa
                     .start_state(&config)
-                    .expect("programmer error, probably");
+                    .expect("DFA start_state failed: invalid regex configuration");
                 Predicate::Content((pred, Some(s), Vec::new()))
             }
             HybridRegex::Pcre2(_) => {

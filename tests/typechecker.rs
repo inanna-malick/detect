@@ -12,7 +12,6 @@ fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {
     Typechecker::typecheck(raw_expr, expr)
 }
 
-use globset;
 use std::collections::HashSet;
 
 #[test]
