@@ -95,10 +95,12 @@ Selectors identify what aspect of a file to examine:
 | Selector | Type | Description | Example |
 |----------|------|-------------|---------|
 | `size` | Numeric | File size in bytes | `size > 1mb` |
-| `type` | String | `file`, `directory`, or `symlink` | `type == file` |
+| `type` | Enum | File type (parse-time validated) | `type == file` |
 | `depth` | Numeric | Directory depth from search root | `depth <= 3` |
 
 **Size units:** `kb`, `mb`, `gb`, `tb` (e.g., `1.5mb`, `500kb`)
+
+**File types** (case-insensitive): `file`, `dir`/`directory`, `symlink`/`link`, `socket`/`sock`, `fifo`/`pipe`, `block`/`blockdev`, `char`/`chardev`
 
 #### Timestamps
 | Selector | Type | Description | Example |
@@ -108,7 +110,8 @@ Selectors identify what aspect of a file to examine:
 | `accessed` | Temporal | Last access time | `accessed < -1h` |
 
 **Time formats:**
-- Relative: `-7d`, `-2h`, `-30m`, `-1w` (days, hours, minutes, weeks)
+- Relative: `-7d` / `-7days`, `-2h` / `-2hours`, `-30m` / `-30minutes`, `-1w` / `-1week`
+  - Supported units: `s`/`sec`/`second`, `m`/`min`/`minute`, `h`/`hr`/`hour`, `d`/`day`, `w`/`week` (+ plurals)
 - Absolute: `2024-01-15`, `2024-01-15T10:30:00`
 - Keywords: `now`, `today`, `yesterday`
 

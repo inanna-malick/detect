@@ -4,7 +4,7 @@ All available operators organized by data type.
 
 ## String Operators
 
-For selectors: `name`, `ext`, `path`, `dir`, `type`, `content`
+For selectors: `name`, `ext`, `path`, `dir`, `content`
 
 | Operator    | Description | Example |
 |-------------|-------------|---------|
@@ -34,8 +34,8 @@ For selectors: `name`, `ext`, `path`, `dir`, `type`, `content`
 
 **Set Membership (`in`)**:
 - Match any value in comma-separated list
-- Example: `ext in [rs,toml,md]`
-- No spaces around commas: `[a,b,c]` not `[a, b, c]`
+- Example: `ext in [rs,toml,md]` or `ext in [rs, toml, md]` (spaces optional)
+- Case-sensitive matching
 
 ## Numeric Operators
 
@@ -71,10 +71,11 @@ For selectors: `modified`, `created`, `accessed`
 ### Time Value Formats
 
 **Relative Times** (from now):
-- `-7d` = 7 days ago
-- `-2h` = 2 hours ago  
-- `-30m` = 30 minutes ago
-- `-1w` = 1 week ago
+- `-7d` = 7 days ago (also: `-7days`, `-7day`)
+- `-2h` = 2 hours ago (also: `-2hours`, `-2hrs`, `-2hr`)
+- `-30m` = 30 minutes ago (also: `-30minutes`, `-30mins`, `-30min`)
+- `-1w` = 1 week ago (also: `-1weeks`, `-1week`)
+- Supported units: `s`/`sec`/`second`, `m`/`min`/`minute`, `h`/`hr`/`hour`, `d`/`day`, `w`/`week` (+ plurals)
 
 **Absolute Dates**:
 - `2024-01-15` = specific date
@@ -84,6 +85,33 @@ For selectors: `modified`, `created`, `accessed`
 - `now` = current time
 - `today` = start of today
 - `yesterday` = start of yesterday
+
+## Enum Operators
+
+For selectors: `type`
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==`     | Exact match (validated at parse-time) | `type == file` |
+| `!=`     | Not equal | `type != dir` |
+| `in [a,b,c]` | Match any type in set | `type in [file,dir,symlink]` |
+
+**Valid Values** (case-insensitive):
+- `file` - Regular file
+- `dir` / `directory` - Directory
+- `symlink` / `link` - Symbolic link
+- `socket` / `sock` - Unix socket
+- `fifo` / `pipe` - Named pipe
+- `block` / `blockdev` - Block device
+- `char` / `chardev` - Character device
+
+**Parse-time Validation**: Invalid enum values produce immediate errors with suggestions.
+
+Example error for `type == dirq`:
+```
+× Expected one of: file, dir, directory, symlink, link, socket, sock, fifo,
+│ pipe, block, blockdev, char, chardev value, found: dirq
+```
 
 ## Boolean Operators
 
@@ -105,14 +133,13 @@ Use parentheses for clarity: `(a OR b) AND c`
 
 ## Common Mistakes
 
-❌ **Wrong**: `ext in [js, ts]` (spaces in set)  
-✅ **Right**: `ext in [js,ts]`
+❌ **Wrong**: `content ~= class.*` (unquoted regex with spaces)
+✅ **Right**: `content ~= "class.*"` or `content ~= class.*` (no spaces)
 
-❌ **Wrong**: `content ~= class.*` (unquoted regex)  
-✅ **Right**: `content ~= "class.*"`
+❌ **Wrong**: `size > 1MB` (wrong unit case)
+✅ **Right**: `size > 1mb` (units are lowercase)
 
-❌ **Wrong**: `size > 1MB` (wrong unit)  
-✅ **Right**: `size > 1mb`
-
-❌ **Wrong**: `name contains *.rs` (mixing operators)  
+❌ **Wrong**: `name contains *.rs` (mixing glob with predicate)
 ✅ **Right**: `*.rs` OR `name contains .rs`
+
+**Note**: Spaces in sets are fine - both `ext in [js,ts]` and `ext in [js, ts]` work identically.

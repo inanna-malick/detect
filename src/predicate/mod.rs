@@ -1,3 +1,7 @@
+mod enum_matcher;
+
+pub use enum_matcher::{EnumMatcher, EnumPredicate};
+
 use crate::hybrid_regex::{HybridRegex, HybridStringRegex};
 use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
@@ -19,7 +23,7 @@ use crate::util::Done;
 use chrono::{DateTime, Duration, Local, NaiveDate};
 
 /// File type enumeration for type predicates
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DetectFileType {
     File,
     Directory,
@@ -73,6 +77,82 @@ impl DetectFileType {
             _ if ft.is_block_device() => Some(Self::BlockDevice),
             _ if ft.is_char_device() => Some(Self::CharDevice),
             _ => None,
+        }
+    }
+
+    /// All enum variants for iteration
+    fn all_variants() -> &'static [Self] {
+        &[
+            Self::File,
+            Self::Directory,
+            Self::Symlink,
+            Self::Socket,
+            Self::Fifo,
+            Self::BlockDevice,
+            Self::CharDevice,
+        ]
+    }
+}
+
+/// Implement EnumPredicate trait for parse-time validation
+impl EnumPredicate for DetectFileType {
+    fn from_str(s: &str) -> Result<Self, String> {
+        // Case-insensitive comparison
+        let s_lower = s.to_lowercase();
+        // Check all variants and their aliases
+        for variant in Self::all_variants() {
+            if variant.aliases().contains(&s_lower.as_str()) {
+                return Ok(*variant);
+            }
+        }
+        Err(format!(
+            "Unknown file type '{}'. Valid types: {}",
+            s,
+            Self::all_valid_strings().join(", ")
+        ))
+    }
+
+    fn all_valid_strings() -> &'static [&'static str] {
+        &[
+            "file",
+            "dir",
+            "directory",
+            "symlink",
+            "link",
+            "socket",
+            "sock",
+            "fifo",
+            "pipe",
+            "block",
+            "blockdev",
+            "char",
+            "chardev",
+        ]
+    }
+
+    fn as_str(&self) -> &'static str {
+        // Delegate to existing method
+        match self {
+            DetectFileType::File => "file",
+            DetectFileType::Directory => "dir",
+            DetectFileType::Symlink => "symlink",
+            DetectFileType::Socket => "socket",
+            DetectFileType::Fifo => "fifo",
+            DetectFileType::BlockDevice => "block",
+            DetectFileType::CharDevice => "char",
+        }
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        // Delegate to existing method
+        match self {
+            DetectFileType::File => &["file"],
+            DetectFileType::Directory => &["dir", "directory"],
+            DetectFileType::Symlink => &["symlink", "link"],
+            DetectFileType::Socket => &["socket", "sock"],
+            DetectFileType::Fifo => &["fifo", "pipe"],
+            DetectFileType::BlockDevice => &["block", "blockdev"],
+            DetectFileType::CharDevice => &["char", "chardev"],
         }
     }
 }
@@ -575,7 +655,6 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePredicate {
     BaseName(StringMatcher),    // filename without extension
@@ -732,7 +811,7 @@ impl Bound {
 #[derive(Debug)]
 pub enum MetadataPredicate {
     Filesize(NumberMatcher),
-    Type(StringMatcher), //dir, exec, etc
+    Type(EnumMatcher<DetectFileType>), // file type with parse-time validation
     Modified(TimeMatcher),
     Created(TimeMatcher),
     Accessed(TimeMatcher),
@@ -768,14 +847,11 @@ impl MetadataPredicate {
     ) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
-            MetadataPredicate::Type(matcher) => {
+            MetadataPredicate::Type(enum_matcher) => {
                 let ft: FileType = metadata.file_type();
-                // Use the new DetectFileType enum for cleaner type checking
+                // Convert filesystem type to DetectFileType and match
                 if let Some(detect_type) = DetectFileType::from_fs_type(&ft) {
-                    detect_type
-                        .aliases()
-                        .iter()
-                        .any(|&alias| matcher.is_match(alias))
+                    enum_matcher.is_match(&detect_type)
                 } else {
                     false
                 }

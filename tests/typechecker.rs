@@ -2,8 +2,8 @@ use detect::expr::Expr;
 use detect::parser::error::DetectError as TypecheckError;
 use detect::parser::{RawParser, Typechecker};
 use detect::predicate::{
-    parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
-    StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
+    parse_time_value, Bound, DetectFileType, EnumMatcher, MetadataPredicate, NamePredicate,
+    NumberMatcher, Predicate, StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
 };
 
 /// Helper function to parse and typecheck an expression
@@ -226,7 +226,7 @@ fn test_unquoted_quantifiers_in_boolean_expressions() {
     ));
     let lhs = Expr::or(lhs_left, lhs_right);
     let rhs_inner = Expr::Predicate(Predicate::meta(MetadataPredicate::Type(
-        StringMatcher::Equals("dir".to_string()),
+        EnumMatcher::Equals(detect::predicate::DetectFileType::Directory),
     )));
     let rhs = Expr::negate(rhs_inner);
     let expected = Expr::and(lhs, rhs);
@@ -815,5 +815,193 @@ fn test_special_regex_characters() {
             description,
             expr
         );
+    }
+}
+
+// ==============================================================================
+// Enum validation tests (type selector with DetectFileType enum)
+// ==============================================================================
+
+#[test]
+fn test_enum_valid_values_all_aliases() {
+    // Test all valid file type aliases
+    let test_cases = vec![
+        ("type == file", DetectFileType::File),
+        ("type == dir", DetectFileType::Directory),
+        ("type == directory", DetectFileType::Directory),
+        ("type == symlink", DetectFileType::Symlink),
+        ("type == link", DetectFileType::Symlink),
+        ("type == socket", DetectFileType::Socket),
+        ("type == sock", DetectFileType::Socket),
+        ("type == fifo", DetectFileType::Fifo),
+        ("type == pipe", DetectFileType::Fifo),
+        ("type == block", DetectFileType::BlockDevice),
+        ("type == blockdev", DetectFileType::BlockDevice),
+        ("type == char", DetectFileType::CharDevice),
+        ("type == chardev", DetectFileType::CharDevice),
+    ];
+
+    for (expr, expected_variant) in test_cases {
+        let typed = parse_and_typecheck(expr).unwrap();
+        let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Type(
+            EnumMatcher::Equals(expected_variant),
+        )));
+        assert_eq!(typed, expected, "Failed for: {}", expr);
+    }
+}
+
+#[test]
+fn test_enum_invalid_values() {
+    // Test that invalid enum values produce helpful errors listing all valid options
+    let invalid_cases = vec![
+        "type == dirq",        // Typo
+        "type == folder",      // Wrong name
+        "type == executable",  // Not a file type
+        "type == reg",         // Unix stat() name not supported
+        "type == unknown",     // Generic invalid
+    ];
+
+    for expr in invalid_cases {
+        let error = parse_and_typecheck(expr).unwrap_err();
+        assert!(
+            matches!(error, TypecheckError::InvalidValue { ref expected, .. } if expected.contains("file") && expected.contains("dir")),
+            "Expected InvalidValue error with list of valid types for '{}', got: {:?}",
+            expr,
+            error
+        );
+    }
+}
+
+#[test]
+fn test_enum_not_equals_operator() {
+    let typed = parse_and_typecheck("type != file").unwrap();
+    let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Type(
+        EnumMatcher::NotEquals(DetectFileType::File),
+    )));
+    assert_eq!(typed, expected);
+}
+
+#[test]
+fn test_enum_in_operator() {
+    use std::collections::HashSet;
+
+    let typed = parse_and_typecheck("type in [file, dir, symlink]").unwrap();
+
+    // Verify it's an In matcher with the correct set
+    match typed {
+        Expr::Predicate(Predicate::Metadata(ref mp)) => match &**mp {
+            MetadataPredicate::Type(EnumMatcher::In(ref set)) => {
+                let expected_set: HashSet<DetectFileType> = vec![
+                    DetectFileType::File,
+                    DetectFileType::Directory,
+                    DetectFileType::Symlink,
+                ]
+                .into_iter()
+                .collect();
+                assert_eq!(set, &expected_set);
+            }
+            _ => panic!("Expected Type predicate with In matcher"),
+        },
+        _ => panic!("Expected Metadata predicate"),
+    }
+}
+
+#[test]
+fn test_enum_in_operator_with_aliases() {
+    use std::collections::HashSet;
+
+    // Mix canonical and alias names
+    let typed = parse_and_typecheck("type in [directory, link, sock]").unwrap();
+
+    match typed {
+        Expr::Predicate(Predicate::Metadata(ref mp)) => match &**mp {
+            MetadataPredicate::Type(EnumMatcher::In(ref set)) => {
+                let expected_set: HashSet<DetectFileType> = vec![
+                    DetectFileType::Directory,
+                    DetectFileType::Symlink,
+                    DetectFileType::Socket,
+                ]
+                .into_iter()
+                .collect();
+                assert_eq!(set, &expected_set);
+            }
+            _ => panic!("Expected Type predicate with In matcher"),
+        },
+        _ => panic!("Expected Metadata predicate"),
+    }
+}
+
+#[test]
+fn test_enum_invalid_value_in_set() {
+    // First invalid value in set should cause error
+    let error = parse_and_typecheck("type in [file, invalid, dir]").unwrap_err();
+    assert!(
+        matches!(error, TypecheckError::InvalidValue { ref found, .. } if found == "invalid"),
+        "Expected InvalidValue error for 'invalid', got: {:?}",
+        error
+    );
+}
+
+#[test]
+fn test_enum_incompatible_operators() {
+    // Enum selectors don't support string-specific operators
+    let invalid_operator_cases = vec![
+        "type ~= file",        // Regex not supported
+        "type contains dir",   // Contains not supported
+        "type > file",         // Greater than not supported
+        "type < dir",          // Less than not supported
+        "type >= socket",      // GTE not supported
+        "type before file",    // Temporal operator not supported
+    ];
+
+    for expr in invalid_operator_cases {
+        let error = parse_and_typecheck(expr).unwrap_err();
+        assert!(
+            matches!(error, TypecheckError::IncompatibleOperator { .. } | TypecheckError::UnknownOperator { .. }),
+            "Expected IncompatibleOperator or UnknownOperator for '{}', got: {:?}",
+            expr,
+            error
+        );
+    }
+}
+
+#[test]
+fn test_enum_case_insensitive() {
+    // Enum values should be case-insensitive
+    let test_cases = vec![
+        ("type == FILE", DetectFileType::File),
+        ("type == Dir", DetectFileType::Directory),
+        ("type == SYMLINK", DetectFileType::Symlink),
+        ("type == SoCkEt", DetectFileType::Socket),
+    ];
+
+    for (expr, expected_variant) in test_cases {
+        let typed = parse_and_typecheck(expr).unwrap();
+        let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Type(
+            EnumMatcher::Equals(expected_variant),
+        )));
+        assert_eq!(typed, expected, "Case insensitivity failed for: {}", expr);
+    }
+}
+
+#[test]
+fn test_enum_in_boolean_expressions() {
+    // Test enum predicates in complex boolean expressions
+    let typed = parse_and_typecheck("type == dir AND size > 1kb").unwrap();
+    assert!(matches!(typed, Expr::And(_, _)));
+
+    let typed = parse_and_typecheck("type != file OR name == test").unwrap();
+    assert!(matches!(typed, Expr::Or(_, _)));
+
+    let typed = parse_and_typecheck("NOT type == symlink").unwrap();
+    assert!(matches!(typed, Expr::Not(_)));
+
+    // Complex nested
+    let typed = parse_and_typecheck("(type in [file, dir] AND size > 0) OR name == README").unwrap();
+    match typed {
+        Expr::Or(ref lhs, _) => {
+            assert!(matches!(**lhs, Expr::And(_, _)));
+        }
+        _ => panic!("Expected Or expression"),
     }
 }

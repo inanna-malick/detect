@@ -16,10 +16,19 @@ All available selectors and their data types.
 | Selector | Type    | Description | Example |
 |----------|---------|-------------|---------|
 | `size`   | Numeric | File size in bytes | `size > 1mb` |
-| `type`   | String  | file/directory/symlink | `type == file` |
+| `type`   | Enum    | File type (validated at parse-time) | `type == file` |
 | `depth`  | Numeric | Directory depth from root | `depth <= 3` |
 
 **Size Units**: `kb`, `mb`, `gb`, `tb` (e.g., `45kb`, `1.5mb`)
+
+**Valid File Types** (case-insensitive):
+- `file` - Regular file
+- `dir` / `directory` - Directory
+- `symlink` / `link` - Symbolic link
+- `socket` / `sock` - Unix socket
+- `fifo` / `pipe` - Named pipe (FIFO)
+- `block` / `blockdev` - Block device
+- `char` / `chardev` - Character device
 
 ## Time Selectors
 
@@ -30,7 +39,8 @@ All available selectors and their data types.
 | `accessed`  | Temporal | Last access time | `accessed < -1h` |
 
 **Time Formats**:
-- Relative: `-7d`, `-2h`, `-30m`, `-1w`
+- Relative: `-7d` / `-7days`, `-2h` / `-2hours`, `-30m` / `-30minutes`, `-1w` / `-1week`
+  - Units: `s`/`sec`/`second`, `m`/`min`/`minute`, `h`/`hr`/`hour`, `d`/`day`, `w`/`week` (+ plurals)
 - Absolute: `2024-01-15`, `2024-01-15T10:30:00`
 - Keywords: `now`, `today`, `yesterday`
 
@@ -44,19 +54,37 @@ All available selectors and their data types.
 
 Some selectors have alternative names for convenience:
 
-- `name` = `stem` = `basename` (filename without extension)
-- `ext` = `extension` (file extension)  
+- `name` = `filename` (full filename with extension)
+- `stem` = `basename` (filename without extension)
+- `ext` = `extension` (file extension)
+- `dir` = `parent` = `directory` (parent directory)
+- `size` = `filesize` = `bytes` (file size)
+- `type` = `filetype` (file type)
+- `modified` = `mtime` (modification time)
+- `created` = `ctime` (creation time)
+- `accessed` = `atime` (access time)
 - `content` = `text` = `contents` (file contents)
-
-**Note**: Alias availability may vary by parser version.
 
 ## Type Details
 
 ### String Selectors
-Work with: `name`, `ext`, `path`, `dir`, `type`, `content`
+Work with: `name`, `ext`, `path`, `dir`, `content`
 
-### Numeric Selectors  
+Operators: `==`, `!=`, `contains`, `~=` (regex), `in [...]`
+
+### Numeric Selectors
 Work with: `size`, `depth`
+
+Operators: `==`, `!=`, `>`, `<`, `>=`, `<=`
 
 ### Temporal Selectors
 Work with: `modified`, `created`, `accessed`
+
+Operators: `==`, `!=`, `>` (after), `<` (before)
+
+### Enum Selectors
+Work with: `type`
+
+Operators: `==`, `!=`, `in [...]`
+
+**Note**: Enum values are validated at parse-time. Invalid values produce errors listing all valid options.

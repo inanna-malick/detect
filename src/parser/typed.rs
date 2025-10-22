@@ -47,6 +47,14 @@ pub enum TemporalOperator {
     After,     // >, after, gt
 }
 
+/// Operators that can be applied to enum-type selectors
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnumOperator {
+    Equals,    // ==, =, eq
+    NotEquals, // !=, <>, ne
+    In,        // in
+}
+
 // ============================================================================
 // Selector Types
 // ============================================================================
@@ -66,7 +74,20 @@ pub enum PathComponent {
 pub enum StringSelector {
     Path(PathComponent),
     Contents, // contents, content, text
-    Type,     // type, filetype, kind
+}
+
+impl StringSelector {
+    /// Get canonical name for error messages
+    pub fn canonical_name(&self) -> &'static str {
+        match self {
+            StringSelector::Path(PathComponent::Full) => "path",
+            StringSelector::Path(PathComponent::Name) => "name",
+            StringSelector::Path(PathComponent::Stem) => "basename",
+            StringSelector::Path(PathComponent::Extension) => "ext",
+            StringSelector::Path(PathComponent::Parent) => "dir",
+            StringSelector::Contents => "content",
+        }
+    }
 }
 
 /// Numeric-type selectors
@@ -84,12 +105,19 @@ pub enum TemporalSelector {
     Accessed, // accessed, atime, access
 }
 
+/// Enum-type selectors (validated at parse time)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnumSelector {
+    Type, // type, filetype - file type enum
+}
+
 /// Selector categories - groups selectors by their value type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectorCategory {
     String(StringSelector),
     Numeric(NumericSelector),
     Temporal(TemporalSelector),
+    Enum(EnumSelector),
 }
 
 /// A typed selector paired with its compatible operator
@@ -98,6 +126,7 @@ pub enum SelectorCategory {
 pub enum TypedSelector {
     String(StringSelector, StringOperator),
     Numeric(NumericSelector, NumericOperator),
+    Enum(EnumSelector, EnumOperator),
     Temporal(TemporalSelector, TemporalOperator),
 }
 
@@ -130,7 +159,7 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
 
         // File Properties (3) + aliases
         "size" | "filesize" | "bytes" => Ok(SelectorCategory::Numeric(NumericSelector::Size)),
-        "type" | "filetype" => Ok(SelectorCategory::String(StringSelector::Type)),
+        "type" | "filetype" => Ok(SelectorCategory::Enum(EnumSelector::Type)),
         "depth" => Ok(SelectorCategory::Numeric(NumericSelector::Depth)),
 
         // Time (3) + common Unix aliases
@@ -194,6 +223,20 @@ pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ParseError> 
     }
 }
 
+/// Parse an enum operator with aliases
+///
+/// # Errors
+/// Returns `ParseError::UnknownOperator` if the operator is not recognized.
+pub fn parse_enum_operator(s: &str) -> Result<EnumOperator, ParseError> {
+    let s_lower = s.to_lowercase();
+    match s_lower.as_str() {
+        "==" | "=" | "eq" => Ok(EnumOperator::Equals),
+        "!=" | "<>" | "ne" | "neq" => Ok(EnumOperator::NotEquals),
+        "in" => Ok(EnumOperator::In),
+        _ => Err(ParseError::UnknownOperator(s.to_string())),
+    }
+}
+
 /// Parse selector and operator together, ensuring type compatibility
 ///
 /// # Errors
@@ -220,6 +263,27 @@ pub fn parse_selector_operator(
         || parse_temporal_operator(&operator_lower).is_ok();
 
     match selector_category {
+        SelectorCategory::Enum(selector) => {
+            let operator = parse_enum_operator(operator_str).map_err(|_| {
+                if is_known_operator {
+                    TypecheckError::IncompatibleOperator {
+                        selector: selector_str.to_string(),
+                        operator: operator_str.to_string(),
+                        selector_span: selector_span.to_source_span(),
+                        operator_span: operator_span.to_source_span(),
+                        src: source.to_string(),
+                    }
+                } else {
+                    TypecheckError::UnknownOperator {
+                        operator: operator_str.to_string(),
+                        span: operator_span.to_source_span(),
+                        src: source.to_string(),
+                    }
+                }
+            })?;
+            Ok(TypedSelector::Enum(selector, operator))
+        }
+
         SelectorCategory::String(selector) => {
             let operator = parse_string_operator(operator_str).map_err(|_| {
                 if is_known_operator {
@@ -305,21 +369,6 @@ pub fn parse_selector_operator(
 // ============================================================================
 // Display implementations for debugging
 // ============================================================================
-
-impl StringSelector {
-    /// Get canonical name for error messages
-    pub fn canonical_name(&self) -> &'static str {
-        match self {
-            StringSelector::Path(PathComponent::Full) => "path",
-            StringSelector::Path(PathComponent::Name) => "name",
-            StringSelector::Path(PathComponent::Stem) => "basename",
-            StringSelector::Path(PathComponent::Extension) => "ext",
-            StringSelector::Path(PathComponent::Parent) => "dir",
-            StringSelector::Contents => "content",
-            StringSelector::Type => "type",
-        }
-    }
-}
 
 impl NumericSelector {
     /// Get canonical name for error messages

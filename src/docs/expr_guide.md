@@ -31,11 +31,10 @@ ext - file extension without dot (e.g., "md")
 path - full absolute path
 dir - parent directory path
 
-**Note**: `basename` selector may not be available in current parser
-
 ### File Properties (How big/what kind?)
 size - file size in bytes (supports: 45kb 1mb 2gb)
-type - file/directory/symlink/socket/fifo
+type - file type (parse-time validated)
+  Valid values: file, dir/directory, symlink/link, socket/sock, fifo/pipe, block/blockdev, char/chardev
 depth - directory depth from search root
 
 ### Time (When did things happen?)

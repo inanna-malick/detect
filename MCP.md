@@ -63,9 +63,6 @@ expression: "*.js AND size > 10kb AND content contains TODO"
 expression: "*.py AND modified > -7days"
 ```
 
-### `detect_help`
-Get comprehensive help for detect's query language, including all operators, selectors, and examples.
-
 ## Testing the MCP Server
 
 You can test the MCP server manually using JSON-RPC:
@@ -92,4 +89,4 @@ The detect MCP server supports the full detect query language:
 - **Boolean logic**: `AND`/`OR`/`NOT` or `&&`/`||`/`!`
 - **Sets**: `extension in [js, ts, jsx]`
 
-Use `detect_help` tool for complete documentation.
+For complete documentation, use `detect --help`, `detect --examples`, `detect --predicates`, and `detect --operators`.

@@ -4,14 +4,15 @@ use crate::{
     parser::{
         error::{DetectError, SpanExt},
         typed::{
-            self, NumericOperator, NumericSelector, PathComponent, StringOperator, StringSelector,
-            TemporalOperator, TemporalSelector, TypedSelector,
+            self, EnumOperator, EnumSelector, NumericOperator, NumericSelector, PathComponent,
+            StringOperator, StringSelector, TemporalOperator, TemporalSelector, TypedSelector,
         },
         RawExpr, RawPredicate, RawValue,
     },
     predicate::{
-        parse_time_value, Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate,
-        StreamingCompiledContentPredicate, StringMatcher, TimeMatcher,
+        parse_time_value, Bound, DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate,
+        NamePredicate, NumberMatcher, Predicate, StreamingCompiledContentPredicate,
+        StringMatcher, TimeMatcher,
     },
 };
 
@@ -152,6 +153,13 @@ impl Typechecker {
                 pred.value_span,
                 source,
             ),
+            TypedSelector::Enum(selector, operator) => Self::build_enum_predicate(
+                selector,
+                operator,
+                &pred.value,
+                pred.value_span,
+                source,
+            ),
         }
     }
 
@@ -176,7 +184,6 @@ impl Typechecker {
                 };
                 Ok(Predicate::name(name_pred))
             }
-            StringSelector::Type => Ok(Predicate::meta(MetadataPredicate::Type(string_matcher))),
             StringSelector::Contents => {
                 let pattern = Self::build_content_pattern(value, operator, value_span, source)?;
                 let content_pred =
@@ -228,6 +235,23 @@ impl Typechecker {
             TemporalSelector::Accessed => MetadataPredicate::Accessed(time_matcher),
         };
         Ok(Predicate::meta(meta_pred))
+    }
+
+    /// Build an enum-type predicate with parse-time validation
+    fn build_enum_predicate(
+        selector: EnumSelector,
+        operator: EnumOperator,
+        value: &RawValue,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        match selector {
+            EnumSelector::Type => {
+                let enum_matcher =
+                    Self::parse_enum_value::<DetectFileType>(value, operator, value_span, source)?;
+                Ok(Predicate::meta(MetadataPredicate::Type(enum_matcher)))
+            }
+        }
     }
 
     /// Parse string value based on operator type
@@ -389,6 +413,64 @@ impl Typechecker {
             TemporalOperator::NotEquals => TimeMatcher::NotEquals(value),
             TemporalOperator::After => TimeMatcher::After(value),
             TemporalOperator::Before => TimeMatcher::Before(value),
+        }
+    }
+
+    /// Parse and validate enum values at parse time using the EnumPredicate trait
+    fn parse_enum_value<E: EnumPredicate>(
+        value: &RawValue,
+        operator: EnumOperator,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<EnumMatcher<E>, DetectError> {
+        let value_str = match value {
+            RawValue::Quoted(s) | RawValue::Raw(s) => s,
+        };
+
+        match operator {
+            EnumOperator::Equals => {
+                let variant = E::from_str(value_str).map_err(|_err_msg| DetectError::InvalidValue {
+                    expected: format!("one of: {}", E::all_valid_strings().join(", ")),
+                    found: value_str.to_string(),
+                    span: value_span.to_source_span(),
+                    src: source.to_string(),
+                })?;
+                Ok(EnumMatcher::Equals(variant))
+            }
+
+            EnumOperator::NotEquals => {
+                let variant = E::from_str(value_str).map_err(|_err_msg| DetectError::InvalidValue {
+                    expected: format!("one of: {}", E::all_valid_strings().join(", ")),
+                    found: value_str.to_string(),
+                    span: value_span.to_source_span(),
+                    src: source.to_string(),
+                })?;
+                Ok(EnumMatcher::NotEquals(variant))
+            }
+
+            EnumOperator::In => {
+                // Reuse existing set parsing logic, then validate each item
+                let string_matcher = Self::parse_as_set(value_str, value_span, source)?;
+
+                // Extract strings from the StringMatcher::In variant
+                let items = match string_matcher {
+                    StringMatcher::In(set) => set,
+                    _ => unreachable!("parse_as_set should return StringMatcher::In"),
+                };
+
+                // Validate each string and convert to enum variant
+                let mut variant_set = std::collections::HashSet::new();
+                for item in items {
+                    let variant = E::from_str(&item).map_err(|_err_msg| DetectError::InvalidValue {
+                        expected: format!("one of: {}", E::all_valid_strings().join(", ")),
+                        found: item.clone(),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    })?;
+                    variant_set.insert(variant);
+                }
+                Ok(EnumMatcher::In(variant_set))
+            }
         }
     }
 }
