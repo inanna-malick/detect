@@ -854,11 +854,11 @@ fn test_enum_valid_values_all_aliases() {
 fn test_enum_invalid_values() {
     // Test that invalid enum values produce helpful errors listing all valid options
     let invalid_cases = vec![
-        "type == dirq",        // Typo
-        "type == folder",      // Wrong name
-        "type == executable",  // Not a file type
-        "type == reg",         // Unix stat() name not supported
-        "type == unknown",     // Generic invalid
+        "type == dirq",       // Typo
+        "type == folder",     // Wrong name
+        "type == executable", // Not a file type
+        "type == reg",        // Unix stat() name not supported
+        "type == unknown",    // Generic invalid
     ];
 
     for expr in invalid_cases {
@@ -946,18 +946,22 @@ fn test_enum_invalid_value_in_set() {
 fn test_enum_incompatible_operators() {
     // Enum selectors don't support string-specific operators
     let invalid_operator_cases = vec![
-        "type ~= file",        // Regex not supported
-        "type contains dir",   // Contains not supported
-        "type > file",         // Greater than not supported
-        "type < dir",          // Less than not supported
-        "type >= socket",      // GTE not supported
-        "type before file",    // Temporal operator not supported
+        "type ~= file",      // Regex not supported
+        "type contains dir", // Contains not supported
+        "type > file",       // Greater than not supported
+        "type < dir",        // Less than not supported
+        "type >= socket",    // GTE not supported
+        "type before file",  // Temporal operator not supported
     ];
 
     for expr in invalid_operator_cases {
         let error = parse_and_typecheck(expr).unwrap_err();
         assert!(
-            matches!(error, TypecheckError::IncompatibleOperator { .. } | TypecheckError::UnknownOperator { .. }),
+            matches!(
+                error,
+                TypecheckError::IncompatibleOperator { .. }
+                    | TypecheckError::UnknownOperator { .. }
+            ),
             "Expected IncompatibleOperator or UnknownOperator for '{}', got: {:?}",
             expr,
             error
@@ -997,7 +1001,8 @@ fn test_enum_in_boolean_expressions() {
     assert!(matches!(typed, Expr::Not(_)));
 
     // Complex nested
-    let typed = parse_and_typecheck("(type in [file, dir] AND size > 0) OR name == README").unwrap();
+    let typed =
+        parse_and_typecheck("(type in [file, dir] AND size > 0) OR name == README").unwrap();
     match typed {
         Expr::Or(ref lhs, _) => {
             assert!(matches!(**lhs, Expr::And(_, _)));

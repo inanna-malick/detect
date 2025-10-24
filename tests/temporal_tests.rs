@@ -228,14 +228,13 @@ async fn test_absolute_dates_and_keywords() {
         .unwrap();
 
     // Test keyword-based queries
-    // TODO: parser doesn't support >= and <= for temporal operators yet
-    // run_temporal_test(
-    //     &tmp_dir,
-    //     "modified >= today",
-    //     vec!["today.txt"],
-    //     vec!["yesterday.txt", "week_old.txt"],
-    // )
-    // .await;
+    run_temporal_test(
+        &tmp_dir,
+        "modified >= today",
+        vec!["today.txt"],
+        vec!["yesterday.txt", "week_old.txt"],
+    )
+    .await;
     run_temporal_test(
         &tmp_dir,
         "modified == today",
@@ -243,14 +242,13 @@ async fn test_absolute_dates_and_keywords() {
         vec!["yesterday.txt"],
     )
     .await;
-    // TODO: parser doesn't support >= and <= for temporal operators yet
-    // run_temporal_test(
-    //     &tmp_dir,
-    //     "modified >= yesterday",
-    //     vec!["today.txt", "yesterday.txt"],
-    //     vec!["week_old.txt"],
-    // )
-    // .await;
+    run_temporal_test(
+        &tmp_dir,
+        "modified >= yesterday",
+        vec!["today.txt", "yesterday.txt"],
+        vec!["week_old.txt"],
+    )
+    .await;
     run_temporal_test(
         &tmp_dir,
         "modified < today",
@@ -328,14 +326,13 @@ async fn test_absolute_dates_and_keywords() {
         .set_modified(yesterday_end_systime)
         .unwrap();
 
-    // TODO: parser doesn't support >= and <= for temporal operators yet
-    // run_temporal_test(
-    //     &tmp_dir,
-    //     "modified >= today",
-    //     vec!["today.txt", "after_midnight.txt"],
-    //     vec!["before_midnight.txt"],
-    // )
-    // .await;
+    run_temporal_test(
+        &tmp_dir,
+        "modified >= today",
+        vec!["today.txt", "after_midnight.txt"],
+        vec!["before_midnight.txt"],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -391,16 +388,6 @@ async fn test_time_selectors() {
 
     run_temporal_test(&tmp_dir, "accessed > -1minute", vec!["test.txt"], vec![]).await;
     run_temporal_test(&tmp_dir, "accessed > -1minute", vec!["test.txt"], vec![]).await;
-
-    // Test time.selector syntax
-    // TODO: parser doesn't support time.modified selector syntax yet
-    // run_temporal_test(
-    //     &tmp_dir,
-    //     "time.modified > -1hour",
-    //     vec!["test.txt"],
-    //     vec!["old.txt"],
-    // )
-    // .await;
 
     // Test created time variants
     let mut created_files = Vec::new();
@@ -489,6 +476,97 @@ async fn test_temporal_combined_queries() {
         r#"!(basename contains "old") && modified > -1day"#,
         vec!["new.rs", "new.txt", "new_todo.rs"],
         vec!["old.rs", "old.txt", "old_todo.rs"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_greater_less_or_equal_operators() {
+    let tmp_dir = TempDir::new("detect-temporal-gte-lte").unwrap();
+
+    // Create files with precise timestamps
+    // Using slightly offset times to avoid boundary issues
+    let now = SystemTime::now();
+    let thirty_mins_ago = now - std::time::Duration::from_secs(30 * 60);
+    let ninety_mins_ago = now - std::time::Duration::from_secs(90 * 60);
+    let two_and_half_hours_ago = now - std::time::Duration::from_secs(150 * 60);
+    let four_hours_ago = now - std::time::Duration::from_secs(4 * 60 * 60);
+
+    let recent = tmp_dir.path().join("recent.txt");
+    let thirty_mins = tmp_dir.path().join("thirty_mins.txt");
+    let ninety_mins = tmp_dir.path().join("ninety_mins.txt");
+    let two_half_hours = tmp_dir.path().join("two_half_hours.txt");
+    let four_hours = tmp_dir.path().join("four_hours.txt");
+
+    std::fs::write(&recent, "recent").unwrap();
+    std::fs::write(&thirty_mins, "thirty_mins").unwrap();
+    std::fs::write(&ninety_mins, "ninety_mins").unwrap();
+    std::fs::write(&two_half_hours, "two_half_hours").unwrap();
+    std::fs::write(&four_hours, "four_hours").unwrap();
+
+    fs::File::open(&recent).unwrap().set_modified(now).unwrap();
+    fs::File::open(&thirty_mins)
+        .unwrap()
+        .set_modified(thirty_mins_ago)
+        .unwrap();
+    fs::File::open(&ninety_mins)
+        .unwrap()
+        .set_modified(ninety_mins_ago)
+        .unwrap();
+    fs::File::open(&two_half_hours)
+        .unwrap()
+        .set_modified(two_and_half_hours_ago)
+        .unwrap();
+    fs::File::open(&four_hours)
+        .unwrap()
+        .set_modified(four_hours_ago)
+        .unwrap();
+
+    // Test >= operator (after or equal) - should include files at or after the threshold
+    run_temporal_test(
+        &tmp_dir,
+        "modified >= -1hour",
+        vec!["recent.txt", "thirty_mins.txt"],
+        vec!["ninety_mins.txt", "two_half_hours.txt", "four_hours.txt"],
+    )
+    .await;
+
+    run_temporal_test(
+        &tmp_dir,
+        "modified >= -2hours",
+        vec!["recent.txt", "thirty_mins.txt", "ninety_mins.txt"],
+        vec!["two_half_hours.txt", "four_hours.txt"],
+    )
+    .await;
+
+    // Test <= operator (before or equal) - should include files at or before the threshold
+    run_temporal_test(
+        &tmp_dir,
+        "modified <= -1hour",
+        vec!["ninety_mins.txt", "two_half_hours.txt", "four_hours.txt"],
+        vec!["recent.txt", "thirty_mins.txt"],
+    )
+    .await;
+
+    run_temporal_test(
+        &tmp_dir,
+        "modified <= -3hours",
+        vec!["four_hours.txt"],
+        vec![
+            "recent.txt",
+            "thirty_mins.txt",
+            "ninety_mins.txt",
+            "two_half_hours.txt",
+        ],
+    )
+    .await;
+
+    // Test combining >= and <= to create a time range
+    run_temporal_test(
+        &tmp_dir,
+        "modified >= -3hours AND modified <= -1hour",
+        vec!["ninety_mins.txt", "two_half_hours.txt"],
+        vec!["recent.txt", "thirty_mins.txt", "four_hours.txt"],
     )
     .await;
 }

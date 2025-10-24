@@ -352,6 +352,8 @@ pub enum NumberMatcher {
 pub enum TimeMatcher {
     Before(DateTime<Local>),
     After(DateTime<Local>),
+    BeforeOrEqual(DateTime<Local>),
+    AfterOrEqual(DateTime<Local>),
     Equals(DateTime<Local>),
     NotEquals(DateTime<Local>),
 }
@@ -366,6 +368,8 @@ impl TimeMatcher {
         match self {
             TimeMatcher::Before(dt) => file_datetime < *dt,
             TimeMatcher::After(dt) => file_datetime > *dt,
+            TimeMatcher::BeforeOrEqual(dt) => file_datetime <= *dt,
+            TimeMatcher::AfterOrEqual(dt) => file_datetime >= *dt,
             TimeMatcher::Equals(dt) => file_datetime.date_naive() == dt.date_naive(),
             TimeMatcher::NotEquals(dt) => file_datetime.date_naive() != dt.date_naive(),
         }
@@ -377,6 +381,8 @@ impl PartialEq for TimeMatcher {
         match (self, other) {
             (TimeMatcher::Before(a), TimeMatcher::Before(b)) => a == b,
             (TimeMatcher::After(a), TimeMatcher::After(b)) => a == b,
+            (TimeMatcher::BeforeOrEqual(a), TimeMatcher::BeforeOrEqual(b)) => a == b,
+            (TimeMatcher::AfterOrEqual(a), TimeMatcher::AfterOrEqual(b)) => a == b,
             (TimeMatcher::Equals(a), TimeMatcher::Equals(b)) => a == b,
             (TimeMatcher::NotEquals(a), TimeMatcher::NotEquals(b)) => a == b,
             _ => false,

@@ -77,7 +77,7 @@ impl<'a> Case<'a> {
         let mut expected = self.expected.to_owned();
         expected.sort();
 
-        // TODO: ordering-agnostic comparison
+        // Sort both sides for ordering-agnostic comparison
         assert_eq!(expected, out, "Failed for expression: {}", self.expr)
     }
 }

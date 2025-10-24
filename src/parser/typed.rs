@@ -41,10 +41,12 @@ pub enum NumericOperator {
 /// Operators that can be applied to temporal-type selectors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TemporalOperator {
-    Equals,    // ==, =, eq
-    NotEquals, // !=, <>, ne
-    Before,    // <, before, lt
-    After,     // >, after, gt
+    Equals,        // ==, =, eq
+    NotEquals,     // !=, <>, ne
+    Before,        // <, before, lt
+    After,         // >, after, gt
+    BeforeOrEqual, // <=, =<, lte, le
+    AfterOrEqual,  // >=, =>, gte, ge
 }
 
 /// Operators that can be applied to enum-type selectors
@@ -219,6 +221,8 @@ pub fn parse_temporal_operator(s: &str) -> Result<TemporalOperator, ParseError> 
         "!=" | "<>" | "ne" | "neq" => Ok(TemporalOperator::NotEquals),
         "<" | "before" | "lt" => Ok(TemporalOperator::Before),
         ">" | "after" | "gt" => Ok(TemporalOperator::After),
+        "<=" | "=<" | "lte" | "le" => Ok(TemporalOperator::BeforeOrEqual),
+        ">=" | "=>" | "gte" | "ge" => Ok(TemporalOperator::AfterOrEqual),
         _ => Err(ParseError::UnknownOperator(s.to_string())),
     }
 }
