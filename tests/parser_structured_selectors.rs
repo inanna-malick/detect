@@ -5,7 +5,7 @@
 
 use detect::expr::Expr;
 use detect::parser::structured_path::PathComponent;
-use detect::parser::typed::{DataFormat, StructuredOperator};
+use detect::parser::typed::StructuredOperator;
 use detect::parser::{RawParser, Typechecker};
 use detect::predicate::{Predicate, StructuredDataPredicate};
 
@@ -21,7 +21,7 @@ fn parse_unquoted_number() {
 
     match typed_expr {
         Expr::Predicate(Predicate::StructuredData(
-            StructuredDataPredicate::YamlValue { path, operator, value }
+            StructuredDataPredicate::YamlValue { path, operator, value, .. }
         )) => {
             assert_eq!(path, vec![PathComponent::Key("port".to_string())]);
             assert_eq!(operator, StructuredOperator::Equals);
@@ -719,5 +719,79 @@ fn parse_complex_recursive_query() {
             }
         }
         _ => panic!("Expected AND expression"),
+    }
+}
+
+#[test]
+fn test_raw_string_preservation_yaml() {
+    // Test that raw_string field preserves original input exactly
+    let test_cases = vec![
+        ("yaml:.count == 1_000_000", "1_000_000"),
+        ("yaml:.permissions == 0755", "0755"),
+        ("yaml:.enabled == yes", "yes"),
+        ("yaml:.version == 1.0", "1.0"),
+        ("yaml:.name == test", "test"),
+    ];
+
+    for (input, expected_raw) in test_cases {
+        let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+        let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+        match typed_expr {
+            Expr::Predicate(Predicate::StructuredData(
+                StructuredDataPredicate::YamlValue { raw_string, .. }
+            )) => {
+                assert_eq!(raw_string, expected_raw, "Input: {}", input);
+            }
+            _ => panic!("Expected YamlValue predicate for input: {}", input),
+        }
+    }
+}
+
+#[test]
+fn test_raw_string_preservation_json() {
+    // Test that raw_string field preserves original input for JSON
+    let test_cases = vec![
+        ("json:.version == 1.0", "1.0"),
+        ("json:.count == 42", "42"),
+        ("json:.name == test", "test"),
+    ];
+
+    for (input, expected_raw) in test_cases {
+        let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+        let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+        match typed_expr {
+            Expr::Predicate(Predicate::StructuredData(
+                StructuredDataPredicate::JsonValue { raw_string, .. }
+            )) => {
+                assert_eq!(raw_string, expected_raw, "Input: {}", input);
+            }
+            _ => panic!("Expected JsonValue predicate for input: {}", input),
+        }
+    }
+}
+
+#[test]
+fn test_raw_string_preservation_toml() {
+    // Test that raw_string field preserves original input for TOML
+    let test_cases = vec![
+        ("toml:.max_connections == 10_000", "10_000"),
+        ("toml:.port == 8080", "8080"),
+        ("toml:.enabled == true", "true"),
+    ];
+
+    for (input, expected_raw) in test_cases {
+        let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+        let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+        match typed_expr {
+            Expr::Predicate(Predicate::StructuredData(
+                StructuredDataPredicate::TomlValue { raw_string, .. }
+            )) => {
+                assert_eq!(raw_string, expected_raw, "Input: {}", input);
+            }
+            _ => panic!("Expected TomlValue predicate for input: {}", input),
+        }
     }
 }

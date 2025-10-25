@@ -285,6 +285,9 @@ impl Typechecker {
         use crate::predicate::StructuredDataPredicate;
         use typed::{DataFormat, StructuredOperator};
 
+        // Capture raw string for string coercion fallback (preserves original formatting)
+        let raw_string = value.as_string().to_string();
+
         // Build native value based on format
         let predicate = match format {
             DataFormat::Yaml => {
@@ -311,6 +314,7 @@ impl Typechecker {
                     path,
                     operator,
                     value: yaml_value,
+                    raw_string,
                 }
             }
 
@@ -337,6 +341,7 @@ impl Typechecker {
                     path,
                     operator,
                     value: json_value,
+                    raw_string: raw_string.clone(),
                 }
             }
 
@@ -363,6 +368,7 @@ impl Typechecker {
                     path,
                     operator,
                     value: toml_value,
+                    raw_string: raw_string.clone(),
                 }
             }
         };

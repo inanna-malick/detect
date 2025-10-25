@@ -877,12 +877,18 @@ impl MetadataPredicate {
 
 /// Structured data predicate for yaml/json/toml queries
 /// Separates value operations (==, >, etc) from string operations (regex, contains)
+///
+/// Value variants store both:
+/// - `value`: Native parsed type for type-safe comparisons
+/// - `raw_string`: Original RHS string for string coercion fallback in equality checks
+///   (prevents information loss from parse→stringify, e.g., "1_000" → 1000 → "1000")
 #[derive(Debug, Clone, PartialEq)]
 pub enum StructuredDataPredicate {
     YamlValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
         value: yaml_rust::Yaml,
+        raw_string: String,
     },
     YamlString {
         path: Vec<crate::parser::structured_path::PathComponent>,
@@ -892,6 +898,7 @@ pub enum StructuredDataPredicate {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
         value: serde_json::Value,
+        raw_string: String,
     },
     JsonString {
         path: Vec<crate::parser::structured_path::PathComponent>,
@@ -901,6 +908,7 @@ pub enum StructuredDataPredicate {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
         value: toml::Value,
+        raw_string: String,
     },
     TomlString {
         path: Vec<crate::parser::structured_path::PathComponent>,
