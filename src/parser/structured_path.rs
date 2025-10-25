@@ -306,8 +306,9 @@ mod tests {
     }
 
     #[test]
-    fn test_error_double_dot() {
-        let result = parse_path("..field");
+    fn test_error_triple_dot() {
+        // Triple dots are invalid (recursive descent is only double dots)
+        let result = parse_path("...field");
         assert!(matches!(result, Err(PathParseError::Syntax(_))));
     }
 

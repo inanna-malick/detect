@@ -145,6 +145,7 @@ pub enum TypedSelector {
     Enum(EnumSelector, EnumOperator),
     Temporal(TemporalSelector, TemporalOperator),
     StructuredData(DataFormat, Vec<StructuredPathComponent>, StructuredOperator),
+    StructuredDataString(DataFormat, Vec<StructuredPathComponent>, StringOperator),
 }
 
 /// Operators for structured data selectors
@@ -157,7 +158,7 @@ pub enum StructuredOperator {
     GreaterOrEqual, // >=
     Less,           // <
     LessOrEqual,    // <=
-    Matches,        // ~, ~= (regex on stringified value)
+    // Regex/contains handled via StringMatcher in separate predicate variants
 }
 
 // ============================================================================
@@ -300,9 +301,18 @@ pub fn parse_structured_operator(s: &str) -> Result<StructuredOperator, ParseErr
         ">=" | "=>" | "gte" | "ge" => Ok(StructuredOperator::GreaterOrEqual),
         "<" | "lt" => Ok(StructuredOperator::Less),
         "<=" | "=<" | "lte" | "le" => Ok(StructuredOperator::LessOrEqual),
-        "~=" | "=~" | "~" | "matches" | "regex" => Ok(StructuredOperator::Matches),
+        // String operations (~=, contains) handled separately
         _ => Err(ParseError::UnknownOperator(s.to_string())),
     }
+}
+
+/// Check if operator is a string operation (regex or contains)
+pub fn is_string_operator(s: &str) -> bool {
+    let s_lower = s.to_lowercase();
+    matches!(
+        s_lower.as_str(),
+        "~=" | "=~" | "~" | "matches" | "regex" | "contains"
+    )
 }
 
 /// Parse selector and operator together, ensuring type compatibility
@@ -434,24 +444,47 @@ pub fn parse_selector_operator(
         }
 
         SelectorCategory::StructuredData(format, components) => {
-            let operator = parse_structured_operator(operator_str).map_err(|_| {
-                if is_known_operator {
-                    TypecheckError::IncompatibleOperator {
-                        selector: selector_str.to_string(),
-                        operator: operator_str.to_string(),
-                        selector_span: selector_span.to_source_span(),
-                        operator_span: operator_span.to_source_span(),
-                        src: source.to_string(),
+            // Check if it's a string operator (regex, contains)
+            if is_string_operator(operator_str) {
+                let string_op = parse_string_operator(operator_str).map_err(|_| {
+                    if is_known_operator {
+                        TypecheckError::IncompatibleOperator {
+                            selector: selector_str.to_string(),
+                            operator: operator_str.to_string(),
+                            selector_span: selector_span.to_source_span(),
+                            operator_span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
+                    } else {
+                        TypecheckError::UnknownOperator {
+                            operator: operator_str.to_string(),
+                            span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
                     }
-                } else {
-                    TypecheckError::UnknownOperator {
-                        operator: operator_str.to_string(),
-                        span: operator_span.to_source_span(),
-                        src: source.to_string(),
+                })?;
+                Ok(TypedSelector::StructuredDataString(format, components, string_op))
+            } else {
+                // Value operator (==, >, <, etc)
+                let operator = parse_structured_operator(operator_str).map_err(|_| {
+                    if is_known_operator {
+                        TypecheckError::IncompatibleOperator {
+                            selector: selector_str.to_string(),
+                            operator: operator_str.to_string(),
+                            selector_span: selector_span.to_source_span(),
+                            operator_span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
+                    } else {
+                        TypecheckError::UnknownOperator {
+                            operator: operator_str.to_string(),
+                            span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
                     }
-                }
-            })?;
-            Ok(TypedSelector::StructuredData(format, components, operator))
+                })?;
+                Ok(TypedSelector::StructuredData(format, components, operator))
+            }
         }
     }
 }

@@ -176,6 +176,9 @@ impl Typechecker {
             TypedSelector::StructuredData(format, path, operator) => {
                 Self::build_structured_predicate(format, path, operator, &pred.value, pred.value_span, source)
             }
+            TypedSelector::StructuredDataString(format, path, string_operator) => {
+                Self::build_structured_string_predicate(format, path, string_operator, &pred.value, pred.value_span, source)
+            }
         }
     }
 
@@ -270,7 +273,7 @@ impl Typechecker {
         }
     }
 
-    /// Build a structured data predicate (yaml/json/toml)
+    /// Build a structured data value predicate (yaml/json/toml with value operations)
     fn build_structured_predicate(
         format: typed::DataFormat,
         path: Vec<super::structured_path::PathComponent>,
@@ -279,86 +282,178 @@ impl Typechecker {
         value_span: pest::Span,
         source: &str,
     ) -> Result<Predicate, DetectError> {
-        let typed_value = Self::parse_structured_value(value, operator, value_span, source)?;
-
         use crate::predicate::StructuredDataPredicate;
-        Ok(Predicate::structured_data(StructuredDataPredicate {
-            format,
-            path,
-            operator,
-            value: typed_value,
-        }))
-    }
+        use typed::{DataFormat, StructuredOperator};
 
-    /// Parse a value for structured data predicates with type validation
-    ///
-    /// Type inference rules:
-    /// - Quoted values → always String
-    /// - Comparison ops (>, <, >=, <=) → require Number
-    /// - Regex op (~=) → require String
-    /// - Equality (==, !=) with unquoted → try Bool → try i64 → fallback String
-    fn parse_structured_value(
-        value: &RawValue,
-        operator: typed::StructuredOperator,
-        value_span: pest::Span,
-        source: &str,
-    ) -> Result<crate::predicate::StructuredValue, DetectError> {
-        use crate::predicate::StructuredValue;
-        use typed::StructuredOperator;
+        // Build native value based on format
+        let predicate = match format {
+            DataFormat::Yaml => {
+                let yaml_value = Self::build_yaml_rhs(value);
 
-        let value_str = value.as_string();
-
-        // Comparison operators require numeric values
-        match operator {
-            StructuredOperator::Greater
-            | StructuredOperator::GreaterOrEqual
-            | StructuredOperator::Less
-            | StructuredOperator::LessOrEqual => {
-                // Quoted strings cannot be used with comparison operators
-                if value.is_quoted() {
+                // Validate comparison operators require numeric values
+                if matches!(
+                    operator,
+                    StructuredOperator::Greater
+                        | StructuredOperator::GreaterOrEqual
+                        | StructuredOperator::Less
+                        | StructuredOperator::LessOrEqual
+                ) && !Self::is_comparable_yaml(&yaml_value)
+                {
                     return Err(DetectError::InvalidValue {
-                        expected: "numeric value (unquoted number)".to_string(),
-                        found: format!("\"{}\"", value_str),
+                        expected: "numeric or date value".to_string(),
+                        found: format!("{:?}", yaml_value),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
                     });
                 }
 
-                // Try to parse as number
-                value_str.parse::<i64>()
-                    .map(StructuredValue::Number)
-                    .map_err(|_| DetectError::InvalidValue {
-                        expected: "numeric value".to_string(),
-                        found: value_str.to_string(),
+                StructuredDataPredicate::YamlValue {
+                    path,
+                    operator,
+                    value: yaml_value,
+                }
+            }
+
+            DataFormat::Json => {
+                let json_value = Self::build_json_rhs(value);
+
+                if matches!(
+                    operator,
+                    StructuredOperator::Greater
+                        | StructuredOperator::GreaterOrEqual
+                        | StructuredOperator::Less
+                        | StructuredOperator::LessOrEqual
+                ) && !Self::is_comparable_json(&json_value)
+                {
+                    return Err(DetectError::InvalidValue {
+                        expected: "numeric or date value".to_string(),
+                        found: format!("{:?}", json_value),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
-                    })
-            }
-
-            // Regex operator requires string
-            StructuredOperator::Matches => {
-                Ok(StructuredValue::String(value_str.to_string()))
-            }
-
-            // Equality operators: infer type from value
-            StructuredOperator::Equals | StructuredOperator::NotEquals => {
-                // Quoted → always string
-                if value.is_quoted() {
-                    return Ok(StructuredValue::String(value_str.to_string()));
+                    });
                 }
 
-                // Unquoted → try bool, then number, then string
-                if value_str == "true" {
-                    Ok(StructuredValue::Bool(true))
-                } else if value_str == "false" {
-                    Ok(StructuredValue::Bool(false))
-                } else if let Ok(num) = value_str.parse::<i64>() {
-                    Ok(StructuredValue::Number(num))
-                } else {
-                    Ok(StructuredValue::String(value_str.to_string()))
+                StructuredDataPredicate::JsonValue {
+                    path,
+                    operator,
+                    value: json_value,
                 }
+            }
+
+            DataFormat::Toml => {
+                let toml_value = Self::build_toml_rhs(value);
+
+                if matches!(
+                    operator,
+                    StructuredOperator::Greater
+                        | StructuredOperator::GreaterOrEqual
+                        | StructuredOperator::Less
+                        | StructuredOperator::LessOrEqual
+                ) && !Self::is_comparable_toml(&toml_value)
+                {
+                    return Err(DetectError::InvalidValue {
+                        expected: "numeric or date value".to_string(),
+                        found: format!("{:?}", toml_value),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    });
+                }
+
+                StructuredDataPredicate::TomlValue {
+                    path,
+                    operator,
+                    value: toml_value,
+                }
+            }
+        };
+
+        Ok(Predicate::structured_data(predicate))
+    }
+
+    /// Build a structured data string predicate (yaml/json/toml with string operations like regex/contains)
+    fn build_structured_string_predicate(
+        format: typed::DataFormat,
+        path: Vec<super::structured_path::PathComponent>,
+        string_operator: typed::StringOperator,
+        value: &RawValue,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        use crate::predicate::StructuredDataPredicate;
+        use typed::DataFormat;
+
+        // Build StringMatcher using existing logic
+        let matcher = Self::parse_string_value(value, string_operator, value_span, source)?;
+
+        let predicate = match format {
+            DataFormat::Yaml => StructuredDataPredicate::YamlString { path, matcher },
+            DataFormat::Json => StructuredDataPredicate::JsonString { path, matcher },
+            DataFormat::Toml => StructuredDataPredicate::TomlString { path, matcher },
+        };
+
+        Ok(Predicate::structured_data(predicate))
+    }
+
+    /// Build a YAML value from RHS, always attempting parse with string fallback
+    ///
+    /// Quotes are transparent (only for shell escaping).
+    /// Always tries to parse content as YAML, falls back to string literal.
+    fn build_yaml_rhs(value: &RawValue) -> yaml_rust::Yaml {
+        let content = value.as_string();
+
+        yaml_rust::YamlLoader::load_from_str(content)
+            .ok()
+            .and_then(|mut docs| docs.pop())
+            .unwrap_or_else(|| yaml_rust::Yaml::String(content.to_string()))
+    }
+
+    /// Build a JSON value from RHS, always attempting parse with string fallback
+    fn build_json_rhs(value: &RawValue) -> serde_json::Value {
+        let content = value.as_string();
+
+        serde_json::from_str(content)
+            .unwrap_or_else(|_| serde_json::Value::String(content.to_string()))
+    }
+
+    /// Build a TOML value from RHS, always attempting parse with string fallback
+    fn build_toml_rhs(value: &RawValue) -> toml::Value {
+        let content = value.as_string();
+
+        // Try 1: Synthetic document approach
+        // Construct synthetic TOML document and parse it
+        // This lets TOML parser handle all types (bool, int, float, datetime, arrays, inline tables, etc)
+        let synthetic_doc = format!("_v = {}", content);
+        if let Ok(parsed) = toml::from_str::<toml::Table>(&synthetic_doc) {
+            if let Some(value) = parsed.get("_v") {
+                return value.clone();
             }
         }
+
+        // Try 2: Direct TOML value parsing
+        // Handles edge cases where synthetic approach fails
+        // Example: toml:.foo == "v = 1" → synthetic produces "_v = v = 1" (invalid)
+        //          but direct parsing can handle it as a complete document
+        if let Ok(value) = toml::from_str::<toml::Value>(content) {
+            return value;
+        }
+
+        // Try 3: Fallback to string
+        toml::Value::String(content.to_string())
+    }
+
+    /// Check if a YAML value is comparable (numeric or date-like)
+    fn is_comparable_yaml(value: &yaml_rust::Yaml) -> bool {
+        matches!(value, yaml_rust::Yaml::Integer(_) | yaml_rust::Yaml::Real(_))
+    }
+
+    /// Check if a JSON value is comparable
+    fn is_comparable_json(value: &serde_json::Value) -> bool {
+        value.is_number()
+    }
+
+    /// Check if a TOML value is comparable
+    fn is_comparable_toml(value: &toml::Value) -> bool {
+        matches!(value, toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Datetime(_))
     }
 
     /// Parse string value based on operator type

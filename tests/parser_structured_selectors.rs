@@ -1,13 +1,13 @@
 //! Tests for structured data selector parsing (yaml:, json:, toml:)
 //!
 //! Validates that selectors like `yaml:.spec.replicas == 5` parse correctly
-//! into StructuredData predicates with proper format, path, operator, and typed values.
+//! into StructuredData predicates with proper format, path, operator, and native typed values.
 
 use detect::expr::Expr;
 use detect::parser::structured_path::PathComponent;
 use detect::parser::typed::{DataFormat, StructuredOperator};
 use detect::parser::{RawParser, Typechecker};
-use detect::predicate::{Predicate, StructuredValue};
+use detect::predicate::{Predicate, StructuredDataPredicate};
 
 // ============================================================================
 // Type Inference Tests
@@ -20,13 +20,15 @@ fn parse_unquoted_number() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Yaml);
-            assert_eq!(pred.path, vec![PathComponent::Key("port".to_string())]);
-            assert_eq!(pred.operator, StructuredOperator::Equals);
-            assert_eq!(pred.value, StructuredValue::Number(8080));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, operator, value }
+        )) => {
+            assert_eq!(path, vec![PathComponent::Key("port".to_string())]);
+            assert_eq!(operator, StructuredOperator::Equals);
+            // Verify it parsed as integer
+            assert!(matches!(value, yaml_rust::Yaml::Integer(8080)));
         }
-        _ => panic!("Expected StructuredData predicate, got: {:?}", typed_expr),
+        _ => panic!("Expected YamlValue predicate, got: {:?}", typed_expr),
     }
 }
 
@@ -37,10 +39,13 @@ fn parse_quoted_number_as_string() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::String("8080".to_string()));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            // Quotes are transparent - "8080" parses as integer via YAML
+            assert!(matches!(value, yaml_rust::Yaml::Integer(8080)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -51,10 +56,12 @@ fn parse_unquoted_bool_true() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::Bool(true));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            assert!(matches!(value, yaml_rust::Yaml::Boolean(true)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -65,10 +72,12 @@ fn parse_unquoted_bool_false() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::Bool(false));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            assert!(matches!(value, yaml_rust::Yaml::Boolean(false)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -79,10 +88,13 @@ fn parse_quoted_bool_as_string() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::String("true".to_string()));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            // Quotes are transparent - "true" parses as boolean via YAML
+            assert!(matches!(value, yaml_rust::Yaml::Boolean(true)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -93,10 +105,13 @@ fn parse_unquoted_string_fallback() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::String("api".to_string()));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            // Bareword "api" doesn't parse as YAML, falls back to string
+            assert!(matches!(value, yaml_rust::Yaml::String(s) if s == "api"));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -111,10 +126,10 @@ fn parse_yaml_format() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Yaml);
+        Expr::Predicate(Predicate::StructuredData(StructuredDataPredicate::YamlValue { .. })) => {
+            // Success - it's a YamlValue variant
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -125,10 +140,10 @@ fn parse_json_format() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Json);
+        Expr::Predicate(Predicate::StructuredData(StructuredDataPredicate::JsonValue { .. })) => {
+            // Success - it's a JsonValue variant
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected JsonValue predicate"),
     }
 }
 
@@ -139,10 +154,10 @@ fn parse_toml_format() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Toml);
+        Expr::Predicate(Predicate::StructuredData(StructuredDataPredicate::TomlValue { .. })) => {
+            // Success - it's a TomlValue variant
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected TomlValue predicate"),
     }
 }
 
@@ -157,10 +172,12 @@ fn parse_single_key_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.path, vec![PathComponent::Key("name".to_string())]);
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
+            assert_eq!(path, vec![PathComponent::Key("name".to_string())]);
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -171,16 +188,18 @@ fn parse_nested_keys() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::Key("spec".to_string()),
                     PathComponent::Key("replicas".to_string()),
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -191,16 +210,18 @@ fn parse_array_index_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::JsonValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::Index(0),
                     PathComponent::Key("name".to_string()),
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected JsonValue predicate"),
     }
 }
 
@@ -211,9 +232,11 @@ fn parse_wildcard_array_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::Key("items".to_string()),
                     PathComponent::WildcardIndex,
@@ -221,7 +244,7 @@ fn parse_wildcard_array_path() {
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -232,9 +255,11 @@ fn parse_complex_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::Key("spec".to_string()),
                     PathComponent::Key("containers".to_string()),
@@ -243,7 +268,7 @@ fn parse_complex_path() {
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -258,11 +283,13 @@ fn parse_comparison_greater() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.operator, StructuredOperator::Greater);
-            assert_eq!(pred.value, StructuredValue::Number(5));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { operator, value, .. }
+        )) => {
+            assert_eq!(operator, StructuredOperator::Greater);
+            assert!(matches!(value, yaml_rust::Yaml::Integer(5)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -273,11 +300,13 @@ fn parse_comparison_greater_equal() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.operator, StructuredOperator::GreaterOrEqual);
-            assert_eq!(pred.value, StructuredValue::Number(10));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { operator, value, .. }
+        )) => {
+            assert_eq!(operator, StructuredOperator::GreaterOrEqual);
+            assert!(matches!(value, yaml_rust::Yaml::Integer(10)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -288,10 +317,12 @@ fn parse_comparison_less() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.operator, StructuredOperator::Less);
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { operator, .. }
+        )) => {
+            assert_eq!(operator, StructuredOperator::Less);
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -302,11 +333,13 @@ fn parse_regex_operator() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.operator, StructuredOperator::Matches);
-            assert_eq!(pred.value, StructuredValue::String("test.*".to_string()));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlString { matcher, .. }
+        )) => {
+            // Verify it's a regex matcher (StringMatcher::Regex)
+            assert!(matches!(matcher, detect::predicate::StringMatcher::Regex(_)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlString predicate with regex"),
     }
 }
 
@@ -396,19 +429,20 @@ fn parse_package_json_node_version() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Json);
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::JsonValue { path, value, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::Key("engines".to_string()),
                     PathComponent::Key("node".to_string()),
                 ]
             );
-            // Note: Quoted "18" becomes String, not Number
-            assert_eq!(pred.value, StructuredValue::String("18".to_string()));
+            // Quotes are transparent - "18" parses as number via JSON
+            assert!(matches!(value, serde_json::Value::Number(n) if n.as_i64() == Some(18)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected JsonValue predicate"),
     }
 }
 
@@ -419,12 +453,13 @@ fn parse_toml_privileged_port() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Toml);
-            assert_eq!(pred.operator, StructuredOperator::Less);
-            assert_eq!(pred.value, StructuredValue::Number(1024));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::TomlValue { operator, value, .. }
+        )) => {
+            assert_eq!(operator, StructuredOperator::Less);
+            assert!(matches!(value, toml::Value::Integer(1024)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected TomlValue predicate"),
     }
 }
 
@@ -435,10 +470,12 @@ fn parse_negative_number() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::Number(-10));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            assert!(matches!(value, yaml_rust::Yaml::Integer(-10)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -449,10 +486,12 @@ fn parse_zero() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.value, StructuredValue::Number(0));
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { value, .. }
+        )) => {
+            assert!(matches!(value, yaml_rust::Yaml::Integer(0)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -467,15 +506,16 @@ fn parse_simple_recursive_descent() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Yaml);
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, value, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![PathComponent::RecursiveKey("password".to_string())]
             );
-            assert_eq!(pred.value, StructuredValue::String("secret".to_string()));
+            assert!(matches!(value, yaml_rust::Yaml::String(s) if s == "secret"));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -486,14 +526,16 @@ fn parse_recursive_debug_flag() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, value, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![PathComponent::RecursiveKey("debug".to_string())]
             );
-            assert_eq!(pred.value, StructuredValue::Bool(true));
+            assert!(matches!(value, yaml_rust::Yaml::Boolean(true)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -504,16 +546,18 @@ fn parse_key_then_recursive() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::Key("user".to_string()),
                     PathComponent::RecursiveKey("password".to_string()),
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -524,18 +568,20 @@ fn parse_recursive_then_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, value, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::RecursiveKey("metadata".to_string()),
                     PathComponent::Key("labels".to_string()),
                     PathComponent::Key("app".to_string()),
                 ]
             );
-            assert_eq!(pred.value, StructuredValue::String("web".to_string()));
+            assert!(matches!(value, yaml_rust::Yaml::String(s) if s == "web"));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -546,16 +592,17 @@ fn parse_recursive_with_comparison() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Toml);
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::TomlValue { path, operator, value, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![PathComponent::RecursiveKey("port".to_string())]
             );
-            assert_eq!(pred.operator, StructuredOperator::Less);
-            assert_eq!(pred.value, StructuredValue::Number(1024));
+            assert_eq!(operator, StructuredOperator::Less);
+            assert!(matches!(value, toml::Value::Integer(1024)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected TomlValue predicate"),
     }
 }
 
@@ -566,15 +613,16 @@ fn parse_recursive_with_regex() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
-            assert_eq!(pred.format, DataFormat::Json);
-            assert_eq!(pred.operator, StructuredOperator::Matches);
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::JsonString { path, matcher }
+        )) => {
             assert_eq!(
-                pred.value,
-                StructuredValue::String(".*@example\\.com".to_string())
+                path,
+                vec![PathComponent::RecursiveKey("email".to_string())]
             );
+            assert!(matches!(matcher, detect::predicate::StringMatcher::Regex(_)));
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected JsonString predicate with regex"),
     }
 }
 
@@ -585,16 +633,18 @@ fn parse_multiple_recursive() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::RecursiveKey("config".to_string()),
                     PathComponent::RecursiveKey("database".to_string()),
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -605,9 +655,11 @@ fn parse_recursive_with_array_index() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::RecursiveKey("users".to_string()),
                     PathComponent::Index(0),
@@ -615,7 +667,7 @@ fn parse_recursive_with_array_index() {
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -626,9 +678,11 @@ fn parse_recursive_with_wildcard() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(pred)) => {
+        Expr::Predicate(Predicate::StructuredData(
+            StructuredDataPredicate::YamlValue { path, .. }
+        )) => {
             assert_eq!(
-                pred.path,
+                path,
                 vec![
                     PathComponent::RecursiveKey("items".to_string()),
                     PathComponent::WildcardIndex,
@@ -636,7 +690,7 @@ fn parse_recursive_with_wildcard() {
                 ]
             );
         }
-        _ => panic!("Expected StructuredData predicate"),
+        _ => panic!("Expected YamlValue predicate"),
     }
 }
 
@@ -650,16 +704,18 @@ fn parse_complex_recursive_query() {
     match typed_expr {
         Expr::And(left, right) => {
             assert!(matches!(*left, Expr::Predicate(Predicate::Name(_))));
-            if let Expr::Predicate(Predicate::StructuredData(pred)) = *right {
+            if let Expr::Predicate(Predicate::StructuredData(
+                StructuredDataPredicate::YamlString { path, .. }
+            )) = *right {
                 assert_eq!(
-                    pred.path,
+                    path,
                     vec![
                         PathComponent::RecursiveKey("database".to_string()),
                         PathComponent::Key("password".to_string()),
                     ]
                 );
             } else {
-                panic!("Expected StructuredData predicate on right");
+                panic!("Expected YamlString predicate on right");
             }
         }
         _ => panic!("Expected AND expression"),

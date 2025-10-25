@@ -38,6 +38,8 @@ serde_json = { version = "1.0", optional = true }
 chrono = "0.4"
 thiserror = "2.0"
 miette = { version = "7.6.0", features = ["fancy"] }
+toml = "0.9.8"
+yaml-rust = "0.4.5"
 
 [dev-dependencies]
 tempdir = "0.3.7"

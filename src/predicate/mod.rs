@@ -568,7 +568,7 @@ pub enum NumericalOp {
     Less,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum Predicate<
     Name = NamePredicate,
     Metadata = MetadataPredicate,
@@ -875,21 +875,37 @@ impl MetadataPredicate {
     }
 }
 
-/// Typed value for structured data predicates
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StructuredValue {
-    Number(i64),
-    String(String),
-    Bool(bool),
-}
-
 /// Structured data predicate for yaml/json/toml queries
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StructuredDataPredicate {
-    pub format: crate::parser::typed::DataFormat,
-    pub path: Vec<crate::parser::structured_path::PathComponent>,
-    pub operator: crate::parser::typed::StructuredOperator,
-    pub value: StructuredValue,
+/// Separates value operations (==, >, etc) from string operations (regex, contains)
+#[derive(Debug, Clone, PartialEq)]
+pub enum StructuredDataPredicate {
+    YamlValue {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+        operator: crate::parser::typed::StructuredOperator,
+        value: yaml_rust::Yaml,
+    },
+    YamlString {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+        matcher: StringMatcher,
+    },
+    JsonValue {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+        operator: crate::parser::typed::StructuredOperator,
+        value: serde_json::Value,
+    },
+    JsonString {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+        matcher: StringMatcher,
+    },
+    TomlValue {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+        operator: crate::parser::typed::StructuredOperator,
+        value: toml::Value,
+    },
+    TomlString {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+        matcher: StringMatcher,
+    },
 }
 
 #[derive(Debug)]
