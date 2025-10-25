@@ -577,6 +577,7 @@ pub enum Predicate<
     Name(Arc<Name>),
     Metadata(Arc<Metadata>),
     Content(Content),
+    StructuredData(StructuredDataPredicate),
 }
 
 impl<N, M, C> Predicate<N, M, C> {
@@ -589,6 +590,9 @@ impl<N, M, C> Predicate<N, M, C> {
     pub fn contents(c: C) -> Self {
         Self::Content(c)
     }
+    pub fn structured_data(s: StructuredDataPredicate) -> Self {
+        Self::StructuredData(s)
+    }
 }
 
 impl<A, B, C: Clone> Clone for Predicate<A, B, C> {
@@ -597,6 +601,7 @@ impl<A, B, C: Clone> Clone for Predicate<A, B, C> {
             Self::Name(arg0) => Self::Name(arg0.clone()),
             Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
             Self::Content(arg0) => Self::Content(arg0.clone()),
+            Self::StructuredData(arg0) => Self::StructuredData(arg0.clone()),
         }
     }
 }
@@ -607,6 +612,7 @@ impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
             Predicate::Name(x) => write!(f, "{}", x),
             Predicate::Metadata(x) => write!(f, "{}", x),
             Predicate::Content(x) => write!(f, "{}", x),
+            Predicate::StructuredData(x) => write!(f, "{:?}", x),
         }
     }
 }
@@ -617,6 +623,7 @@ impl<A, B> Predicate<NamePredicate, A, B> {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
         }
     }
 
@@ -629,6 +636,7 @@ impl<A, B> Predicate<NamePredicate, A, B> {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match_with_base(path, base_path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
+            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
         }
     }
 }
@@ -642,6 +650,7 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
             Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
         }
     }
 
@@ -657,6 +666,7 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
             }
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
+            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
         }
     }
 }
@@ -863,6 +873,23 @@ impl MetadataPredicate {
             }
         }
     }
+}
+
+/// Typed value for structured data predicates
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StructuredValue {
+    Number(i64),
+    String(String),
+    Bool(bool),
+}
+
+/// Structured data predicate for yaml/json/toml queries
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuredDataPredicate {
+    pub format: crate::parser::typed::DataFormat,
+    pub path: Vec<crate::parser::structured_path::PathComponent>,
+    pub operator: crate::parser::typed::StructuredOperator,
+    pub value: StructuredValue,
 }
 
 #[derive(Debug)]

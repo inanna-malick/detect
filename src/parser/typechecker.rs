@@ -173,6 +173,9 @@ impl Typechecker {
             TypedSelector::Enum(selector, operator) => {
                 Self::build_enum_predicate(selector, operator, &pred.value, pred.value_span, source)
             }
+            TypedSelector::StructuredData(format, path, operator) => {
+                Self::build_structured_predicate(format, path, operator, &pred.value, pred.value_span, source)
+            }
         }
     }
 
@@ -263,6 +266,97 @@ impl Typechecker {
                 let enum_matcher =
                     Self::parse_enum_value::<DetectFileType>(value, operator, value_span, source)?;
                 Ok(Predicate::meta(MetadataPredicate::Type(enum_matcher)))
+            }
+        }
+    }
+
+    /// Build a structured data predicate (yaml/json/toml)
+    fn build_structured_predicate(
+        format: typed::DataFormat,
+        path: Vec<super::structured_path::PathComponent>,
+        operator: typed::StructuredOperator,
+        value: &RawValue,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        let typed_value = Self::parse_structured_value(value, operator, value_span, source)?;
+
+        use crate::predicate::StructuredDataPredicate;
+        Ok(Predicate::structured_data(StructuredDataPredicate {
+            format,
+            path,
+            operator,
+            value: typed_value,
+        }))
+    }
+
+    /// Parse a value for structured data predicates with type validation
+    ///
+    /// Type inference rules:
+    /// - Quoted values → always String
+    /// - Comparison ops (>, <, >=, <=) → require Number
+    /// - Regex op (~=) → require String
+    /// - Equality (==, !=) with unquoted → try Bool → try i64 → fallback String
+    fn parse_structured_value(
+        value: &RawValue,
+        operator: typed::StructuredOperator,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<crate::predicate::StructuredValue, DetectError> {
+        use crate::predicate::StructuredValue;
+        use typed::StructuredOperator;
+
+        let value_str = value.as_string();
+
+        // Comparison operators require numeric values
+        match operator {
+            StructuredOperator::Greater
+            | StructuredOperator::GreaterOrEqual
+            | StructuredOperator::Less
+            | StructuredOperator::LessOrEqual => {
+                // Quoted strings cannot be used with comparison operators
+                if value.is_quoted() {
+                    return Err(DetectError::InvalidValue {
+                        expected: "numeric value (unquoted number)".to_string(),
+                        found: format!("\"{}\"", value_str),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    });
+                }
+
+                // Try to parse as number
+                value_str.parse::<i64>()
+                    .map(StructuredValue::Number)
+                    .map_err(|_| DetectError::InvalidValue {
+                        expected: "numeric value".to_string(),
+                        found: value_str.to_string(),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    })
+            }
+
+            // Regex operator requires string
+            StructuredOperator::Matches => {
+                Ok(StructuredValue::String(value_str.to_string()))
+            }
+
+            // Equality operators: infer type from value
+            StructuredOperator::Equals | StructuredOperator::NotEquals => {
+                // Quoted → always string
+                if value.is_quoted() {
+                    return Ok(StructuredValue::String(value_str.to_string()));
+                }
+
+                // Unquoted → try bool, then number, then string
+                if value_str == "true" {
+                    Ok(StructuredValue::Bool(true))
+                } else if value_str == "false" {
+                    Ok(StructuredValue::Bool(false))
+                } else if let Ok(num) = value_str.parse::<i64>() {
+                    Ok(StructuredValue::Number(num))
+                } else {
+                    Ok(StructuredValue::String(value_str.to_string()))
+                }
             }
         }
     }

@@ -10,7 +10,7 @@ expr = { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
   primary = _{ predicate | single_word | "(" ~ expr ~ ")" }
 
 predicate = { selector ~ operator ~ value }
-  selector = @{ (ASCII_ALPHANUMERIC | "." | "_")+ }
+  selector = @{ (ASCII_ALPHANUMERIC | "." | "_" | "[" | "]" | "*" | ":")+ }
   // Parse operators flexibly - validate in typechecker
   // Start with symbols or letters, but not mix arbitrarily
   operator = @{ 
