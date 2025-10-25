@@ -439,26 +439,6 @@ fn test_value_edge_cases() {
 }
 
 #[test]
-fn test_glob_vs_predicate_conflicts() {
-    // Things that could be ambiguous between glob and predicate
-
-    // This should be a predicate, not a glob
-    let result = RawParser::parse_raw_expr("*.rs");
-    assert_eq!(result.unwrap().to_test_expr(), RawTestExpr::Glob("*.rs"));
-
-    // What about something that starts like a predicate but is incomplete?
-    let result = RawParser::parse_raw_expr("name*");
-    assert_eq!(result.unwrap().to_test_expr(), RawTestExpr::Glob("name*"));
-
-    // Glob with spaces (actually fails to parse - not supported by grammar)
-    let result = RawParser::parse_raw_expr("test file");
-    assert!(
-        result.is_err(),
-        "Glob with spaces should fail in current grammar"
-    );
-}
-
-#[test]
 fn test_complex_real_world_cases() {
     // Very complex expression - verify it parses to AND at root
     let complex = r#"(name == "test.rs" OR ext in [js, ts, "file.jsx"]) AND NOT (size > 1mb OR modified < -7d) AND content ~= "(TODO|FIXME)""#;

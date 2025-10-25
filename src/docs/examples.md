@@ -6,19 +6,15 @@ Quick examples for common file search tasks.
 
 ```bash
 # All Rust files
-detect '*.rs'
 detect 'ext == rs'
 
 # JavaScript/TypeScript files
-detect '*.{js,ts,jsx,tsx}'
 detect 'ext in [js,ts,jsx,tsx]'
 
 # Files with "test" in name
-detect '*test*'
 detect 'name contains test'
 
 # README files
-detect '*README*'
 detect 'name == README.md'
 ```
 
@@ -51,23 +47,23 @@ detect 'size > 100kb AND modified > -7d'
 detect 'modified > -1h'
 
 # Small documentation files
-detect '*.md && size < 10kb'
+detect 'ext == md AND size < 10kb'
 ```
 
 ## Complex Combinations
 
 ```bash
 # Rust files with async code
-detect '*.rs && content ~= async'
+detect 'ext == rs AND content ~= async'
 
 # Large TypeScript files without tests
 detect 'ext == ts AND size > 10kb AND NOT content contains test'
 
 # Recent changes to config files
-detect '*.{json,yaml,toml,ini} && modified > -3d'
+detect 'ext in [json,yaml,toml,ini] AND modified > -3d'
 
 # Build files and scripts
-detect 'name in [Makefile,Dockerfile,package.json] OR *.{sh,py,js}'
+detect 'name in [Makefile,Dockerfile,package.json] OR ext in [sh,py,js]'
 
 # Find potential secrets (be careful!)
 detect 'content ~= "(password|secret|api_key)" AND NOT path ~= test'
@@ -80,7 +76,7 @@ detect 'content ~= "(password|secret|api_key)" AND NOT path ~= test'
 detect 'path ~= "^./src/" AND type == file'
 
 # Exclude node_modules and target directories
-detect '*.js AND NOT path ~= "(node_modules|target)"'
+detect 'ext == js AND NOT path ~= "(node_modules|target)"'
 
 # Files at specific depth
 detect 'depth == 2 AND ext == rs'
@@ -90,22 +86,58 @@ detect 'depth == 2 AND ext == rs'
 
 ```bash
 # find . -name "*.js" -size +1M
-detect '*.js && size > 1mb'
+detect 'ext == js AND size > 1mb'
 
 # find . -type f -exec grep -l "TODO" {} \;
-detect 'content contains TODO'
+detect 'type == file AND content contains TODO'
 
 # find . -name "*test*" -mtime -7
-detect '*test* && modified > -7d'
+detect 'name contains test AND modified > -7d'
+
+# find . -type d
+detect 'type == dir'
 
 # grep -r "class.*Service" --include="*.ts" .
 detect 'ext == ts AND content ~= "class.*Service"'
 ```
 
+## File Type Aliases (Convenience Shortcuts)
+
+For common file type queries, single-word aliases provide shorthand:
+
+```bash
+# Regular files only
+detect 'file'
+
+# Directories only
+detect 'dir'
+
+# Symbolic links
+detect 'symlink'
+
+# Subdirectories (not root)
+detect 'dir && depth > 0'
+
+# Large regular files
+detect 'file && size > 10mb'
+
+# Recent directories
+detect 'dir && modified > -7d'
+```
+
+**Available aliases:** `file`, `dir`/`directory`, `symlink`/`link`, `socket`/`sock`, `fifo`/`pipe`, `block`/`blockdev`, `char`/`chardev` (case-insensitive)
+
+**Equivalence:**
+- `file` is shorthand for `type == file`
+- `dir && depth > 0` is shorthand for `type == dir AND depth > 0`
+
 ## Tips
 
-- Use `*.pattern` for familiar shell-style matching
-- Use predicates for more complex filters
-- Combine both: `*.rs && size > 1kb`
+- Use `ext == value` for extension matching (not wildcards)
+- Use `name contains text` for filename substring searches
+- Use regex for complex patterns: `name ~= "pattern"`
+- File type aliases (`file`, `dir`, `symlink`) are convenient shortcuts
+- Combine aliases with predicates: `file && size > 1mb`
 - Quote expressions with spaces or special characters
 - Use `-i` flag to include gitignored files
+- Start with metadata filters before content searches for performance

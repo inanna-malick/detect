@@ -120,9 +120,9 @@ Combine expressions with logical operators:
 | Operator | Description | Example |
 |----------|-------------|---------|
 | `AND` / `&&` | Both conditions true | `ext == rs AND size > 1kb` |
-| `OR` / `\|\|` | Either condition true | `*.md OR content contains TODO` |
-| `NOT` / `!` | Negate condition | `NOT *.test.*` |
-| `( )` | Group expressions | `(*.rs OR *.toml) AND size > 1kb` |
+| `OR` / `\|\|` | Either condition true | `file OR dir` |
+| `NOT` / `!` | Negate condition | `NOT symlink` |
+| `( )` | Group expressions | `(file OR dir) AND size > 1kb` |
 
 ### Precedence (highest to lowest):
 1. `NOT` / `!`
@@ -139,7 +139,7 @@ Use parentheses for clarity: `(a OR b) AND c`
 ❌ **Wrong**: `size > 1MB` (wrong unit case)
 ✅ **Right**: `size > 1mb` (units are lowercase)
 
-❌ **Wrong**: `name contains *.rs` (mixing glob with predicate)
-✅ **Right**: `*.rs` OR `name contains .rs`
+❌ **Wrong**: `*.rs` (wildcards not supported)
+✅ **Right**: `ext == rs` or use regex `name ~= ".*\.rs$"`
 
 **Note**: Spaces in sets are fine - both `ext in [js,ts]` and `ext in [js, ts]` work identically.

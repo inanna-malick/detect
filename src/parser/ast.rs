@@ -23,7 +23,7 @@ pub enum RawExpr<'a> {
     And(Box<RawExpr<'a>>, Box<RawExpr<'a>>),
     Or(Box<RawExpr<'a>>, Box<RawExpr<'a>>),
     Predicate(RawPredicate<'a>),
-    Glob(pest::Span<'a>),
+    SingleWord(pest::Span<'a>),
 }
 
 impl<'a> RawExpr<'a> {
@@ -42,7 +42,7 @@ impl<'a> RawExpr<'a> {
             RawExpr::Predicate(pred) => {
                 test_utils::RawTestExpr::Predicate(pred.to_test_predicate())
             }
-            RawExpr::Glob(span) => test_utils::RawTestExpr::Glob(span.as_str()),
+            RawExpr::SingleWord(span) => test_utils::RawTestExpr::SingleWord(span.as_str()),
         }
     }
 }
@@ -108,7 +108,7 @@ pub mod test_utils {
         And(Box<RawTestExpr<'a>>, Box<RawTestExpr<'a>>),
         Or(Box<RawTestExpr<'a>>, Box<RawTestExpr<'a>>),
         Predicate(RawTestPredicate<'a>),
-        Glob(&'a str),
+        SingleWord(&'a str),
     }
 
     impl<'a> RawTestExpr<'a> {
@@ -141,9 +141,9 @@ pub mod test_utils {
             })
         }
 
-        /// Helper constructor for creating a glob expression
-        pub fn glob(pattern: &'a str) -> Self {
-            RawTestExpr::Glob(pattern)
+        /// Helper constructor for creating a single-word expression
+        pub fn single_word(word: &'a str) -> Self {
+            RawTestExpr::SingleWord(word)
         }
 
         /// Helper constructor for creating an AND expression

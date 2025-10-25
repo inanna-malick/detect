@@ -332,14 +332,6 @@ fn test_complex_expression() {
 }
 
 #[test]
-fn test_glob_pattern() {
-    let typed = parse_and_typecheck("*.rs").unwrap();
-    let expected_glob = globset::Glob::new("*.rs").unwrap();
-    let expected = Expr::Predicate(Predicate::name(NamePredicate::GlobPattern(expected_glob)));
-    assert_eq!(typed, expected);
-}
-
-#[test]
 fn test_selector_aliases() {
     // Test that all selector aliases resolve to the same predicate
 
@@ -1009,4 +1001,40 @@ fn test_enum_in_boolean_expressions() {
         }
         _ => panic!("Expected Or expression"),
     }
+}
+
+#[test]
+fn test_fractional_size_parsing() {
+    // Verify fractional size values parse to correct byte counts
+    let typed = parse_and_typecheck("size > 0.5kb").unwrap();
+    let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+        NumberMatcher::In(Bound::Left(513..)), // 512 bytes + 1
+    )));
+    assert_eq!(typed, expected);
+
+    let typed = parse_and_typecheck("size >= 1.5kb").unwrap();
+    let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+        NumberMatcher::In(Bound::Left(1536..)), // 1536 bytes
+    )));
+    assert_eq!(typed, expected);
+
+    let typed = parse_and_typecheck("size < 2.5mb").unwrap();
+    let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+        NumberMatcher::In(Bound::Right(..2621440)), // 2.5 * 1024 * 1024
+    )));
+    assert_eq!(typed, expected);
+
+    // Uppercase units
+    let typed = parse_and_typecheck("size > 0.5KB").unwrap();
+    let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+        NumberMatcher::In(Bound::Left(513..)),
+    )));
+    assert_eq!(typed, expected);
+
+    // Filesize alias with fractional
+    let typed = parse_and_typecheck("filesize >= 1.5mb").unwrap();
+    let expected = Expr::Predicate(Predicate::meta(MetadataPredicate::Filesize(
+        NumberMatcher::In(Bound::Left(1572864..)), // 1.5 * 1024 * 1024
+    )));
+    assert_eq!(typed, expected);
 }

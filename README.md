@@ -72,7 +72,35 @@ detect 'ext in [ts,js,tsx,jsx]'
 
 # Find files containing TODO comments
 detect 'content contains TODO'
+
+# Find directories (using alias)
+detect 'dir'
+
+# Find large regular files (using alias)
+detect 'file && size > 1mb'
 ```
+
+## Single-Word Aliases
+
+For common file type queries, detect provides convenient single-word aliases:
+
+```bash
+# File type aliases (shorthand for type == value)
+detect 'file'              # Regular files
+detect 'dir'               # Directories
+detect 'symlink'           # Symbolic links
+
+# Combine with other predicates
+detect 'dir && depth > 0'           # Subdirectories only
+detect 'file && size > 10mb'        # Large regular files
+detect 'NOT symlink && modified > -7d'  # Recent non-symlink files
+```
+
+**Available aliases:** `file`, `dir`/`directory`, `symlink`/`link`, `socket`/`sock`, `fifo`/`pipe`, `block`/`blockdev`, `char`/`chardev` (all case-insensitive)
+
+**Equivalence:**
+- `dir` is shorthand for `type == dir`
+- `file && size > 1mb` is shorthand for `type == file AND size > 1mb`
 
 ## Query Language
 

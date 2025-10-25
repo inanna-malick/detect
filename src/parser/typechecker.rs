@@ -107,15 +107,32 @@ impl Typechecker {
                 let typed_expr = Self::typecheck_inner(*expr, source)?;
                 Ok(Expr::negate(typed_expr))
             }
-            RawExpr::Glob(span) => {
-                let glob_str = span.as_str();
-                let glob = globset::Glob::new(glob_str).map_err(|e| DetectError::InvalidValue {
-                    expected: "valid glob pattern".to_string(),
-                    found: format!("{}: {}", glob_str, e),
-                    span: span.to_source_span(),
-                    src: source.to_string(),
-                })?;
-                Ok(Expr::name_predicate(NamePredicate::GlobPattern(glob)))
+            RawExpr::SingleWord(span) => {
+                let word = span.as_str();
+
+                // Try to resolve as alias
+                match crate::parser::resolve_alias(word) {
+                    Ok(predicate) => Ok(Expr::Predicate(predicate)),
+                    Err(_) => {
+                        // Generate suggestions
+                        let suggestions = crate::parser::suggest_aliases(word);
+                        let suggestions_msg = if !suggestions.is_empty() {
+                            Some(format!("Did you mean: {}?", suggestions.join(", ")))
+                        } else {
+                            Some(format!(
+                                "Valid aliases: {}",
+                                crate::predicate::DetectFileType::all_valid_strings().join(", ")
+                            ))
+                        };
+
+                        Err(DetectError::UnknownAlias {
+                            word: word.to_string(),
+                            span: span.to_source_span(),
+                            src: source.to_string(),
+                            suggestions: suggestions_msg,
+                        })
+                    }
+                }
             }
         }
     }

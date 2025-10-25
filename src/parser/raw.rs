@@ -93,7 +93,7 @@ impl RawParser {
     fn parse_primary(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, RawParseError> {
         match pair.as_rule() {
             Rule::predicate => Self::parse_predicate(pair),
-            Rule::glob_pattern => Ok(RawExpr::Glob(pair.as_span())),
+            Rule::single_word => Ok(RawExpr::SingleWord(pair.as_span())),
             Rule::expr => Self::parse_expr(pair),
             rule => Err(RawParseError::internal(format!(
                 "Unexpected primary rule: {:?}",

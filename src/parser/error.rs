@@ -45,6 +45,18 @@ pub enum DetectError {
         src: String,
     },
 
+    #[error("Unknown alias: '{word}'")]
+    #[diagnostic(code(detect::unknown_alias))]
+    UnknownAlias {
+        word: String,
+        #[label("unknown alias")]
+        span: SourceSpan,
+        #[source_code]
+        src: String,
+        #[help]
+        suggestions: Option<String>,
+    },
+
     #[error("Operator '{operator}' is not compatible with selector '{selector}'")]
     #[diagnostic(
         code(detect::incompatible_operator),
@@ -198,7 +210,7 @@ fn rule_to_friendly_name(rule: &Rule) -> &'static str {
         Rule::quoted_string => "quoted string",
         Rule::unterminated_string => "unterminated string",
         Rule::trailing_quote => "trailing quote",
-        Rule::glob_pattern => "glob pattern",
+        Rule::single_word => "single-word alias",
         Rule::set_contents => "set contents",
         Rule::set_items => "set items",
         Rule::set_item => "set item",
@@ -345,6 +357,7 @@ impl DetectError {
             DetectError::Syntax { src: s, .. }
             | DetectError::UnknownSelector { src: s, .. }
             | DetectError::UnknownOperator { src: s, .. }
+            | DetectError::UnknownAlias { src: s, .. }
             | DetectError::IncompatibleOperator { src: s, .. }
             | DetectError::InvalidValue { src: s, .. }
             | DetectError::InvalidEscape { src: s, .. }

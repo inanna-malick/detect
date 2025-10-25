@@ -117,20 +117,6 @@ fn test_negation_variants() {
 }
 
 #[test]
-fn test_glob_pattern() {
-    let result = RawParser::parse_raw_expr("*.rs").unwrap();
-    let expected = RawTestExpr::glob("*.rs");
-    assert_eq!(result.to_test_expr(), expected);
-}
-
-#[test]
-fn test_complex_glob_pattern() {
-    let result = RawParser::parse_raw_expr("**/*.js").unwrap();
-    let expected = RawTestExpr::glob("**/*.js");
-    assert_eq!(result.to_test_expr(), expected);
-}
-
-#[test]
 fn test_operator_precedence() {
     // AND should bind tighter than OR
     let result = RawParser::parse_raw_expr("a == b OR c == d AND e == f").unwrap();

@@ -1,32 +1,36 @@
-SYNTAX: selector operator value OR glob pattern
+SYNTAX: selector operator value OR single-word-alias
 
-## Glob Patterns (Shell-Style)
+## Single-Word Aliases
 
-For users familiar with shell patterns, detect supports glob syntax as an alternative to predicates:
+For common file type queries, detect supports single-word aliases as shorthand:
 
-### Basic Glob Examples
-*.rs                                  # All Rust files
-*.{js,ts,jsx,tsx}                     # JavaScript/TypeScript files  
-*test*                                # Files with "test" in name
-src/*.rs                              # Rust files in src directory
-**/*.md                               # Markdown files recursively
-test_*.txt                            # Files starting with "test_"
-[ab]*.rs                              # Files starting with 'a' or 'b'
+### File Type Aliases
+file                                  # Regular files
+dir, directory                        # Directories
+symlink, link                         # Symbolic links
+socket, sock                          # Unix sockets
+fifo, pipe                            # Named pipes (FIFOs)
+block, blockdev                       # Block devices
+char, chardev                         # Character devices
 
-### Glob + Boolean Logic
-*.rs && size > 1kb                    # Large Rust files
-*test* || content contains TODO       # Test files or files with TODOs
-NOT *.md                              # Non-markdown files
-(*.rs || *.toml) && modified > -7d    # Recent Rust or config files
+### Aliases in Boolean Logic
+dir && depth > 0                      # Directories below root level
+file && size > 1mb                    # Large regular files
+NOT symlink                           # Exclude symlinks
+(file || dir) && modified > -7d       # Recent files or directories
 
-### When to Use Globs vs Predicates
-- **Globs**: Quick shell-style patterns, familiar syntax
-- **Predicates**: More powerful (content search, size, dates), composable
+### When to Use Aliases vs Predicates
+- **Aliases**: Quick, concise for common patterns
+- **Predicates**: Explicit, composable with all operators
+
+### Equivalence
+dir                  ===  type == dir
+file && size > 1mb   ===  type == file AND size > 1mb
 
 ## Clean 12-Selector System
 
 ### File Identity (What is it?)
-name - full filename with extension (e.g., "README.md")  
+name - full filename with extension (e.g., "README.md")
 ext - file extension without dot (e.g., "md")
 path - full absolute path
 dir - parent directory path
@@ -50,14 +54,14 @@ content - file text content
 ### String Operators (for name, content, path, type)
 - `==` / `!=` - Exact match / not equal
 - `contains` - Substring search (literal text)
-- `~=` - Regex pattern matching 
+- `~=` - Regex pattern matching
 - `in [a,b,c]` - Match any item in set
 
 ### Numeric Operators (for size, depth)
 - `==` / `!=` - Exact value / not equal
 - `>` / `<` / `>=` / `<=` - Comparisons
 
-### Temporal Operators (for modified, created, accessed)  
+### Temporal Operators (for modified, created, accessed)
 - `>` / `<` - After / before (relative: `-7d`, absolute: `2024-01-15`)
 - `==` / `!=` - Exact time match
 
@@ -74,26 +78,27 @@ Usage: combine and group expressions
 
 ## Common Examples:
 
-### Finding Files by Extension (Two Ways)
-ext == rs                                 # Rust source files (predicate)
-*.rs                                      # Rust source files (glob)
-ext in [js,ts,jsx,tsx]                   # JavaScript/TypeScript files (predicate)
-*.{js,ts,jsx,tsx}                        # JavaScript/TypeScript files (glob)
+### Finding Files by Type
+file                                     # Regular files only
+dir && depth > 0                         # Subdirectories
+symlink                                  # Symbolic links
+ext == rs                                # Rust source files
+ext in [js,ts,jsx,tsx]                   # JavaScript/TypeScript files
 
-### Content Search (Predicates Only)
+### Content Search
 content contains TODO                     # Files with TODO comments (literal)
 content ~= "class.*Service"              # Classes ending with Service (regex)
 content ~= "@(Component|Injectable)"     # Angular decorators (regex)
 
-### Size and Time Filters  
+### Size and Time Filters
 size > 1mb                               # Large files
-size > 100kb AND modified > -7d          # Large recent files
+file && size > 100kb AND modified > -7d  # Large recent regular files
 modified > -1h                           # Files changed in last hour
 
-### Combining Approaches
-*.rs && content ~= async                 # Rust files with async (glob + predicate)
-*test* || content contains TODO          # Test files OR TODO files
-NOT *.md && size > 1kb                   # Large non-markdown files
+### Combining Aliases and Predicates
+file && ext == rs && content ~= async    # Async code in Rust files
+dir && name contains test                # Test directories
+NOT (symlink || socket) && file          # Regular files only (exclude special)
 
 ### Complex Queries
 ext == rs AND content ~= async           # Rust files with async
@@ -108,9 +113,10 @@ content ~= "@(Injectable|Component)" AND size > 10kb
 path ~= "src/" AND ext == rs AND NOT content contains "test"
 
 ## Migration from find:
-find . -name "*.js" -size +1M → detect '*.js && size > 1mb' OR detect 'ext == js AND size > 1mb'
-find . -type f -exec grep -l TODO {} \; → detect 'content contains TODO'
-find . -name "*test*" → detect '*test*' OR detect 'name contains test'
+find . -name "*.js" -size +1M → detect 'ext == js AND size > 1mb'
+find . -type f -exec grep -l TODO {} \; → detect 'file && content contains TODO'
+find . -name "*test*" → detect 'name contains test'
+find . -type d → detect 'dir'
 
 ## Syntax Notes:
 - Quotes required for whitespace/special chars
@@ -119,9 +125,11 @@ find . -name "*test*" → detect '*test*' OR detect 'name contains test'
 - Set items: comma-separated [a,b,c]
 - Boolean precedence: NOT > AND > OR
 - Performance: name/metadata filters before content
+- Aliases are case-insensitive: `FILE` == `file` == `File`
 
 ## Troubleshooting:
 - No results? Try broader criteria or check syntax
 - Use -i flag to include gitignored files
 - For large searches, start with name/size filters
 - Test complex regex patterns separately first
+- Unknown alias error? Use `type == value` instead

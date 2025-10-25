@@ -22,7 +22,6 @@ mcp = ["dep:serde", "dep:serde_json"]
 anyhow = "1"
 clap = {version = "4.4", features = ["derive"]}
 futures = "0.3.23"
-globset = "0.4"
 ignore = "0.4"
 pcre2 = "0.2"
 pest = "2.7.15"

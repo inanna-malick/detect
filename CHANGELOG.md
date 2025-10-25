@@ -6,12 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Single-word file type aliases**: Use `file`, `dir`, `symlink`, etc. as shorthand for `type == file`, `type == dir`, etc. Enables natural queries like `dir && depth > 0` or `file && size > 1mb`. All file type values work as aliases (case-insensitive).
 - MCP (Model Context Protocol) server support for AI assistant integration
 - Better error messages with source location tracking and helpful suggestions
 - Unquoted regex pattern support - `content ~= [0-9]+` works without quotes
 - Parse-time validation for `type` selector values (breaking change - see below)
 - Relative path display in search results
 - Dual MIT/Apache-2.0 licensing
+- Greater than or equal (`>=`) and less than or equal (`<=`) operators for temporal selectors
 
 ### Changed
 

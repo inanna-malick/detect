@@ -7,7 +7,7 @@ expr = { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
     or = { "||" | ^"or" }
   prefix = _{ neg }
     neg = { "!" | "\\!" | ^"not" }
-  primary = _{ predicate | glob_pattern | "(" ~ expr ~ ")" }
+  primary = _{ predicate | single_word | "(" ~ expr ~ ")" }
 
 predicate = { selector ~ operator ~ value }
   selector = @{ (ASCII_ALPHANUMERIC | "." | "_")+ }
@@ -56,7 +56,7 @@ predicate = { selector ~ operator ~ value }
   
   escaped = { "\\" ~ ("\"" | "'" | "\\" | "n" | "t" | "r") }
 
-glob_pattern = @{ (ASCII_ALPHANUMERIC | "*" | "/" | "." | "_" | "-" | "?" | "[" | "]")+ }
+single_word = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Separate entry point for parsing set contents
 // Used by typechecker when operator is 'in'

@@ -54,13 +54,13 @@ Search filesystem using detect's expressive query language.
 **Examples:**
 ```
 # Find all Rust files
-expression: "*.rs"
+expression: "ext == rs"
 
 # Find large JavaScript files with TODOs
-expression: "*.js AND size > 10kb AND content contains TODO"
+expression: "ext == js AND size > 10kb AND content contains TODO"
 
 # Find recently modified Python files
-expression: "*.py AND modified > -7days"
+expression: "ext == py AND modified > -7days"
 ```
 
 ## Testing the MCP Server
@@ -75,18 +75,18 @@ echo '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{}}' | detect --mcp
 echo '{"jsonrpc":"2.0","method":"tools/list","id":2,"params":{}}' | detect --mcp
 
 # Run a search
-echo '{"jsonrpc":"2.0","method":"tools/call","id":3,"params":{"name":"detect","arguments":{"expression":"*.rs","max_results":5}}}' | detect --mcp
+echo '{"jsonrpc":"2.0","method":"tools/call","id":3,"params":{"name":"detect","arguments":{"expression":"ext == rs","max_results":5}}}' | detect --mcp
 ```
 
 ## Query Language Quick Reference
 
 The detect MCP server supports the full detect query language:
 
-- **File patterns**: `*.rs`, `**/*.js`, `test_*.txt`
 - **Path selectors**: `name`, `basename`, `ext`, `dir`, `path`
 - **Content search**: `content contains TODO`, `content ~= regex`
 - **Metadata**: `size > 1mb`, `modified > -7days`, `type == file`
+- **File type aliases**: `file`, `dir`, `symlink` (shorthand for type predicates)
 - **Boolean logic**: `AND`/`OR`/`NOT` or `&&`/`||`/`!`
-- **Sets**: `extension in [js, ts, jsx]`
+- **Sets**: `ext in [js, ts, jsx]`
 
 For complete documentation, use `detect --help`, `detect --examples`, `detect --predicates`, and `detect --operators`.

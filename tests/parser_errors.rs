@@ -225,4 +225,3 @@ fn test_parentheses_edge_cases() {
     let expected = RawTestExpr::string_predicate("name", "==", "foo");
     assert_eq!(result.unwrap().to_test_expr(), expected);
 }
-

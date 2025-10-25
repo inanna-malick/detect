@@ -913,3 +913,306 @@ async fn test_regex_special_escapes() {
 
     run_test_cases(cases).await;
 }
+
+#[tokio::test]
+async fn test_depth_predicate() {
+    // Search root is depth 0, files in root are depth 1, etc.
+    let depth_files = vec![
+        f("level1.txt", "level 1"),
+        f("dir1/level2.txt", "level 2"),
+        f("dir1/sub/level3.txt", "level 3"),
+        f("dir1/sub/deep/level4.txt", "level 4"),
+        f("dir2/another2.txt", "depth 2"),
+        f("dir2/sub/another3.txt", "depth 3"),
+    ];
+
+    let cases = vec![
+        (
+            "depth == 1 AND ext == txt",
+            &["level1.txt"][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth == 2 AND ext == txt",
+            &["dir1/level2.txt", "dir2/another2.txt"][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth == 3 AND ext == txt",
+            &["dir1/sub/level3.txt", "dir2/sub/another3.txt"][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth <= 2 AND ext == txt",
+            &["level1.txt", "dir1/level2.txt", "dir2/another2.txt"][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth > 1 AND ext == txt",
+            &[
+                "dir1/level2.txt",
+                "dir1/sub/level3.txt",
+                "dir1/sub/deep/level4.txt",
+                "dir2/another2.txt",
+                "dir2/sub/another3.txt",
+            ][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth >= 3 AND ext == txt",
+            &[
+                "dir1/sub/level3.txt",
+                "dir1/sub/deep/level4.txt",
+                "dir2/sub/another3.txt",
+            ][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth > 3 AND ext == txt",
+            &["dir1/sub/deep/level4.txt"][..],
+            depth_files.clone(),
+        ),
+        (
+            "depth == 3 AND content contains level",
+            &["dir1/sub/level3.txt"][..],
+            depth_files.clone(),
+        ),
+        (
+            "NOT depth > 3 AND ext == txt",
+            &[
+                "level1.txt",
+                "dir1/level2.txt",
+                "dir1/sub/level3.txt",
+                "dir2/another2.txt",
+                "dir2/sub/another3.txt",
+            ][..],
+            depth_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_multi_dot_extensions() {
+    let multi_dot_files = vec![
+        f("archive.tar.gz", "compressed"),
+        f("backup.2024.tar", "backup data"),
+        f("config.local.json", "{}"),
+        f(".gitignore", "node_modules/"),
+        f(".env.production", "API_KEY=secret"),
+        f("file.backup.old.txt", "old backup"),
+        f("simple.txt", "simple file"),
+        f("nodot", "no extension"),
+        f(".hidden", "hidden file"),
+    ];
+
+    let cases = vec![
+        (
+            "ext == gz",
+            &["archive.tar.gz"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "ext == tar",
+            &["backup.2024.tar"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "ext == json",
+            &["config.local.json"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "ext == txt",
+            &["file.backup.old.txt", "simple.txt"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            r#"ext == """#,
+            &[".gitignore", ".hidden", "nodot"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "ext == production",
+            &[".env.production"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "name == archive.tar.gz",
+            &["archive.tar.gz"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "name == .gitignore",
+            &[".gitignore"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "basename == archive.tar",
+            &["archive.tar.gz"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "basename == file.backup.old",
+            &["file.backup.old.txt"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "basename == .gitignore",
+            &[".gitignore"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            "name contains .tar",
+            &["archive.tar.gz", "backup.2024.tar"][..],
+            multi_dot_files.clone(),
+        ),
+        (
+            r#"name ~= "\.tar\.(gz|bz2|xz)$""#,
+            &["archive.tar.gz"][..],
+            multi_dot_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
+
+#[tokio::test]
+async fn test_binary_and_non_utf8_content() {
+    let tmp_dir = TempDir::new("detect-binary").unwrap();
+
+    let text_file = tmp_dir.path().join("text.txt");
+    std::fs::write(&text_file, "Hello world").unwrap();
+
+    let binary_file = tmp_dir.path().join("binary.dat");
+    std::fs::write(
+        &binary_file,
+        &[0x00, 0x01, 0x02, 0xFF, 0xFE, b'A', b'B', 0x00],
+    )
+    .unwrap();
+
+    let invalid_utf8 = tmp_dir.path().join("invalid.txt");
+    std::fs::write(&invalid_utf8, &[0xFF, 0xFE, 0xFD]).unwrap();
+
+    let mixed_file = tmp_dir.path().join("mixed.dat");
+    let mut mixed_data = b"Start ".to_vec();
+    mixed_data.extend_from_slice(&[0x00, 0xFF, 0x00]);
+    mixed_data.extend_from_slice(b" End");
+    std::fs::write(&mixed_file, &mixed_data).unwrap();
+
+    // Content search should not crash on binary files, only finds text
+    let mut found = Vec::new();
+    detect::parse_and_run_fs(
+        test_logger(),
+        tmp_dir.path(),
+        false,
+        "content contains Hello".to_owned(),
+        |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
+    )
+    .await
+    .unwrap();
+
+    found.sort();
+    assert_eq!(found, vec!["text.txt"]);
+
+    // Regex search should not crash on binary files, only finds text
+    let mut found = Vec::new();
+    detect::parse_and_run_fs(
+        test_logger(),
+        tmp_dir.path(),
+        false,
+        r#"content ~= "Hello.*world""#.to_owned(),
+        |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
+    )
+    .await
+    .unwrap();
+
+    found.sort();
+    assert_eq!(found, vec!["text.txt"]);
+
+    // Size-based queries work fine on all file types
+    let mut found = Vec::new();
+    detect::parse_and_run_fs(
+        test_logger(),
+        tmp_dir.path(),
+        false,
+        "size > 0 AND type == file".to_owned(),
+        |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
+    )
+    .await
+    .unwrap();
+
+    found.sort();
+    assert_eq!(
+        found,
+        vec!["binary.dat", "invalid.txt", "mixed.dat", "text.txt"]
+    );
+
+    // Name-based queries work on binary files
+    let mut found = Vec::new();
+    detect::parse_and_run_fs(
+        test_logger(),
+        tmp_dir.path(),
+        false,
+        "ext == dat".to_owned(),
+        |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
+    )
+    .await
+    .unwrap();
+
+    found.sort();
+    assert_eq!(found, vec!["binary.dat", "mixed.dat"]);
+}
+
+#[tokio::test]
+async fn test_regex_pcre2_fallback() {
+    let pcre2_test_files = vec![
+        f("test1.txt", "foo bar baz"),
+        f("test2.txt", "foobar"),
+        f("test3.txt", "bar foo"),
+        f("test4.txt", "function query() { }"),
+        f("test5.txt", "SELECT * FROM table"),
+    ];
+
+    let cases = vec![
+        // Lookbehind (PCRE2 fallback required)
+        (
+            r"content ~= (?<=foo)bar",
+            &["test2.txt"][..],
+            pcre2_test_files.clone(),
+        ),
+        // Lookahead (supported in both)
+        (
+            r"content ~= foo(?=bar)",
+            &["test2.txt"][..],
+            pcre2_test_files.clone(),
+        ),
+        // Escaped parens
+        (
+            r"content ~= query\(\)",
+            &["test4.txt"][..],
+            pcre2_test_files.clone(),
+        ),
+        // Basic patterns (no fallback needed)
+        (
+            r"content ~= foo.*bar",
+            &["test1.txt", "test2.txt"][..],
+            pcre2_test_files.clone(),
+        ),
+        // Word boundaries
+        (
+            r"content ~= \bbar\b",
+            &["test1.txt", "test3.txt"][..],
+            pcre2_test_files.clone(),
+        ),
+        // Case-insensitive flag
+        (
+            r"content ~= (?i)SELECT",
+            &["test5.txt"][..],
+            pcre2_test_files.clone(),
+        ),
+    ];
+
+    run_test_cases(cases).await;
+}
