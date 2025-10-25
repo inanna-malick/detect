@@ -333,12 +333,12 @@ fn error_comparison_with_invalid_number() {
 }
 
 #[test]
-fn error_invalid_path_double_dot() {
-    let input = "yaml:..invalid == 5";
+fn error_invalid_path_triple_dot() {
+    let input = "yaml:...invalid == 5";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
     let result = Typechecker::typecheck(raw_expr, input);
 
-    assert!(result.is_err(), "Double dots in path should fail");
+    assert!(result.is_err(), "Triple dots in path should fail");
 }
 
 // ============================================================================
@@ -453,5 +453,215 @@ fn parse_zero() {
             assert_eq!(pred.value, StructuredValue::Number(0));
         }
         _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+// ============================================================================
+// Recursive Descent Tests
+// ============================================================================
+
+#[test]
+fn parse_simple_recursive_descent() {
+    let input = "yaml:..password == secret";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(pred.format, DataFormat::Yaml);
+            assert_eq!(
+                pred.path,
+                vec![PathComponent::RecursiveKey("password".to_string())]
+            );
+            assert_eq!(pred.value, StructuredValue::String("secret".to_string()));
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_recursive_debug_flag() {
+    let input = "yaml:..debug == true";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(
+                pred.path,
+                vec![PathComponent::RecursiveKey("debug".to_string())]
+            );
+            assert_eq!(pred.value, StructuredValue::Bool(true));
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_key_then_recursive() {
+    let input = "yaml:.user..password == admin";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(
+                pred.path,
+                vec![
+                    PathComponent::Key("user".to_string()),
+                    PathComponent::RecursiveKey("password".to_string()),
+                ]
+            );
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_recursive_then_path() {
+    let input = r#"yaml:..metadata.labels.app == "web""#;
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(
+                pred.path,
+                vec![
+                    PathComponent::RecursiveKey("metadata".to_string()),
+                    PathComponent::Key("labels".to_string()),
+                    PathComponent::Key("app".to_string()),
+                ]
+            );
+            assert_eq!(pred.value, StructuredValue::String("web".to_string()));
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_recursive_with_comparison() {
+    let input = "toml:..port < 1024";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(pred.format, DataFormat::Toml);
+            assert_eq!(
+                pred.path,
+                vec![PathComponent::RecursiveKey("port".to_string())]
+            );
+            assert_eq!(pred.operator, StructuredOperator::Less);
+            assert_eq!(pred.value, StructuredValue::Number(1024));
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_recursive_with_regex() {
+    let input = r#"json:..email ~= ".*@example\.com""#;
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(pred.format, DataFormat::Json);
+            assert_eq!(pred.operator, StructuredOperator::Matches);
+            assert_eq!(
+                pred.value,
+                StructuredValue::String(".*@example\\.com".to_string())
+            );
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_multiple_recursive() {
+    let input = "yaml:..config..database == postgres";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(
+                pred.path,
+                vec![
+                    PathComponent::RecursiveKey("config".to_string()),
+                    PathComponent::RecursiveKey("database".to_string()),
+                ]
+            );
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_recursive_with_array_index() {
+    let input = "yaml:..users[0].name == alice";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(
+                pred.path,
+                vec![
+                    PathComponent::RecursiveKey("users".to_string()),
+                    PathComponent::Index(0),
+                    PathComponent::Key("name".to_string()),
+                ]
+            );
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_recursive_with_wildcard() {
+    let input = "yaml:..items[*].id == 42";
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    match typed_expr {
+        Expr::Predicate(Predicate::StructuredData(pred)) => {
+            assert_eq!(
+                pred.path,
+                vec![
+                    PathComponent::RecursiveKey("items".to_string()),
+                    PathComponent::WildcardIndex,
+                    PathComponent::Key("id".to_string()),
+                ]
+            );
+        }
+        _ => panic!("Expected StructuredData predicate"),
+    }
+}
+
+#[test]
+fn parse_complex_recursive_query() {
+    let input = r#"name == config.yaml AND yaml:..database.password ~= "secure.*""#;
+    let raw_expr = RawParser::parse_raw_expr(input).unwrap();
+    let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
+
+    // Verify AND expression with mixed predicates
+    match typed_expr {
+        Expr::And(left, right) => {
+            assert!(matches!(*left, Expr::Predicate(Predicate::Name(_))));
+            if let Expr::Predicate(Predicate::StructuredData(pred)) = *right {
+                assert_eq!(
+                    pred.path,
+                    vec![
+                        PathComponent::RecursiveKey("database".to_string()),
+                        PathComponent::Key("password".to_string()),
+                    ]
+                );
+            } else {
+                panic!("Expected StructuredData predicate on right");
+            }
+        }
+        _ => panic!("Expected AND expression"),
     }
 }

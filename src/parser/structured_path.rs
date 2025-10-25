@@ -18,6 +18,8 @@ pub struct PathParser;
 pub enum PathComponent {
     /// Object field access: .fieldname
     Key(String),
+    /// Recursive descent: ..fieldname (matches key at any depth)
+    RecursiveKey(String),
     /// Array index access: [42]
     Index(usize),
     /// Array wildcard access: [*]
@@ -97,6 +99,16 @@ pub fn parse_path(input: &str) -> Result<Vec<PathComponent>, PathParseError> {
 
 fn parse_component(pair: Pair<'_, Rule>) -> Result<Option<PathComponent>, PathParseError> {
     match pair.as_rule() {
+        Rule::recursive_key => {
+            // recursive_key -> identifier
+            let identifier = pair
+                .into_inner()
+                .next()
+                .ok_or_else(|| PathParseError::Syntax("Missing identifier".to_string()))?;
+            Ok(Some(PathComponent::RecursiveKey(
+                identifier.as_str().to_string(),
+            )))
+        }
         Rule::key_access => {
             // key_access -> identifier
             let identifier = pair

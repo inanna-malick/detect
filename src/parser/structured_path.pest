@@ -5,7 +5,10 @@ WHITESPACE = _{ " " | "\t" }
 
 path = { SOI ~ component+ ~ EOI }
 
-component = _{ key_access | index_access | wildcard_access }
+component = _{ recursive_key | key_access | index_access | wildcard_access }
+
+// Recursive descent: ..fieldname
+recursive_key = { ".." ~ identifier }
 
 // Key access: .fieldname
 key_access = { "." ~ identifier }

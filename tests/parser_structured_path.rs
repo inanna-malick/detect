@@ -301,8 +301,8 @@ fn error_empty_brackets() {
 }
 
 #[test]
-fn error_double_dot() {
-    let result = parse_path("..field");
+fn error_triple_dot() {
+    let result = parse_path("...field");
     assert!(matches!(result, Err(PathParseError::Syntax(_))));
 }
 
@@ -384,6 +384,127 @@ fn error_bracket_after_dot() {
     // .[] is invalid - missing key
     let result = parse_path(".[]");
     assert!(matches!(result, Err(PathParseError::Syntax(_))));
+}
+
+// ============================================================================
+// Recursive Descent
+// ============================================================================
+
+#[test]
+fn parse_simple_recursive() {
+    let result = parse_path("..password").unwrap();
+    assert_eq!(
+        result,
+        vec![PathComponent::RecursiveKey("password".to_string())]
+    );
+}
+
+#[test]
+fn parse_recursive_from_root() {
+    let result = parse_path("..debug").unwrap();
+    assert_eq!(result, vec![PathComponent::RecursiveKey("debug".to_string())]);
+}
+
+#[test]
+fn parse_key_then_recursive() {
+    let result = parse_path(".user..password").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::Key("user".to_string()),
+            PathComponent::RecursiveKey("password".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_recursive_then_key() {
+    let result = parse_path("..metadata.labels").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::RecursiveKey("metadata".to_string()),
+            PathComponent::Key("labels".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_recursive_with_deep_path() {
+    let result = parse_path("..config.server.port").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::RecursiveKey("config".to_string()),
+            PathComponent::Key("server".to_string()),
+            PathComponent::Key("port".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_multiple_recursive() {
+    let result = parse_path("..a..b").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::RecursiveKey("a".to_string()),
+            PathComponent::RecursiveKey("b".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_recursive_with_index() {
+    let result = parse_path(".data[0]..id").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::Key("data".to_string()),
+            PathComponent::Index(0),
+            PathComponent::RecursiveKey("id".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_recursive_before_index() {
+    let result = parse_path("..users[0].name").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::RecursiveKey("users".to_string()),
+            PathComponent::Index(0),
+            PathComponent::Key("name".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_recursive_with_wildcard() {
+    let result = parse_path("..items[*].id").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::RecursiveKey("items".to_string()),
+            PathComponent::WildcardIndex,
+            PathComponent::Key("id".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_complex_recursive_path() {
+    let result = parse_path(".spec..containers[0].image").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::Key("spec".to_string()),
+            PathComponent::RecursiveKey("containers".to_string()),
+            PathComponent::Index(0),
+            PathComponent::Key("image".to_string()),
+        ]
+    );
 }
 
 // ============================================================================
