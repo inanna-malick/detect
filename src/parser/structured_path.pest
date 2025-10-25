@@ -1,0 +1,19 @@
+// Grammar for structured data path expressions
+// Parses paths like: .spec.replicas, [0].name, .items[*].id
+
+WHITESPACE = _{ " " | "\t" }
+
+path = { SOI ~ component+ ~ EOI }
+
+component = _{ key_access | index_access | wildcard_access }
+
+// Key access: .fieldname
+key_access = { "." ~ identifier }
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Array index: [42]
+index_access = { "[" ~ number ~ "]" }
+number = @{ ASCII_DIGIT+ }
+
+// Wildcard array access: [*]
+wildcard_access = { "[" ~ "*" ~ "]" }
