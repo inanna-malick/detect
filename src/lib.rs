@@ -62,7 +62,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 Predicate::Name(n) => Predicate::Name(Arc::clone(n)),
                 Predicate::Metadata(m) => Predicate::Metadata(Arc::clone(m)),
                 Predicate::Content(c) => Predicate::Content(c.as_ref()),
-                Predicate::StructuredData(s) => Predicate::StructuredData(s.clone()),
+                Predicate::Structured(s) => Predicate::Structured(s.clone()),
             });
 
             info!(logger, "parsed expression"; "expr" => %expr);

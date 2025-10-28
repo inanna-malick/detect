@@ -573,14 +573,15 @@ pub enum Predicate<
     Name = NamePredicate,
     Metadata = MetadataPredicate,
     Content = StreamingCompiledContentPredicate,
+    Structured = StructuredDataPredicate,
 > {
     Name(Arc<Name>),
     Metadata(Arc<Metadata>),
     Content(Content),
-    StructuredData(StructuredDataPredicate),
+    Structured(Structured),
 }
 
-impl<N, M, C> Predicate<N, M, C> {
+impl<N, M, C, S> Predicate<N, M, C, S> {
     pub fn name(n: N) -> Self {
         Self::Name(Arc::new(n))
     }
@@ -590,40 +591,40 @@ impl<N, M, C> Predicate<N, M, C> {
     pub fn contents(c: C) -> Self {
         Self::Content(c)
     }
-    pub fn structured_data(s: StructuredDataPredicate) -> Self {
-        Self::StructuredData(s)
+    pub fn structured(s: S) -> Self {
+        Self::Structured(s)
     }
 }
 
-impl<A, B, C: Clone> Clone for Predicate<A, B, C> {
+impl<A, B, C: Clone, S: Clone> Clone for Predicate<A, B, C, S> {
     fn clone(&self) -> Self {
         match self {
             Self::Name(arg0) => Self::Name(arg0.clone()),
             Self::Metadata(arg0) => Self::Metadata(arg0.clone()),
             Self::Content(arg0) => Self::Content(arg0.clone()),
-            Self::StructuredData(arg0) => Self::StructuredData(arg0.clone()),
+            Self::Structured(arg0) => Self::Structured(arg0.clone()),
         }
     }
 }
 
-impl<A: Display, B: Display, C: Display> Display for Predicate<A, B, C> {
+impl<A: Display, B: Display, C: Display, S: std::fmt::Debug> Display for Predicate<A, B, C, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Predicate::Name(x) => write!(f, "{}", x),
             Predicate::Metadata(x) => write!(f, "{}", x),
             Predicate::Content(x) => write!(f, "{}", x),
-            Predicate::StructuredData(x) => write!(f, "{:?}", x),
+            Predicate::Structured(x) => write!(f, "{:?}", x),
         }
     }
 }
 
-impl<A, B> Predicate<NamePredicate, A, B> {
-    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B>> {
+impl<A, B, S> Predicate<NamePredicate, A, B, S> {
+    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, S>> {
         match self {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
+            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
         }
     }
 
@@ -631,26 +632,26 @@ impl<A, B> Predicate<NamePredicate, A, B> {
         self,
         path: &Path,
         base_path: Option<&Path>,
-    ) -> ShortCircuit<Predicate<Done, A, B>> {
+    ) -> ShortCircuit<Predicate<Done, A, B, S>> {
         match self {
             Predicate::Name(p) => ShortCircuit::Known(p.is_match_with_base(path, base_path)),
             Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
+            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
         }
     }
 }
 
-impl<A, B> Predicate<A, MetadataPredicate, B> {
+impl<A, B, S> Predicate<A, MetadataPredicate, B, S> {
     pub fn eval_metadata_predicate(
         self,
         metadata: &Metadata,
-    ) -> ShortCircuit<Predicate<A, Done, B>> {
+    ) -> ShortCircuit<Predicate<A, Done, B, S>> {
         match self {
             Predicate::Metadata(p) => ShortCircuit::Known(p.is_match(metadata)),
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
+            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
         }
     }
 
@@ -659,14 +660,14 @@ impl<A, B> Predicate<A, MetadataPredicate, B> {
         metadata: &Metadata,
         path: &Path,
         base_path: Option<&Path>,
-    ) -> ShortCircuit<Predicate<A, Done, B>> {
+    ) -> ShortCircuit<Predicate<A, Done, B, S>> {
         match self {
             Predicate::Metadata(p) => {
                 ShortCircuit::Known(p.is_match_with_path(metadata, Some(path), base_path))
             }
             Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
             Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-            Predicate::StructuredData(x) => ShortCircuit::Unknown(Predicate::StructuredData(x)),
+            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
         }
     }
 }

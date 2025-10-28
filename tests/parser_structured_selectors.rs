@@ -20,7 +20,7 @@ fn parse_unquoted_number() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, operator, value, .. }
         )) => {
             assert_eq!(path, vec![PathComponent::Key("port".to_string())]);
@@ -39,7 +39,7 @@ fn parse_quoted_number_as_string() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             // Quotes are transparent - "8080" parses as integer via YAML
@@ -56,7 +56,7 @@ fn parse_unquoted_bool_true() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             assert!(matches!(value, yaml_rust::Yaml::Boolean(true)));
@@ -72,7 +72,7 @@ fn parse_unquoted_bool_false() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             assert!(matches!(value, yaml_rust::Yaml::Boolean(false)));
@@ -88,7 +88,7 @@ fn parse_quoted_bool_as_string() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             // Quotes are transparent - "true" parses as boolean via YAML
@@ -105,7 +105,7 @@ fn parse_unquoted_string_fallback() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             // Bareword "api" doesn't parse as YAML, falls back to string
@@ -126,7 +126,7 @@ fn parse_yaml_format() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(StructuredDataPredicate::YamlValue { .. })) => {
+        Expr::Predicate(Predicate::Structured(StructuredDataPredicate::YamlValue { .. })) => {
             // Success - it's a YamlValue variant
         }
         _ => panic!("Expected YamlValue predicate"),
@@ -140,7 +140,7 @@ fn parse_json_format() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(StructuredDataPredicate::JsonValue { .. })) => {
+        Expr::Predicate(Predicate::Structured(StructuredDataPredicate::JsonValue { .. })) => {
             // Success - it's a JsonValue variant
         }
         _ => panic!("Expected JsonValue predicate"),
@@ -154,7 +154,7 @@ fn parse_toml_format() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(StructuredDataPredicate::TomlValue { .. })) => {
+        Expr::Predicate(Predicate::Structured(StructuredDataPredicate::TomlValue { .. })) => {
             // Success - it's a TomlValue variant
         }
         _ => panic!("Expected TomlValue predicate"),
@@ -172,7 +172,7 @@ fn parse_single_key_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(path, vec![PathComponent::Key("name".to_string())]);
@@ -188,7 +188,7 @@ fn parse_nested_keys() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -210,7 +210,7 @@ fn parse_array_index_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::JsonValue { path, .. }
         )) => {
             assert_eq!(
@@ -232,7 +232,7 @@ fn parse_wildcard_array_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -255,7 +255,7 @@ fn parse_complex_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -283,7 +283,7 @@ fn parse_comparison_greater() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { operator, value, .. }
         )) => {
             assert_eq!(operator, StructuredOperator::Greater);
@@ -300,7 +300,7 @@ fn parse_comparison_greater_equal() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { operator, value, .. }
         )) => {
             assert_eq!(operator, StructuredOperator::GreaterOrEqual);
@@ -317,7 +317,7 @@ fn parse_comparison_less() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { operator, .. }
         )) => {
             assert_eq!(operator, StructuredOperator::Less);
@@ -333,7 +333,7 @@ fn parse_regex_operator() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlString { matcher, .. }
         )) => {
             // Verify it's a regex matcher (StringMatcher::Regex)
@@ -387,8 +387,8 @@ fn parse_and_expression() {
     // Verify it's an AND expression with two StructuredData predicates
     match typed_expr {
         Expr::And(left, right) => {
-            assert!(matches!(*left, Expr::Predicate(Predicate::StructuredData(_))));
-            assert!(matches!(*right, Expr::Predicate(Predicate::StructuredData(_))));
+            assert!(matches!(*left, Expr::Predicate(Predicate::Structured(_))));
+            assert!(matches!(*right, Expr::Predicate(Predicate::Structured(_))));
         }
         _ => panic!("Expected AND expression"),
     }
@@ -404,7 +404,7 @@ fn parse_mixed_selectors() {
     match typed_expr {
         Expr::And(left, right) => {
             assert!(matches!(*left, Expr::Predicate(Predicate::Name(_))));
-            assert!(matches!(*right, Expr::Predicate(Predicate::StructuredData(_))));
+            assert!(matches!(*right, Expr::Predicate(Predicate::Structured(_))));
         }
         _ => panic!("Expected AND expression with mixed predicates"),
     }
@@ -429,7 +429,7 @@ fn parse_package_json_node_version() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::JsonValue { path, value, .. }
         )) => {
             assert_eq!(
@@ -453,7 +453,7 @@ fn parse_toml_privileged_port() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::TomlValue { operator, value, .. }
         )) => {
             assert_eq!(operator, StructuredOperator::Less);
@@ -470,7 +470,7 @@ fn parse_negative_number() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             assert!(matches!(value, yaml_rust::Yaml::Integer(-10)));
@@ -486,7 +486,7 @@ fn parse_zero() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { value, .. }
         )) => {
             assert!(matches!(value, yaml_rust::Yaml::Integer(0)));
@@ -506,7 +506,7 @@ fn parse_simple_recursive_descent() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, value, .. }
         )) => {
             assert_eq!(
@@ -526,7 +526,7 @@ fn parse_recursive_debug_flag() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, value, .. }
         )) => {
             assert_eq!(
@@ -546,7 +546,7 @@ fn parse_key_then_recursive() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -568,7 +568,7 @@ fn parse_recursive_then_path() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, value, .. }
         )) => {
             assert_eq!(
@@ -592,7 +592,7 @@ fn parse_recursive_with_comparison() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::TomlValue { path, operator, value, .. }
         )) => {
             assert_eq!(
@@ -613,7 +613,7 @@ fn parse_recursive_with_regex() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::JsonString { path, matcher }
         )) => {
             assert_eq!(
@@ -633,7 +633,7 @@ fn parse_multiple_recursive() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -655,7 +655,7 @@ fn parse_recursive_with_array_index() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -678,7 +678,7 @@ fn parse_recursive_with_wildcard() {
     let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
     match typed_expr {
-        Expr::Predicate(Predicate::StructuredData(
+        Expr::Predicate(Predicate::Structured(
             StructuredDataPredicate::YamlValue { path, .. }
         )) => {
             assert_eq!(
@@ -704,7 +704,7 @@ fn parse_complex_recursive_query() {
     match typed_expr {
         Expr::And(left, right) => {
             assert!(matches!(*left, Expr::Predicate(Predicate::Name(_))));
-            if let Expr::Predicate(Predicate::StructuredData(
+            if let Expr::Predicate(Predicate::Structured(
                 StructuredDataPredicate::YamlString { path, .. }
             )) = *right {
                 assert_eq!(
@@ -738,7 +738,7 @@ fn test_raw_string_preservation_yaml() {
         let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
         match typed_expr {
-            Expr::Predicate(Predicate::StructuredData(
+            Expr::Predicate(Predicate::Structured(
                 StructuredDataPredicate::YamlValue { raw_string, .. }
             )) => {
                 assert_eq!(raw_string, expected_raw, "Input: {}", input);
@@ -762,7 +762,7 @@ fn test_raw_string_preservation_json() {
         let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
         match typed_expr {
-            Expr::Predicate(Predicate::StructuredData(
+            Expr::Predicate(Predicate::Structured(
                 StructuredDataPredicate::JsonValue { raw_string, .. }
             )) => {
                 assert_eq!(raw_string, expected_raw, "Input: {}", input);
@@ -786,7 +786,7 @@ fn test_raw_string_preservation_toml() {
         let typed_expr = Typechecker::typecheck(raw_expr, input).unwrap();
 
         match typed_expr {
-            Expr::Predicate(Predicate::StructuredData(
+            Expr::Predicate(Predicate::Structured(
                 StructuredDataPredicate::TomlValue { raw_string, .. }
             )) => {
                 assert_eq!(raw_string, expected_raw, "Input: {}", input);

@@ -373,7 +373,7 @@ impl Typechecker {
             }
         };
 
-        Ok(Predicate::structured_data(predicate))
+        Ok(Predicate::structured(predicate))
     }
 
     /// Build a structured data string predicate (yaml/json/toml with string operations like regex/contains)
@@ -397,7 +397,7 @@ impl Typechecker {
             DataFormat::Toml => StructuredDataPredicate::TomlString { path, matcher },
         };
 
-        Ok(Predicate::structured_data(predicate))
+        Ok(Predicate::structured(predicate))
     }
 
     /// Build a YAML value from RHS, always attempting parse with string fallback
