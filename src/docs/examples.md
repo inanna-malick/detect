@@ -54,17 +54,17 @@ detect 'json:.dependencies.serde ~= "^1\\."'
 # Find configs with debugging enabled
 detect 'yaml:.debug == true'
 
-# Array wildcard - match ANY enabled feature
+# Array wildcard - all array elements
 detect 'yaml:.features[*].enabled == true'
 
-# Recursive descent - find ANY port field > 8000
+# Recursive descent - finds all port fields at any depth
 detect 'yaml:..port > 8000 OR json:..port > 8000 OR toml:..port > 8000'
 
 # Combine with file filters
 detect 'size < 50kb AND yaml:.database.host contains prod'
 
 # Find configs outside test directories
-detect 'yaml:.server AND NOT path contains test'
+detect 'yaml:.server.port == 8080 AND NOT path contains test'
 
 # Type coercion - matches both int and string
 detect 'yaml:.version == "1.0"'  # matches 1.0 or "1.0"
@@ -74,9 +74,6 @@ detect 'json:.metadata.author == "test"'
 
 # Array indexing
 detect 'yaml:.features[0].name == "auth"'
-
-# String matcher on structured data
-detect 'toml:.dependencies.* contains "async"'
 
 # Find Kubernetes manifests with high replica counts
 detect 'yaml:.spec.replicas > 3'

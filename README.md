@@ -33,7 +33,7 @@ detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
 - **Natural syntax** - readable boolean expressions instead of cryptic flags
 - **Full regex support** - powerful PCRE2-compatible pattern matching
 - **Type safety** - prevents nonsensical queries at parse time with helpful errors
-- **Fast execution** - optimized three-phase evaluation (metadata before content scanning)
+- **Fast execution** - optimized four-phase evaluation (metadata before content scanning)
 - **Beginner friendly** - approachable for CLI newcomers, powerful for experts
 
 ## Installation
@@ -158,18 +158,18 @@ Query YAML, JSON, and TOML file contents:
 
 | Selector | Type | Description | Example |
 |----------|------|-------------|---------|
-| `yaml:.path` | Structured | Navigate YAML structure | `yaml:.server.port == 8080` |
-| `json:.path` | Structured | Navigate JSON structure | `json:.dependencies.react` |
-| `toml:.path` | Structured | Navigate TOML structure | `toml:.package.edition == "2021"` |
+| `yaml:.path` | Structured | YAML navigation | `yaml:.server.port == 8080` |
+| `json:.path` | Structured | JSON navigation | `json:.dependencies.react` |
+| `toml:.path` | Structured | TOML navigation | `toml:.package.edition == "2021"` |
 
 **Navigation:**
 - `.field` - Access object field
 - `.nested.field` - Access nested fields
 - `[0]` - Array element by index
-- `[*]` - Wildcard (matches ANY element)
-- `..field` - Recursive descent (any depth)
+- `[*]` - Wildcard - all array elements
+- `..field` - Recursive descent - all fields at any depth
 
-**Type coercion:** Automatically converts types when needed (`yaml:.port == 8080` matches both `8080` and `"8080"`)
+**Type coercion:** Auto-converts types (`yaml:.port == 8080` matches both `8080` and `"8080"`)
 
 **Configuration:** Use `--max-structured-size <size>` to set max file size (default: 10MB)
 
@@ -286,7 +286,7 @@ detect 'json:.dependencies.serde ~= "^1\\."'
 # Find configs with debugging enabled
 detect 'yaml:.debug == true'
 
-# Array wildcard - match ANY enabled feature
+# Array wildcard example
 detect 'yaml:.features[*].enabled == true'
 
 # Recursive descent across all formats
@@ -340,12 +340,12 @@ detect optimizes query execution automatically using a **four-phase evaluation s
 3. **Structured predicates** - Parse YAML/JSON/TOML and navigate structure
 4. **Content predicates** - Streaming regex evaluation with DFAs
 
-Files are eliminated as early as possible in the pipeline, minimizing expensive operations. Content is never read unless metadata and structured filters pass first.
+Early elimination minimizes I/O. Content is never read unless metadata and structured filters pass first.
 
 **Structured data optimizations:**
-- Single file read when both structured + content predicates present
-- Document caching to avoid re-parsing for multiple structured predicates
-- Configurable size limit (default 10MB) to skip large files
+- Single read for combined predicates
+- Caches parsed documents
+- Size limit: 10MB (configurable)
 - UTF-8 detection short-circuits on binary files
 
 Additional optimizations:
