@@ -564,8 +564,7 @@ pub fn eval_structured_predicate(
             // Check all documents with OR semantics (any match = true)
             for doc in docs {
                 let values = navigate_yaml(doc, path);
-                let refs: Vec<&yaml_rust::Yaml> = values.to_vec();
-                if compare_yaml_values(&refs, *operator, value, raw_string) {
+                if compare_yaml_values(&values, *operator, value, raw_string) {
                     return Ok(true);
                 }
             }
@@ -579,8 +578,7 @@ pub fn eval_structured_predicate(
             };
             for doc in docs {
                 let values = navigate_yaml(doc, path);
-                let refs: Vec<&yaml_rust::Yaml> = values.to_vec();
-                if match_yaml_strings(&refs, matcher) {
+                if match_yaml_strings(&values, matcher) {
                     return Ok(true);
                 }
             }
@@ -598,8 +596,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_json(doc, path);
-            let refs: Vec<&serde_json::Value> = values.to_vec();
-            Ok(compare_json_values(&refs, *operator, value, raw_string))
+            Ok(compare_json_values(&values, *operator, value, raw_string))
         }
 
         StructuredDataPredicate::JsonString { path, matcher } => {
@@ -608,8 +605,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_json(doc, path);
-            let refs: Vec<&serde_json::Value> = values.to_vec();
-            Ok(match_json_strings(&refs, matcher))
+            Ok(match_json_strings(&values, matcher))
         }
 
         StructuredDataPredicate::TomlValue {
@@ -623,8 +619,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_toml(doc, path);
-            let refs: Vec<&toml::Value> = values.to_vec();
-            Ok(compare_toml_values(&refs, *operator, value, raw_string))
+            Ok(compare_toml_values(&values, *operator, value, raw_string))
         }
 
         StructuredDataPredicate::TomlString { path, matcher } => {
@@ -633,8 +628,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_toml(doc, path);
-            let refs: Vec<&toml::Value> = values.to_vec();
-            Ok(match_toml_strings(&refs, matcher))
+            Ok(match_toml_strings(&values, matcher))
         }
     }
 }

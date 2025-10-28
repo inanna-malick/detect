@@ -8,7 +8,7 @@ pub mod mcp_server;
 pub mod parser;
 pub mod predicate;
 mod predicate_error;
-mod util;
+pub mod util;
 
 use std::{path::Path, sync::Arc, time::Instant};
 

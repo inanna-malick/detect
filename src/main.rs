@@ -55,53 +55,6 @@ struct Args {
     max_structured_size: String,
 }
 
-/// Parse size values like "1mb", "100kb" from CLI arguments
-fn parse_cli_size(s: &str) -> Result<u64, String> {
-    let s = s.trim().to_lowercase();
-
-    // Find where the unit starts
-    let mut unit_start = 0;
-    for (i, ch) in s.char_indices() {
-        if !ch.is_ascii_digit() && ch != '.' {
-            unit_start = i;
-            break;
-        }
-    }
-
-    if unit_start == 0 {
-        return Err(format!(
-            "Invalid size '{}': expected format like '10mb', '500kb'",
-            s
-        ));
-    }
-
-    let number_str = &s[..unit_start];
-    let unit_str = &s[unit_start..];
-
-    let number: f64 = number_str.parse().map_err(|_| {
-        format!(
-            "Invalid size '{}': cannot parse numeric value '{}'",
-            s, number_str
-        )
-    })?;
-
-    let multiplier = match unit_str {
-        "b" | "byte" | "bytes" => 1.0,
-        "k" | "kb" | "kilobyte" | "kilobytes" => 1024.0,
-        "m" | "mb" | "megabyte" | "megabytes" => 1024.0 * 1024.0,
-        "g" | "gb" | "gigabyte" | "gigabytes" => 1024.0 * 1024.0 * 1024.0,
-        "t" | "tb" | "terabyte" | "terabytes" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
-        _ => {
-            return Err(format!(
-                "Invalid size '{}': unknown unit '{}' (expected: b, kb, mb, gb, tb)",
-                s, unit_str
-            ))
-        }
-    };
-
-    Ok((number * multiplier) as u64)
-}
-
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -140,10 +93,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Expression is required when not in MCP mode");
 
     // Parse max structured size
-    let max_structured_size = parse_cli_size(&args.max_structured_size).unwrap_or_else(|e| {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    });
+    let max_structured_size =
+        detect::util::parse_size(&args.max_structured_size).unwrap_or_else(|e| {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        });
 
     let config = RuntimeConfig {
         max_structured_size,

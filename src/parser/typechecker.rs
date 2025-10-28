@@ -21,55 +21,12 @@ pub use crate::parser::error::DetectError as TypecheckError;
 
 /// Parse size values like "1mb", "100kb", etc. into bytes
 fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64, TypecheckError> {
-    let s = s.trim().to_lowercase();
-
-    // Find where the unit starts
-    let mut unit_start = 0;
-    for (i, ch) in s.char_indices() {
-        if !ch.is_ascii_digit() && ch != '.' {
-            unit_start = i;
-            break;
-        }
-    }
-
-    if unit_start == 0 {
-        return Err(TypecheckError::InvalidValue {
-            expected: "size with unit (e.g., 1mb, 100kb)".to_string(),
-            found: s,
-            span: value_span.to_source_span(),
-            src: source.to_string(),
-        });
-    }
-
-    let number_str = &s[..unit_start];
-    let unit_str = &s[unit_start..];
-
-    let number: f64 = number_str
-        .parse()
-        .map_err(|_| TypecheckError::InvalidValue {
-            expected: "numeric value".to_string(),
-            found: number_str.to_string(),
-            span: value_span.to_source_span(),
-            src: source.to_string(),
-        })?;
-
-    let multiplier = match unit_str {
-        "b" | "byte" | "bytes" => 1.0,
-        "k" | "kb" | "kilobyte" | "kilobytes" => 1024.0,
-        "m" | "mb" | "megabyte" | "megabytes" => 1024.0 * 1024.0,
-        "g" | "gb" | "gigabyte" | "gigabytes" => 1024.0 * 1024.0 * 1024.0,
-        "t" | "tb" | "terabyte" | "terabytes" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
-        _ => {
-            return Err(TypecheckError::InvalidValue {
-                expected: "size unit (b, kb, mb, gb, tb)".to_string(),
-                found: unit_str.to_string(),
-                span: value_span.to_source_span(),
-                src: source.to_string(),
-            })
-        }
-    };
-
-    Ok((number * multiplier) as u64)
+    crate::util::parse_size(s).map_err(|err_msg| TypecheckError::InvalidValue {
+        expected: "size with unit (e.g., 1mb, 100kb)".to_string(),
+        found: err_msg,
+        span: value_span.to_source_span(),
+        src: source.to_string(),
+    })
 }
 
 /// Check if an operator is an ordering comparison (>, >=, <, <=)
