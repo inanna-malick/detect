@@ -72,6 +72,17 @@ fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64
     Ok((number * multiplier) as u64)
 }
 
+/// Check if an operator is an ordering comparison (>, >=, <, <=)
+fn is_ordering_operator(op: typed::StructuredOperator) -> bool {
+    matches!(
+        op,
+        typed::StructuredOperator::Greater
+            | typed::StructuredOperator::GreaterOrEqual
+            | typed::StructuredOperator::Less
+            | typed::StructuredOperator::LessOrEqual
+    )
+}
+
 /// Main typechecker that transforms raw AST to typed expressions
 pub struct Typechecker;
 
@@ -361,7 +372,7 @@ impl Typechecker {
         source: &str,
     ) -> Result<Predicate, DetectError> {
         use crate::predicate::StructuredDataPredicate;
-        use typed::{DataFormat, StructuredOperator};
+        use typed::DataFormat;
 
         // Capture raw string for string coercion fallback (preserves original formatting)
         let raw_string = value.as_string().to_string();
@@ -372,13 +383,7 @@ impl Typechecker {
                 let yaml_value = Self::build_yaml_rhs(value);
 
                 // Validate comparison operators require numeric values
-                if matches!(
-                    operator,
-                    StructuredOperator::Greater
-                        | StructuredOperator::GreaterOrEqual
-                        | StructuredOperator::Less
-                        | StructuredOperator::LessOrEqual
-                ) && !Self::is_comparable_yaml(&yaml_value)
+                if is_ordering_operator(operator) && !Self::is_comparable_yaml(&yaml_value)
                 {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
@@ -399,13 +404,7 @@ impl Typechecker {
             DataFormat::Json => {
                 let json_value = Self::build_json_rhs(value);
 
-                if matches!(
-                    operator,
-                    StructuredOperator::Greater
-                        | StructuredOperator::GreaterOrEqual
-                        | StructuredOperator::Less
-                        | StructuredOperator::LessOrEqual
-                ) && !Self::is_comparable_json(&json_value)
+                if is_ordering_operator(operator) && !Self::is_comparable_json(&json_value)
                 {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
@@ -419,20 +418,14 @@ impl Typechecker {
                     path,
                     operator,
                     value: json_value,
-                    raw_string: raw_string.clone(),
+                    raw_string,
                 }
             }
 
             DataFormat::Toml => {
                 let toml_value = Self::build_toml_rhs(value);
 
-                if matches!(
-                    operator,
-                    StructuredOperator::Greater
-                        | StructuredOperator::GreaterOrEqual
-                        | StructuredOperator::Less
-                        | StructuredOperator::LessOrEqual
-                ) && !Self::is_comparable_toml(&toml_value)
+                if is_ordering_operator(operator) && !Self::is_comparable_toml(&toml_value)
                 {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
@@ -446,7 +439,7 @@ impl Typechecker {
                     path,
                     operator,
                     value: toml_value,
-                    raw_string: raw_string.clone(),
+                    raw_string,
                 }
             }
         };

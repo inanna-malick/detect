@@ -289,7 +289,6 @@ fn yaml_to_string(value: &yaml_rust::Yaml) -> Option<String> {
         yaml_rust::Yaml::Boolean(b) => Some(b.to_string()),
         yaml_rust::Yaml::Real(s) => Some(s.clone()),
         yaml_rust::Yaml::Null => Some("null".to_string()),
-        yaml_rust::Yaml::Array(_) | yaml_rust::Yaml::Hash(_) => None,
         _ => None,
     }
 }
@@ -363,13 +362,8 @@ fn compare_yaml_value(
     match operator {
         StructuredOperator::Equals | StructuredOperator::NotEquals => {
             // Centralized equality logic with type coercion fallback
-            let equals = if actual == expected {
-                true
-            } else if let Some(actual_str) = yaml_to_string(actual) {
-                actual_str == raw_string
-            } else {
-                false
-            };
+            let equals =
+                actual == expected || yaml_to_string(actual).is_some_and(|s| s == raw_string);
 
             // NotEquals is simply the negation of Equals
             match operator {
@@ -389,10 +383,7 @@ fn compare_yaml_value(
             }
             _ => {
                 // Try string fallback for ordering
-                if let Some(actual_str) = yaml_to_string(actual) {
-                    return compare_strings(&actual_str, raw_string, operator);
-                }
-                false
+                yaml_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator))
             }
         },
     }
@@ -408,13 +399,8 @@ fn compare_json_value(
     match operator {
         StructuredOperator::Equals | StructuredOperator::NotEquals => {
             // Centralized equality logic with type coercion fallback
-            let equals = if actual == expected {
-                true
-            } else if let Some(actual_str) = json_to_string(actual) {
-                actual_str == raw_string
-            } else {
-                false
-            };
+            let equals =
+                actual == expected || json_to_string(actual).is_some_and(|s| s == raw_string);
 
             // NotEquals is simply the negation of Equals
             match operator {
@@ -440,10 +426,7 @@ fn compare_json_value(
                 compare_strings(a, e, operator)
             }
             _ => {
-                if let Some(actual_str) = json_to_string(actual) {
-                    return compare_strings(&actual_str, raw_string, operator);
-                }
-                false
+                json_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator))
             }
         },
     }
@@ -459,13 +442,8 @@ fn compare_toml_value(
     match operator {
         StructuredOperator::Equals | StructuredOperator::NotEquals => {
             // Centralized equality logic with type coercion fallback
-            let equals = if actual == expected {
-                true
-            } else if let Some(actual_str) = toml_to_string(actual) {
-                actual_str == raw_string
-            } else {
-                false
-            };
+            let equals =
+                actual == expected || toml_to_string(actual).is_some_and(|s| s == raw_string);
 
             // NotEquals is simply the negation of Equals
             match operator {
@@ -479,10 +457,7 @@ fn compare_toml_value(
             (toml::Value::Integer(a), toml::Value::Integer(e)) => compare_i64(*a, *e, operator),
             (toml::Value::String(a), toml::Value::String(e)) => compare_strings(a, e, operator),
             _ => {
-                if let Some(actual_str) = toml_to_string(actual) {
-                    return compare_strings(&actual_str, raw_string, operator);
-                }
-                false
+                toml_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator))
             }
         },
     }
@@ -495,9 +470,6 @@ pub fn compare_yaml_values(
     expected: &yaml_rust::Yaml,
     raw_string: &str,
 ) -> bool {
-    if actual_values.is_empty() {
-        return false;
-    }
     actual_values
         .iter()
         .any(|actual| compare_yaml_value(actual, operator, expected, raw_string))
@@ -510,9 +482,6 @@ pub fn compare_json_values(
     expected: &serde_json::Value,
     raw_string: &str,
 ) -> bool {
-    if actual_values.is_empty() {
-        return false;
-    }
     actual_values
         .iter()
         .any(|actual| compare_json_value(actual, operator, expected, raw_string))
@@ -525,9 +494,6 @@ pub fn compare_toml_values(
     expected: &toml::Value,
     raw_string: &str,
 ) -> bool {
-    if actual_values.is_empty() {
-        return false;
-    }
     actual_values
         .iter()
         .any(|actual| compare_toml_value(actual, operator, expected, raw_string))

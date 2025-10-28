@@ -66,7 +66,7 @@ pub fn parse_path(input: &str) -> Result<Vec<PathComponent>, PathParseError> {
     }
 
     let pairs = PathParser::parse(Rule::path, input)
-        .map_err(|e| PathParseError::Syntax(format!("Failed to parse path '{}': {}", input, e)))?;
+        .map_err(|e| PathParseError::Syntax(format!("Failed to parse path '{input}': {e}")))?;
 
     let mut components = Vec::new();
 
