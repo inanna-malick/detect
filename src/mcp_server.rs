@@ -217,6 +217,7 @@ pub async fn run_mcp_server() -> Result<()> {
                                                 &directory,
                                                 !include_gitignored,
                                                 expression,
+                                                crate::RuntimeConfig::default(),
                                                 |path| {
                                                     if max_results == 0
                                                         || results.len() < max_results

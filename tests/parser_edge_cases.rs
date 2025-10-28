@@ -633,6 +633,6 @@ fn test_whitespace_in_set_values() {
     assert!(result.is_ok());
 
     // After typechecking, verify whitespace is preserved
-    let _typed = Typechecker::typecheck(result.unwrap(), expr).unwrap();
+    let _typed = Typechecker::typecheck(result.unwrap(), expr, &detect::RuntimeConfig::default()).unwrap();
     // The actual verification would happen in the set values
 }

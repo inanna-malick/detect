@@ -18,17 +18,34 @@ use parser::{error::DetectError, RawParser, Typechecker};
 use predicate::Predicate;
 use slog::{debug, info, Logger};
 
+/// Runtime configuration for detect operations
+#[derive(Debug, Clone)]
+pub struct RuntimeConfig {
+    /// Maximum file size (in bytes) for structured data parsing (YAML/JSON/TOML)
+    /// Files larger than this will skip structured data evaluation
+    pub max_structured_size: u64,
+}
+
+impl Default for RuntimeConfig {
+    fn default() -> Self {
+        Self {
+            max_structured_size: 10 * 1024 * 1024, // 10MB default
+        }
+    }
+}
+
 pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     logger: Logger,
     root: &Path,
     respect_gitignore: bool,
     expr: String,
+    config: RuntimeConfig,
     mut on_match: F,
 ) -> Result<(), DetectError> {
     // Use parser: parse then typecheck
     let original_query = expr.clone();
     let parse_result = RawParser::parse_raw_expr(&expr)
-        .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr));
+        .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr, &config));
 
     match parse_result {
         Ok(parsed_expr) => {

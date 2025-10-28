@@ -80,31 +80,35 @@ impl Typechecker {
     ///
     /// # Errors
     /// Returns `DetectError` for syntax errors, unknown selectors, incompatible operators, or invalid values.
-    pub fn typecheck(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
-        Self::typecheck_inner(raw_expr, source)
+    pub fn typecheck(
+        raw_expr: RawExpr<'_>,
+        source: &str,
+        config: &crate::RuntimeConfig,
+    ) -> Result<Expr<Predicate>, DetectError> {
+        Self::typecheck_inner(raw_expr, source, config)
     }
 
     fn typecheck_inner(
         raw_expr: RawExpr<'_>,
         source: &str,
+        config: &crate::RuntimeConfig,
     ) -> Result<Expr<Predicate>, DetectError> {
         match raw_expr {
             RawExpr::Predicate(pred) => {
-                let typed_pred = Self::typecheck_predicate(pred, source)?;
-                Ok(Expr::Predicate(typed_pred))
+                Self::typecheck_predicate(pred, source, config)
             }
             RawExpr::And(lhs, rhs) => {
-                let typed_lhs = Self::typecheck_inner(*lhs, source)?;
-                let typed_rhs = Self::typecheck_inner(*rhs, source)?;
+                let typed_lhs = Self::typecheck_inner(*lhs, source, config)?;
+                let typed_rhs = Self::typecheck_inner(*rhs, source, config)?;
                 Ok(Expr::and(typed_lhs, typed_rhs))
             }
             RawExpr::Or(lhs, rhs) => {
-                let typed_lhs = Self::typecheck_inner(*lhs, source)?;
-                let typed_rhs = Self::typecheck_inner(*rhs, source)?;
+                let typed_lhs = Self::typecheck_inner(*lhs, source, config)?;
+                let typed_rhs = Self::typecheck_inner(*rhs, source, config)?;
                 Ok(Expr::or(typed_lhs, typed_rhs))
             }
             RawExpr::Not(expr) => {
-                let typed_expr = Self::typecheck_inner(*expr, source)?;
+                let typed_expr = Self::typecheck_inner(*expr, source, config)?;
                 Ok(Expr::negate(typed_expr))
             }
             RawExpr::SingleWord(span) => {
@@ -137,8 +141,48 @@ impl Typechecker {
         }
     }
 
+    /// Build synthetic precondition for structured data predicates
+    /// Wraps actual predicate in: (ext in [exts]) AND (size < max) AND actual_predicate
+    fn build_synthetic_precondition(
+        format: typed::DataFormat,
+        config: &crate::RuntimeConfig,
+        actual_predicate: Predicate,
+    ) -> Expr<Predicate> {
+        use std::collections::HashSet;
+        use typed::DataFormat;
+
+        // Map format to file extensions
+        let extensions: Vec<&str> = match format {
+            DataFormat::Yaml => vec!["yaml", "yml"],
+            DataFormat::Json => vec!["json"],
+            DataFormat::Toml => vec!["toml"],
+        };
+
+        // Build: ext in [extensions]
+        let ext_set: HashSet<String> = extensions.iter().map(|s| s.to_string()).collect();
+        let ext_predicate = Predicate::name(NamePredicate::Extension(StringMatcher::In(ext_set)));
+
+        // Build: size < max_structured_size
+        let size_predicate = Predicate::meta(MetadataPredicate::Filesize(
+            NumberMatcher::In(Bound::Right(..config.max_structured_size)),
+        ));
+
+        // Construct: ext_check AND size_check AND actual_predicate
+        Expr::and(
+            Expr::and(
+                Expr::Predicate(ext_predicate),
+                Expr::Predicate(size_predicate),
+            ),
+            Expr::Predicate(actual_predicate),
+        )
+    }
+
     /// Transform a raw predicate into a typed predicate using the new type system
-    fn typecheck_predicate(pred: RawPredicate<'_>, source: &str) -> Result<Predicate, DetectError> {
+    fn typecheck_predicate(
+        pred: RawPredicate<'_>,
+        source: &str,
+        config: &crate::RuntimeConfig,
+    ) -> Result<Expr<Predicate>, DetectError> {
         // Parse selector and operator together with type safety, passing spans
         let typed_selector = typed::parse_selector_operator(
             pred.selector,
@@ -149,35 +193,67 @@ impl Typechecker {
         )?;
 
         match typed_selector {
-            TypedSelector::String(selector, operator) => Self::build_string_predicate(
-                selector,
-                operator,
-                &pred.value,
-                pred.value_span,
-                source,
-            ),
-            TypedSelector::Numeric(selector, operator) => Self::build_numeric_predicate(
-                selector,
-                operator,
-                &pred.value,
-                pred.value_span,
-                source,
-            ),
-            TypedSelector::Temporal(selector, operator) => Self::build_temporal_predicate(
-                selector,
-                operator,
-                &pred.value,
-                pred.value_span,
-                source,
-            ),
+            TypedSelector::String(selector, operator) => {
+                let predicate = Self::build_string_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
+            TypedSelector::Numeric(selector, operator) => {
+                let predicate = Self::build_numeric_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
+            TypedSelector::Temporal(selector, operator) => {
+                let predicate = Self::build_temporal_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
             TypedSelector::Enum(selector, operator) => {
-                Self::build_enum_predicate(selector, operator, &pred.value, pred.value_span, source)
+                let predicate = Self::build_enum_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
             }
             TypedSelector::StructuredData(format, path, operator) => {
-                Self::build_structured_predicate(format, path, operator, &pred.value, pred.value_span, source)
+                let predicate = Self::build_structured_predicate(
+                    format,
+                    path,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Self::build_synthetic_precondition(format, config, predicate))
             }
             TypedSelector::StructuredDataString(format, path, string_operator) => {
-                Self::build_structured_string_predicate(format, path, string_operator, &pred.value, pred.value_span, source)
+                let predicate = Self::build_structured_string_predicate(
+                    format,
+                    path,
+                    string_operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Self::build_synthetic_precondition(format, config, predicate))
             }
         }
     }

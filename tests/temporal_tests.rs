@@ -15,7 +15,8 @@ async fn run_temporal_test(
         tmp_dir.path(),
         false,
         expr.to_owned(),
-        |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
+        detect::RuntimeConfig::default(),
+            |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
     .unwrap();
@@ -376,7 +377,8 @@ async fn test_time_selectors() {
         tmp_dir.path(),
         false,
         "created > -1hour".to_owned(),
-        |p| created_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
+        detect::RuntimeConfig::default(),
+            |p| created_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
     .unwrap();
@@ -396,7 +398,8 @@ async fn test_time_selectors() {
         tmp_dir.path(),
         false,
         "created > -1hour".to_owned(),
-        |p| created_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
+        detect::RuntimeConfig::default(),
+            |p| created_files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
     .unwrap();
