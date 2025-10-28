@@ -8,6 +8,7 @@ use regex_automata::dfa::Automaton;
 use tokio::io::{self};
 
 pub mod fs;
+pub mod structured;
 
 pub async fn run_contents_predicate_stream(
     e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'_>>>,

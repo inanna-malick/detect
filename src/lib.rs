@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-mod eval;
+pub mod eval;
 pub mod expr;
 mod hybrid_regex;
 #[cfg(feature = "mcp")]
