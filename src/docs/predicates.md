@@ -50,6 +50,63 @@ All available selectors and their data types.
 |-----------|--------|-------------|---------|
 | `content` | String | File text contents | `content contains TODO` |
 
+## Structured Data Selectors
+
+Query YAML, JSON, and TOML file contents by navigating their structure:
+
+| Selector | Type | Description | Example |
+|----------|------|-------------|---------|
+| `yaml:.path` | Structured | Navigate YAML structure | `yaml:.server.port == 8080` |
+| `json:.path` | Structured | Navigate JSON structure | `json:.name == "test"` |
+| `toml:.path` | Structured | Navigate TOML structure | `toml:.dependencies.serde` |
+
+**Navigation Syntax:**
+- `.field` - Access object field
+- `.nested.field` - Access nested fields
+- `[0]` - Access array element by index
+- `[*]` - Wildcard: match ANY array element (OR semantics)
+- `..field` - Recursive descent: find field at any depth
+
+**Operators:** `==`, `!=`, `>`, `<`, `>=`, `<=`, `contains`, `~=`
+
+**Type Coercion:** Automatic fallback to string comparison when types don't match
+- `yaml:.port == 8080` matches both integer 8080 and string "8080"
+- `json:.version == "1.0"` matches both string "1.0" and number 1.0
+- Applies to all comparison and string matching operators
+
+**Examples:**
+```bash
+# Simple field access
+yaml:.server.port == 8080
+
+# Nested fields
+json:.dependencies.react == "18.0.0"
+
+# Array indexing
+yaml:.features[0].name == "auth"
+
+# Wildcards (match ANY)
+yaml:.features[*].enabled == true
+
+# Recursive descent
+yaml:..password contains "prod"
+
+# String matchers
+toml:.dependencies.* contains "tokio"
+
+# Numeric comparisons
+json:.spec.replicas > 3
+
+# Type coercion
+yaml:.port == "8080"  # matches port: 8080 or port: "8080"
+```
+
+**Limitations:**
+- Files > 10MB skip structured evaluation by default (use `--max-structured-size` to configure)
+- Non-UTF8 files skip structured evaluation
+- Invalid YAML/JSON/TOML returns false (no error)
+- Multi-document YAML: matches if ANY document matches
+
 ## Selector Aliases
 
 Some selectors have alternative names for convenience:
