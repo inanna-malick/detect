@@ -152,6 +152,27 @@ Selectors identify what aspect of a file to examine:
 
 **Aliases:** `contents`, `text`
 
+#### Structured Data
+
+Query YAML, JSON, and TOML file contents:
+
+| Selector | Type | Description | Example |
+|----------|------|-------------|---------|
+| `yaml:.path` | Structured | Navigate YAML structure | `yaml:.server.port == 8080` |
+| `json:.path` | Structured | Navigate JSON structure | `json:.dependencies.react` |
+| `toml:.path` | Structured | Navigate TOML structure | `toml:.package.edition == "2021"` |
+
+**Navigation:**
+- `.field` - Access object field
+- `.nested.field` - Access nested fields
+- `[0]` - Array element by index
+- `[*]` - Wildcard (matches ANY element)
+- `..field` - Recursive descent (any depth)
+
+**Type coercion:** Automatically converts types when needed (`yaml:.port == 8080` matches both `8080` and `"8080"`)
+
+**Configuration:** Use `--max-structured-size <size>` to set max file size (default: 10MB)
+
 ### Operators
 
 #### String Operators
@@ -245,6 +266,42 @@ detect 'content ~= "(TODO|FIXME|NOTE):"'
 detect 'content ~= "import .* from .+(react|vue)"'
 ```
 
+### Structured Data Queries
+
+Query configuration file contents with path-based selectors:
+
+```bash
+# Find YAML files with specific server port
+detect 'yaml:.server.port == 8080'
+
+# Find package.json files with React dependency
+detect 'json:.dependencies.react'
+
+# Find Cargo.toml files using 2021 edition
+detect 'toml:.package.edition == "2021"'
+
+# Version range matching with regex
+detect 'json:.dependencies.serde ~= "^1\\."'
+
+# Find configs with debugging enabled
+detect 'yaml:.debug == true'
+
+# Array wildcard - match ANY enabled feature
+detect 'yaml:.features[*].enabled == true'
+
+# Recursive descent across all formats
+detect 'yaml:..port > 8000 OR json:..port > 8000 OR toml:..port > 8000'
+
+# Combine with metadata filters
+detect 'size < 50kb AND yaml:.database.host contains prod'
+
+# Kubernetes manifests with high replica counts
+detect 'yaml:.spec.replicas > 3'
+
+# Security: find production credentials outside tests
+detect 'yaml:..password contains prod AND NOT path contains test'
+```
+
 ### Complex Queries
 
 ```bash
@@ -267,19 +324,29 @@ detect 'ext == rs' ./src
 # Include gitignored files
 detect -i 'content contains SECRET'
 
+# Configure max file size for structured parsing
+detect --max-structured-size 50mb 'yaml:.config'
+
 # Debug logging
 detect -l debug 'complex query here'
 ```
 
 ## Performance
 
-detect optimizes query execution automatically using a **three-phase evaluation strategy**:
+detect optimizes query execution automatically using a **four-phase evaluation strategy**:
 
 1. **Name predicates** - Fast path-based filtering (no file I/O)
 2. **Metadata predicates** - Stat calls only for size/timestamps
-3. **Content predicates** - Streaming regex evaluation with DFAs
+3. **Structured predicates** - Parse YAML/JSON/TOML and navigate structure
+4. **Content predicates** - Streaming regex evaluation with DFAs
 
-Files are eliminated as early as possible in the pipeline, minimizing expensive operations. Content is never read unless metadata filters pass first.
+Files are eliminated as early as possible in the pipeline, minimizing expensive operations. Content is never read unless metadata and structured filters pass first.
+
+**Structured data optimizations:**
+- Single file read when both structured + content predicates present
+- Document caching to avoid re-parsing for multiple structured predicates
+- Configurable size limit (default 10MB) to skip large files
+- UTF-8 detection short-circuits on binary files
 
 Additional optimizations:
 - Respects `.gitignore` by default (override with `-i`)
