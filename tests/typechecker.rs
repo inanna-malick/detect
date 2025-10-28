@@ -420,10 +420,12 @@ fn test_operator_aliases() {
 
     for (alias, canonical) in cases {
         let result1 = RawParser::parse_raw_expr(alias).unwrap();
-        let typed1 = Typechecker::typecheck(result1, alias, &detect::RuntimeConfig::default()).unwrap();
+        let typed1 =
+            Typechecker::typecheck(result1, alias, &detect::RuntimeConfig::default()).unwrap();
 
         let result2 = RawParser::parse_raw_expr(canonical).unwrap();
-        let typed2 = Typechecker::typecheck(result2, canonical, &detect::RuntimeConfig::default()).unwrap();
+        let typed2 =
+            Typechecker::typecheck(result2, canonical, &detect::RuntimeConfig::default()).unwrap();
 
         assert_eq!(typed1, typed2, "Failed for {} vs {}", alias, canonical);
     }
@@ -441,10 +443,12 @@ fn test_operator_aliases() {
 
     for (alias, canonical) in num_cases {
         let result1 = RawParser::parse_raw_expr(alias).unwrap();
-        let typed1 = Typechecker::typecheck(result1, alias, &detect::RuntimeConfig::default()).unwrap();
+        let typed1 =
+            Typechecker::typecheck(result1, alias, &detect::RuntimeConfig::default()).unwrap();
 
         let result2 = RawParser::parse_raw_expr(canonical).unwrap();
-        let typed2 = Typechecker::typecheck(result2, canonical, &detect::RuntimeConfig::default()).unwrap();
+        let typed2 =
+            Typechecker::typecheck(result2, canonical, &detect::RuntimeConfig::default()).unwrap();
 
         assert_eq!(typed1, typed2, "Failed for {} vs {}", alias, canonical);
     }
@@ -458,10 +462,12 @@ fn test_operator_aliases() {
 
     for (alias, canonical) in time_cases {
         let result1 = RawParser::parse_raw_expr(alias).unwrap();
-        let typed1 = Typechecker::typecheck(result1, alias, &detect::RuntimeConfig::default()).unwrap();
+        let typed1 =
+            Typechecker::typecheck(result1, alias, &detect::RuntimeConfig::default()).unwrap();
 
         let result2 = RawParser::parse_raw_expr(canonical).unwrap();
-        let typed2 = Typechecker::typecheck(result2, canonical, &detect::RuntimeConfig::default()).unwrap();
+        let typed2 =
+            Typechecker::typecheck(result2, canonical, &detect::RuntimeConfig::default()).unwrap();
 
         assert_eq!(typed1, typed2, "Failed for {} vs {}", alias, canonical);
     }
@@ -559,7 +565,11 @@ fn test_all_operator_aliases_work() {
     for expr in test_cases {
         let parse_result = RawParser::parse_raw_expr(expr);
         assert!(parse_result.is_ok(), "Failed to parse: {}", expr);
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr, &detect::RuntimeConfig::default());
+        let typecheck_result = Typechecker::typecheck(
+            parse_result.unwrap(),
+            expr,
+            &detect::RuntimeConfig::default(),
+        );
         assert!(typecheck_result.is_ok(), "Failed to typecheck: {}", expr);
     }
 }
@@ -578,10 +588,12 @@ fn test_case_insensitive_operators() {
 
     for (upper_case, lower_case) in test_cases {
         let result1 = RawParser::parse_raw_expr(upper_case).unwrap();
-        let typed1 = Typechecker::typecheck(result1, upper_case, &detect::RuntimeConfig::default()).unwrap();
+        let typed1 =
+            Typechecker::typecheck(result1, upper_case, &detect::RuntimeConfig::default()).unwrap();
 
         let result2 = RawParser::parse_raw_expr(lower_case).unwrap();
-        let typed2 = Typechecker::typecheck(result2, lower_case, &detect::RuntimeConfig::default()).unwrap();
+        let typed2 =
+            Typechecker::typecheck(result2, lower_case, &detect::RuntimeConfig::default()).unwrap();
 
         assert_eq!(
             typed1, typed2,
@@ -725,7 +737,8 @@ fn test_unknown_operators_parse_but_fail_typecheck() {
         );
 
         // Typecheck should fail with UnknownOperator
-        let typecheck_result = Typechecker::typecheck(result, expr, &detect::RuntimeConfig::default());
+        let typecheck_result =
+            Typechecker::typecheck(result, expr, &detect::RuntimeConfig::default());
         assert!(
             matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == expected_op),
             "Expected UnknownOperator({}) for '{}', got {:?}",
@@ -758,7 +771,11 @@ fn test_very_large_numeric_values() {
     assert!(parse_result.is_ok());
 
     // Should fail during typecheck
-    let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), overflow, &detect::RuntimeConfig::default());
+    let typecheck_result = Typechecker::typecheck(
+        parse_result.unwrap(),
+        overflow,
+        &detect::RuntimeConfig::default(),
+    );
     assert!(typecheck_result.is_err());
 }
 
@@ -800,7 +817,11 @@ fn test_special_regex_characters() {
             expr
         );
 
-        let typecheck_result = Typechecker::typecheck(parse_result.unwrap(), expr, &detect::RuntimeConfig::default());
+        let typecheck_result = Typechecker::typecheck(
+            parse_result.unwrap(),
+            expr,
+            &detect::RuntimeConfig::default(),
+        );
         assert!(
             typecheck_result.is_ok(),
             "Failed to typecheck {}: {}",

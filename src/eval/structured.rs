@@ -197,10 +197,7 @@ fn collect_recursive_json_key<'a>(
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
-pub fn navigate_toml<'a>(
-    root: &'a toml::Value,
-    path: &[PathComponent],
-) -> Vec<&'a toml::Value> {
+pub fn navigate_toml<'a>(root: &'a toml::Value, path: &[PathComponent]) -> Vec<&'a toml::Value> {
     let mut current_values = vec![root];
 
     for component in path {
@@ -537,10 +534,7 @@ pub fn compare_toml_values(
 }
 
 /// Match YAML values against string matcher (OR semantics)
-pub fn match_yaml_strings(
-    actual_values: &[&yaml_rust::Yaml],
-    matcher: &StringMatcher,
-) -> bool {
+pub fn match_yaml_strings(actual_values: &[&yaml_rust::Yaml], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
     }
@@ -554,10 +548,7 @@ pub fn match_yaml_strings(
 }
 
 /// Match JSON values against string matcher (OR semantics)
-pub fn match_json_strings(
-    actual_values: &[&serde_json::Value],
-    matcher: &StringMatcher,
-) -> bool {
+pub fn match_json_strings(actual_values: &[&serde_json::Value], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
     }
@@ -571,10 +562,7 @@ pub fn match_json_strings(
 }
 
 /// Match TOML values against string matcher (OR semantics)
-pub fn match_toml_strings(
-    actual_values: &[&toml::Value],
-    matcher: &StringMatcher,
-) -> bool {
+pub fn match_toml_strings(actual_values: &[&toml::Value], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
     }
@@ -610,7 +598,7 @@ pub fn eval_structured_predicate(
             // Check all documents with OR semantics (any match = true)
             for doc in docs {
                 let values = navigate_yaml(doc, path);
-                let refs: Vec<&yaml_rust::Yaml> = values.iter().map(|v| *v).collect();
+                let refs: Vec<&yaml_rust::Yaml> = values.to_vec();
                 if compare_yaml_values(&refs, *operator, value, raw_string) {
                     return Ok(true);
                 }
@@ -625,7 +613,7 @@ pub fn eval_structured_predicate(
             };
             for doc in docs {
                 let values = navigate_yaml(doc, path);
-                let refs: Vec<&yaml_rust::Yaml> = values.iter().map(|v| *v).collect();
+                let refs: Vec<&yaml_rust::Yaml> = values.to_vec();
                 if match_yaml_strings(&refs, matcher) {
                     return Ok(true);
                 }
@@ -644,7 +632,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_json(doc, path);
-            let refs: Vec<&serde_json::Value> = values.iter().map(|v| *v).collect();
+            let refs: Vec<&serde_json::Value> = values.to_vec();
             Ok(compare_json_values(&refs, *operator, value, raw_string))
         }
 
@@ -654,7 +642,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_json(doc, path);
-            let refs: Vec<&serde_json::Value> = values.iter().map(|v| *v).collect();
+            let refs: Vec<&serde_json::Value> = values.to_vec();
             Ok(match_json_strings(&refs, matcher))
         }
 
@@ -669,7 +657,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_toml(doc, path);
-            let refs: Vec<&toml::Value> = values.iter().map(|v| *v).collect();
+            let refs: Vec<&toml::Value> = values.to_vec();
             Ok(compare_toml_values(&refs, *operator, value, raw_string))
         }
 
@@ -679,7 +667,7 @@ pub fn eval_structured_predicate(
                 Err(e) => return Err(e.clone()),
             };
             let values = navigate_toml(doc, path);
-            let refs: Vec<&toml::Value> = values.iter().map(|v| *v).collect();
+            let refs: Vec<&toml::Value> = values.to_vec();
             Ok(match_toml_strings(&refs, matcher))
         }
     }
@@ -691,6 +679,12 @@ pub struct ParsedDocuments {
     yaml: Option<Result<Vec<yaml_rust::Yaml>, String>>,
     json: Option<Result<serde_json::Value, String>>,
     toml: Option<Result<toml::Value, String>>,
+}
+
+impl Default for ParsedDocuments {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ParsedDocuments {
@@ -715,8 +709,7 @@ impl ParsedDocuments {
     pub fn get_or_parse_json(&mut self, contents: &str) -> &Result<serde_json::Value, String> {
         if self.json.is_none() {
             self.json = Some(
-                serde_json::from_str(contents)
-                    .map_err(|e| format!("JSON parse error: {}", e)),
+                serde_json::from_str(contents).map_err(|e| format!("JSON parse error: {}", e)),
             );
         }
         self.json.as_ref().unwrap()
@@ -724,9 +717,8 @@ impl ParsedDocuments {
 
     pub fn get_or_parse_toml(&mut self, contents: &str) -> &Result<toml::Value, String> {
         if self.toml.is_none() {
-            self.toml = Some(
-                toml::from_str(contents).map_err(|e| format!("TOML parse error: {}", e)),
-            );
+            self.toml =
+                Some(toml::from_str(contents).map_err(|e| format!("TOML parse error: {}", e)));
         }
         self.toml.as_ref().unwrap()
     }
@@ -788,8 +780,9 @@ mod tests {
     #[test]
     fn test_navigate_yaml_recursive_key() {
         let yaml = YamlLoader::load_from_str(
-            "database:\n  host: localhost\nnested:\n  database:\n    host: remote"
-        ).unwrap();
+            "database:\n  host: localhost\nnested:\n  database:\n    host: remote",
+        )
+        .unwrap();
         let path = vec![
             PathComponent::RecursiveKey("database".to_string()),
             PathComponent::Key("host".to_string()),
@@ -1111,8 +1104,7 @@ mod tests {
 
     #[test]
     fn test_json_string_matcher() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"name": "test-app"}"#).unwrap();
+        let json: serde_json::Value = serde_json::from_str(r#"{"name": "test-app"}"#).unwrap();
         let matcher = StringMatcher::regex("test-.*").unwrap();
         let path = vec![PathComponent::Key("name".to_string())];
         let values = navigate_json(&json, &path);
@@ -1448,10 +1440,8 @@ mod tests {
 
     #[test]
     fn test_toml_datetime_equality() {
-        let toml: toml::Value =
-            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
-        let expected: toml::Value =
-            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let toml: toml::Value = toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let expected: toml::Value = toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
         let path = vec![PathComponent::Key("timestamp".to_string())];
         let values = navigate_toml(&toml, &path);
 
@@ -1465,8 +1455,7 @@ mod tests {
 
     #[test]
     fn test_toml_datetime_string_coercion() {
-        let toml: toml::Value =
-            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let toml: toml::Value = toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
         let expected_string = toml::Value::String("2024-01-15T10:30:00Z".to_string());
         let path = vec![PathComponent::Key("timestamp".to_string())];
         let values = navigate_toml(&toml, &path);
@@ -1481,8 +1470,7 @@ mod tests {
 
     #[test]
     fn test_toml_datetime_comparison_lexicographic() {
-        let toml: toml::Value =
-            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let toml: toml::Value = toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
         let expected = toml::Value::String("2024-01-01T00:00:00Z".to_string());
         let path = vec![PathComponent::Key("timestamp".to_string())];
         let values = navigate_toml(&toml, &path);

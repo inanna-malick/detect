@@ -8,8 +8,8 @@ use detect::parser::structured_path::PathComponent;
 use detect::parser::typed::StructuredOperator;
 use detect::parser::{RawParser, Typechecker};
 use detect::predicate::{
-    Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate, StructuredDataPredicate,
-    StringMatcher,
+    Bound, MetadataPredicate, NamePredicate, NumberMatcher, Predicate, StringMatcher,
+    StructuredDataPredicate,
 };
 use std::collections::HashSet;
 
@@ -425,9 +425,8 @@ fn parse_regex_operator() {
     let typed_expr =
         Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
-    let matcher = StringMatcher::Regex(
-        detect::hybrid_regex::HybridStringRegex::new("test.*").unwrap(),
-    );
+    let matcher =
+        StringMatcher::Regex(detect::hybrid_regex::HybridStringRegex::new("test.*").unwrap());
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -459,7 +458,10 @@ fn error_comparison_with_invalid_number() {
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
     let result = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default());
 
-    assert!(result.is_err(), "Comparison with non-numeric value should fail");
+    assert!(
+        result.is_err(),
+        "Comparison with non-numeric value should fail"
+    );
 }
 
 #[test]
@@ -479,7 +481,8 @@ fn error_invalid_path_triple_dot() {
 fn parse_and_expression() {
     let input = r#"yaml:.kind == "Deployment" AND yaml:.spec.replicas > 5"#;
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     // Left: yaml:.kind == "Deployment" with synthetic wrapper
     let left_synthetic = build_expected_synthetic(
@@ -515,12 +518,13 @@ fn parse_and_expression() {
 fn parse_mixed_selectors() {
     let input = "name == config.yaml AND yaml:.debug == true";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     // Left: Name predicate
-    let name_pred = Expr::Predicate(Predicate::name(
-        NamePredicate::FileName(StringMatcher::Equals("config.yaml".to_string()))
-    ));
+    let name_pred = Expr::Predicate(Predicate::name(NamePredicate::FileName(
+        StringMatcher::Equals("config.yaml".to_string()),
+    )));
 
     // Right: yaml:.debug == true with synthetic wrapper
     let yaml_synthetic = build_expected_synthetic(
@@ -546,7 +550,8 @@ fn parse_mixed_selectors() {
 fn parse_k8s_deployment_query() {
     let input = r#"yaml:.kind == "Deployment" AND yaml:.spec.replicas > 5"#;
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let _typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let _typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
     // Success if it parses without error
 }
 
@@ -554,7 +559,8 @@ fn parse_k8s_deployment_query() {
 fn parse_package_json_node_version() {
     let input = r#"json:.engines.node == "18""#;
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "json",
@@ -576,7 +582,8 @@ fn parse_package_json_node_version() {
 fn parse_toml_privileged_port() {
     let input = "toml:.server.port < 1024";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "toml",
@@ -598,7 +605,8 @@ fn parse_toml_privileged_port() {
 fn parse_negative_number() {
     let input = "yaml:.offset == -10";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -617,7 +625,8 @@ fn parse_negative_number() {
 fn parse_zero() {
     let input = "yaml:.count == 0";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -640,7 +649,8 @@ fn parse_zero() {
 fn parse_simple_recursive_descent() {
     let input = "yaml:..password == secret";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -659,7 +669,8 @@ fn parse_simple_recursive_descent() {
 fn parse_recursive_debug_flag() {
     let input = "yaml:..debug == true";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -678,7 +689,8 @@ fn parse_recursive_debug_flag() {
 fn parse_key_then_recursive() {
     let input = "yaml:.user..password == admin";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -700,7 +712,8 @@ fn parse_key_then_recursive() {
 fn parse_recursive_then_path() {
     let input = r#"yaml:..metadata.labels.app == "web""#;
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -723,7 +736,8 @@ fn parse_recursive_then_path() {
 fn parse_recursive_with_comparison() {
     let input = "toml:..port < 1024";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "toml",
@@ -742,7 +756,8 @@ fn parse_recursive_with_comparison() {
 fn parse_recursive_with_regex() {
     let input = r#"json:..email ~= ".*@example\.com""#;
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let matcher = StringMatcher::Regex(
         detect::hybrid_regex::HybridStringRegex::new(r".*@example\.com").unwrap(),
@@ -763,7 +778,8 @@ fn parse_recursive_with_regex() {
 fn parse_multiple_recursive() {
     let input = "yaml:..config..database == postgres";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -785,7 +801,8 @@ fn parse_multiple_recursive() {
 fn parse_recursive_with_array_index() {
     let input = "yaml:..users[0].name == alice";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -808,7 +825,8 @@ fn parse_recursive_with_array_index() {
 fn parse_recursive_with_wildcard() {
     let input = "yaml:..items[*].id == 42";
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -831,17 +849,17 @@ fn parse_recursive_with_wildcard() {
 fn parse_complex_recursive_query() {
     let input = r#"name == config.yaml AND yaml:..database.password ~= "secure.*""#;
     let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-    let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+    let typed_expr =
+        Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     // Left: Name predicate
-    let name_pred = Expr::Predicate(Predicate::name(
-        NamePredicate::FileName(StringMatcher::Equals("config.yaml".to_string()))
-    ));
+    let name_pred = Expr::Predicate(Predicate::name(NamePredicate::FileName(
+        StringMatcher::Equals("config.yaml".to_string()),
+    )));
 
     // Right: Synthetic wrapper with YamlString predicate
-    let matcher = StringMatcher::Regex(
-        detect::hybrid_regex::HybridStringRegex::new(r"secure.*").unwrap(),
-    );
+    let matcher =
+        StringMatcher::Regex(detect::hybrid_regex::HybridStringRegex::new(r"secure.*").unwrap());
     let yaml_synthetic = build_expected_synthetic(
         "yaml",
         StructuredDataPredicate::YamlString {
@@ -871,21 +889,21 @@ fn test_raw_string_preservation_yaml() {
 
     for (input, expected_raw) in test_cases {
         let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-        let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+        let typed_expr =
+            Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
         // Extract the structured predicate from the synthetic wrapper
         // Structure: And(And(ext, size), Structured(...))
         match typed_expr {
-            Expr::And(_, right) => {
-                match *right {
-                    Expr::Predicate(Predicate::Structured(
-                        StructuredDataPredicate::YamlValue { raw_string, .. }
-                    )) => {
-                        assert_eq!(raw_string, expected_raw, "Input: {}", input);
-                    }
-                    _ => panic!("Expected YamlValue predicate for input: {}", input),
+            Expr::And(_, right) => match *right {
+                Expr::Predicate(Predicate::Structured(StructuredDataPredicate::YamlValue {
+                    raw_string,
+                    ..
+                })) => {
+                    assert_eq!(raw_string, expected_raw, "Input: {}", input);
                 }
-            }
+                _ => panic!("Expected YamlValue predicate for input: {}", input),
+            },
             _ => panic!("Expected synthetic wrapper for input: {}", input),
         }
     }
@@ -902,21 +920,21 @@ fn test_raw_string_preservation_json() {
 
     for (input, expected_raw) in test_cases {
         let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-        let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+        let typed_expr =
+            Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
         // Extract the structured predicate from the synthetic wrapper
         // Structure: And(And(ext, size), Structured(...))
         match typed_expr {
-            Expr::And(_, right) => {
-                match *right {
-                    Expr::Predicate(Predicate::Structured(
-                        StructuredDataPredicate::JsonValue { raw_string, .. }
-                    )) => {
-                        assert_eq!(raw_string, expected_raw, "Input: {}", input);
-                    }
-                    _ => panic!("Expected JsonValue predicate for input: {}", input),
+            Expr::And(_, right) => match *right {
+                Expr::Predicate(Predicate::Structured(StructuredDataPredicate::JsonValue {
+                    raw_string,
+                    ..
+                })) => {
+                    assert_eq!(raw_string, expected_raw, "Input: {}", input);
                 }
-            }
+                _ => panic!("Expected JsonValue predicate for input: {}", input),
+            },
             _ => panic!("Expected synthetic wrapper for input: {}", input),
         }
     }
@@ -933,21 +951,21 @@ fn test_raw_string_preservation_toml() {
 
     for (input, expected_raw) in test_cases {
         let raw_expr = RawParser::parse_raw_expr(input).unwrap();
-        let typed_expr = Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
+        let typed_expr =
+            Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
         // Extract the structured predicate from the synthetic wrapper
         // Structure: And(And(ext, size), Structured(...))
         match typed_expr {
-            Expr::And(_, right) => {
-                match *right {
-                    Expr::Predicate(Predicate::Structured(
-                        StructuredDataPredicate::TomlValue { raw_string, .. }
-                    )) => {
-                        assert_eq!(raw_string, expected_raw, "Input: {}", input);
-                    }
-                    _ => panic!("Expected TomlValue predicate for input: {}", input),
+            Expr::And(_, right) => match *right {
+                Expr::Predicate(Predicate::Structured(StructuredDataPredicate::TomlValue {
+                    raw_string,
+                    ..
+                })) => {
+                    assert_eq!(raw_string, expected_raw, "Input: {}", input);
                 }
-            }
+                _ => panic!("Expected TomlValue predicate for input: {}", input),
+            },
             _ => panic!("Expected synthetic wrapper for input: {}", input),
         }
     }

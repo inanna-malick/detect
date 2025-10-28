@@ -94,9 +94,7 @@ impl Typechecker {
         config: &crate::RuntimeConfig,
     ) -> Result<Expr<Predicate>, DetectError> {
         match raw_expr {
-            RawExpr::Predicate(pred) => {
-                Self::typecheck_predicate(pred, source, config)
-            }
+            RawExpr::Predicate(pred) => Self::typecheck_predicate(pred, source, config),
             RawExpr::And(lhs, rhs) => {
                 let typed_lhs = Self::typecheck_inner(*lhs, source, config)?;
                 let typed_rhs = Self::typecheck_inner(*rhs, source, config)?;
@@ -163,9 +161,9 @@ impl Typechecker {
         let ext_predicate = Predicate::name(NamePredicate::Extension(StringMatcher::In(ext_set)));
 
         // Build: size < max_structured_size
-        let size_predicate = Predicate::meta(MetadataPredicate::Filesize(
-            NumberMatcher::In(Bound::Right(..config.max_structured_size)),
-        ));
+        let size_predicate = Predicate::meta(MetadataPredicate::Filesize(NumberMatcher::In(
+            Bound::Right(..config.max_structured_size),
+        )));
 
         // Construct: ext_check AND size_check AND actual_predicate
         Expr::and(
@@ -242,7 +240,9 @@ impl Typechecker {
                     pred.value_span,
                     source,
                 )?;
-                Ok(Self::build_synthetic_precondition(format, config, predicate))
+                Ok(Self::build_synthetic_precondition(
+                    format, config, predicate,
+                ))
             }
             TypedSelector::StructuredDataString(format, path, string_operator) => {
                 let predicate = Self::build_structured_string_predicate(
@@ -253,7 +253,9 @@ impl Typechecker {
                     pred.value_span,
                     source,
                 )?;
-                Ok(Self::build_synthetic_precondition(format, config, predicate))
+                Ok(Self::build_synthetic_precondition(
+                    format, config, predicate,
+                ))
             }
         }
     }
@@ -525,7 +527,10 @@ impl Typechecker {
 
     /// Check if a YAML value is comparable (numeric or date-like)
     fn is_comparable_yaml(value: &yaml_rust::Yaml) -> bool {
-        matches!(value, yaml_rust::Yaml::Integer(_) | yaml_rust::Yaml::Real(_))
+        matches!(
+            value,
+            yaml_rust::Yaml::Integer(_) | yaml_rust::Yaml::Real(_)
+        )
     }
 
     /// Check if a JSON value is comparable
@@ -535,7 +540,10 @@ impl Typechecker {
 
     /// Check if a TOML value is comparable
     fn is_comparable_toml(value: &toml::Value) -> bool {
-        matches!(value, toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Datetime(_))
+        matches!(
+            value,
+            toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Datetime(_)
+        )
     }
 
     /// Parse string value based on operator type

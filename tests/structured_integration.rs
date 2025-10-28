@@ -20,11 +20,13 @@ const EMPTY_TOML: &str = include_str!("fixtures/structured/empty.toml");
 const TYPE_COERCION_YAML: &str = include_str!("fixtures/structured/type_coercion.yaml");
 const NESTED_ARRAYS_JSON: &str = include_str!("fixtures/structured/nested_arrays.json");
 const NUMERIC_EDGE_CASES_JSON: &str = include_str!("fixtures/structured/numeric_edge_cases.json");
-const NULL_BOOLEAN_EDGE_CASES_YAML: &str = include_str!("fixtures/structured/null_boolean_edge_cases.yaml");
+const NULL_BOOLEAN_EDGE_CASES_YAML: &str =
+    include_str!("fixtures/structured/null_boolean_edge_cases.yaml");
 const DEEP_NESTING_YAML: &str = include_str!("fixtures/structured/deep_nesting.yaml");
 const UNICODE_STRINGS_JSON: &str = include_str!("fixtures/structured/unicode_strings.json");
 const EMPTY_STRUCTURES_YAML: &str = include_str!("fixtures/structured/empty_structures.yaml");
-const TYPE_MISMATCH_COERCION_TOML: &str = include_str!("fixtures/structured/type_mismatch_coercion.toml");
+const TYPE_MISMATCH_COERCION_TOML: &str =
+    include_str!("fixtures/structured/type_mismatch_coercion.toml");
 const DATETIME_TOML: &str = include_str!("fixtures/structured/datetime.toml");
 const FLOATS_YAML: &str = include_str!("fixtures/structured/floats.yaml");
 const FLOATS_TOML: &str = include_str!("fixtures/structured/floats.toml");
@@ -35,11 +37,7 @@ fn test_logger() -> Logger {
 }
 
 /// Helper to run a structured query test
-async fn run_structured_test(
-    files: Vec<(&str, &str)>,
-    expr: &str,
-    expected_matches: Vec<&str>,
-) {
+async fn run_structured_test(files: Vec<(&str, &str)>, expr: &str, expected_matches: Vec<&str>) {
     let t = TempDir::new("structured_test").unwrap();
 
     // Write fixture files
@@ -68,7 +66,10 @@ async fn run_structured_test(
 
     // Sort for order-independent comparison
     matches.sort();
-    let mut expected = expected_matches.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let mut expected = expected_matches
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
     expected.sort();
 
     assert_eq!(
@@ -597,10 +598,7 @@ async fn test_complex_boolean_logic() {
 async fn test_mixed_formats_or_logic() {
     // Match files with YAML port=8080 OR JSON version
     run_structured_test(
-        vec![
-            ("config.yaml", CONFIG_YAML),
-            ("package.json", PACKAGE_JSON),
-        ],
+        vec![("config.yaml", CONFIG_YAML), ("package.json", PACKAGE_JSON)],
         "yaml:.server.port == 8080 OR json:.version == \"1.2.3\"",
         vec!["config.yaml", "package.json"],
     )
@@ -634,7 +632,11 @@ async fn test_binary_yaml_file_no_crash() {
     .await
     .unwrap();
 
-    assert_eq!(matches.len(), 0, "Binary file should not match YAML selector");
+    assert_eq!(
+        matches.len(),
+        0,
+        "Binary file should not match YAML selector"
+    );
 }
 
 #[tokio::test]
@@ -659,7 +661,11 @@ async fn test_binary_file_content_predicate_works() {
     .await
     .unwrap();
 
-    assert_eq!(matches, vec!["binary.yaml"], "Content predicate should work on binary files");
+    assert_eq!(
+        matches,
+        vec!["binary.yaml"],
+        "Content predicate should work on binary files"
+    );
 }
 
 // ============================================================================

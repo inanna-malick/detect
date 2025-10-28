@@ -164,7 +164,7 @@ pub enum StructuredOperator {
     GreaterOrEqual, // >=
     Less,           // <
     LessOrEqual,    // <=
-    // Regex/contains handled via StringMatcher in separate predicate variants
+                    // Regex/contains handled via StringMatcher in separate predicate variants
 }
 
 // ============================================================================
@@ -185,7 +185,10 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
                 reason: e.to_string(),
             }
         })?;
-        return Ok(SelectorCategory::StructuredData(DataFormat::Yaml, components));
+        return Ok(SelectorCategory::StructuredData(
+            DataFormat::Yaml,
+            components,
+        ));
     }
     if let Some(path_str) = s.strip_prefix("json:") {
         let components = super::structured_path::parse_path(path_str).map_err(|e| {
@@ -195,7 +198,10 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
                 reason: e.to_string(),
             }
         })?;
-        return Ok(SelectorCategory::StructuredData(DataFormat::Json, components));
+        return Ok(SelectorCategory::StructuredData(
+            DataFormat::Json,
+            components,
+        ));
     }
     if let Some(path_str) = s.strip_prefix("toml:") {
         let components = super::structured_path::parse_path(path_str).map_err(|e| {
@@ -205,7 +211,10 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
                 reason: e.to_string(),
             }
         })?;
-        return Ok(SelectorCategory::StructuredData(DataFormat::Toml, components));
+        return Ok(SelectorCategory::StructuredData(
+            DataFormat::Toml,
+            components,
+        ));
     }
 
     // Standard selector matching
@@ -499,7 +508,9 @@ pub fn parse_selector_operator(
                         }
                     }
                 })?;
-                Ok(TypedSelector::StructuredDataString(format, components, string_op))
+                Ok(TypedSelector::StructuredDataString(
+                    format, components, string_op,
+                ))
             } else {
                 // Value operator (==, >, <, etc)
                 let operator = parse_structured_operator(operator_str).map_err(|_| {

@@ -66,11 +66,14 @@ pub async fn eval<'dfa>(
             logger,
             "not a file, all structured/content predicates eval to false"
         );
-        let e: Expr<Predicate<Done, Done, Done, Done>> = e.reduce_predicate_and_short_circuit(|p| match p {
-            Predicate::Content(_) => ShortCircuit::Known(false),
-            Predicate::Structured(_) => ShortCircuit::Known(false),
-            _ => unreachable!("only Content and Structured predicates should remain after metadata phase"),
-        });
+        let e: Expr<Predicate<Done, Done, Done, Done>> =
+            e.reduce_predicate_and_short_circuit(|p| match p {
+                Predicate::Content(_) => ShortCircuit::Known(false),
+                Predicate::Structured(_) => ShortCircuit::Known(false),
+                _ => unreachable!(
+                    "only Content and Structured predicates should remain after metadata phase"
+                ),
+            });
 
         if let Expr::Literal(b) = e {
             debug!(logger, "evaluation finished"; "result" => b);
@@ -82,7 +85,10 @@ pub async fn eval<'dfa>(
 
     match (has_structured, has_content) {
         (true, true) => {
-            debug!(logger, "evaluating both structured and content predicates - single file read");
+            debug!(
+                logger,
+                "evaluating both structured and content predicates - single file read"
+            );
             // Read file once as bytes
             let bytes = tokio::fs::read(path).await?;
 
@@ -121,11 +127,16 @@ pub async fn eval<'dfa>(
                         debug!(logger, "evaluation finished"; "result" => b);
                         Ok(b)
                     } else {
-                        unreachable!("all content predicates should be reduced to literals after streaming")
+                        unreachable!(
+                            "all content predicates should be reduced to literals after streaming"
+                        )
                     }
                 }
                 Err(_) => {
-                    debug!(logger, "file is not UTF-8, structured predicates = false, using streaming content");
+                    debug!(
+                        logger,
+                        "file is not UTF-8, structured predicates = false, using streaming content"
+                    );
                     // Non-UTF-8: structured predicates fail, stream content
                     let e = e.reduce_predicate_and_short_circuit(|p| match p {
                         Predicate::Structured(_) => ShortCircuit::Known(false),
@@ -151,7 +162,9 @@ pub async fn eval<'dfa>(
                         debug!(logger, "evaluation finished"; "result" => b);
                         Ok(b)
                     } else {
-                        unreachable!("all content predicates should be reduced to literals after streaming")
+                        unreachable!(
+                            "all content predicates should be reduced to literals after streaming"
+                        )
                     }
                 }
             }
@@ -165,18 +178,26 @@ pub async fn eval<'dfa>(
                     e.reduce_predicate_and_short_circuit(|p| match p {
                         Predicate::Structured(s) => {
                             match eval_structured_predicate(&s, &contents, &mut cache) {
-                                Ok(result) => ShortCircuit::<Predicate<Done, Done, Done>>::Known(result),
+                                Ok(result) => {
+                                    ShortCircuit::<Predicate<Done, Done, Done>>::Known(result)
+                                }
                                 Err(_) => ShortCircuit::<Predicate<Done, Done, Done>>::Known(false),
                             }
                         }
-                        _ => unreachable!("only Structured predicates should remain when has_content is false"),
+                        _ => unreachable!(
+                            "only Structured predicates should remain when has_content is false"
+                        ),
                     })
                 }
                 Err(_) => {
                     // Non-UTF-8 or read error: all structured predicates = false
                     e.reduce_predicate_and_short_circuit(|p| match p {
-                        Predicate::Structured(_) => ShortCircuit::<Predicate<Done, Done, Done>>::Known(false),
-                        _ => unreachable!("only Structured predicates should remain when has_content is false"),
+                        Predicate::Structured(_) => {
+                            ShortCircuit::<Predicate<Done, Done, Done>>::Known(false)
+                        }
+                        _ => unreachable!(
+                            "only Structured predicates should remain when has_content is false"
+                        ),
                     })
                 }
             };
@@ -185,7 +206,9 @@ pub async fn eval<'dfa>(
                 debug!(logger, "evaluation finished"; "result" => b);
                 Ok(b)
             } else {
-                unreachable!("all structured predicates should be reduced to literals after evaluation")
+                unreachable!(
+                    "all structured predicates should be reduced to literals after evaluation"
+                )
             }
         }
         (false, true) => {
@@ -206,7 +229,9 @@ pub async fn eval<'dfa>(
         }
         (false, false) => {
             // No structured or content predicates remain (already short-circuited)
-            unreachable!("both has_structured and has_content are false - should have short-circuited")
+            unreachable!(
+                "both has_structured and has_content are false - should have short-circuited"
+            )
         }
     }
 }

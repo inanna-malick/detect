@@ -33,7 +33,10 @@ pub enum DetectError {
     },
 
     #[error("Invalid {format} selector path: {path}")]
-    #[diagnostic(code(detect::invalid_structured_path), help("Structured selectors use format: {format}:.path.to.field"))]
+    #[diagnostic(
+        code(detect::invalid_structured_path),
+        help("Structured selectors use format: {format}:.path.to.field")
+    )]
     InvalidStructuredPath {
         format: String,
         path: String,

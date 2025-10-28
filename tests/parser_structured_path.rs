@@ -402,7 +402,10 @@ fn parse_simple_recursive() {
 #[test]
 fn parse_recursive_from_root() {
     let result = parse_path("..debug").unwrap();
-    assert_eq!(result, vec![PathComponent::RecursiveKey("debug".to_string())]);
+    assert_eq!(
+        result,
+        vec![PathComponent::RecursiveKey("debug".to_string())]
+    );
 }
 
 #[test]
