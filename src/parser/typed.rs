@@ -12,6 +12,12 @@ pub enum ParseError {
     UnknownSelector(String),
     /// Unknown operator name
     UnknownOperator(String),
+    /// Invalid structured selector path
+    InvalidStructuredPath {
+        format: String,
+        path: String,
+        reason: String,
+    },
 }
 
 // ============================================================================
@@ -172,18 +178,33 @@ pub enum StructuredOperator {
 pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
     // Check for structured data prefix first
     if let Some(path_str) = s.strip_prefix("yaml:") {
-        let components = super::structured_path::parse_path(path_str)
-            .map_err(|e| ParseError::UnknownSelector(format!("yaml:{} ({})", path_str, e)))?;
+        let components = super::structured_path::parse_path(path_str).map_err(|e| {
+            ParseError::InvalidStructuredPath {
+                format: "yaml".to_string(),
+                path: path_str.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
         return Ok(SelectorCategory::StructuredData(DataFormat::Yaml, components));
     }
     if let Some(path_str) = s.strip_prefix("json:") {
-        let components = super::structured_path::parse_path(path_str)
-            .map_err(|e| ParseError::UnknownSelector(format!("json:{} ({})", path_str, e)))?;
+        let components = super::structured_path::parse_path(path_str).map_err(|e| {
+            ParseError::InvalidStructuredPath {
+                format: "json".to_string(),
+                path: path_str.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
         return Ok(SelectorCategory::StructuredData(DataFormat::Json, components));
     }
     if let Some(path_str) = s.strip_prefix("toml:") {
-        let components = super::structured_path::parse_path(path_str)
-            .map_err(|e| ParseError::UnknownSelector(format!("toml:{} ({})", path_str, e)))?;
+        let components = super::structured_path::parse_path(path_str).map_err(|e| {
+            ParseError::InvalidStructuredPath {
+                format: "toml".to_string(),
+                path: path_str.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
         return Ok(SelectorCategory::StructuredData(DataFormat::Toml, components));
     }
 
@@ -327,12 +348,27 @@ pub fn parse_selector_operator(
     source: &str,
 ) -> Result<TypedSelector, TypecheckError> {
     use crate::parser::error::SpanExt;
-    let selector_category =
-        recognize_selector(selector_str).map_err(|_| TypecheckError::UnknownSelector {
+    let selector_category = recognize_selector(selector_str).map_err(|e| match e {
+        ParseError::InvalidStructuredPath {
+            format,
+            path,
+            reason,
+        } => TypecheckError::InvalidStructuredPath {
+            format,
+            path,
+            span: selector_span.to_source_span(),
+            reason,
+            src: source.to_string(),
+        },
+        ParseError::UnknownSelector(_) => TypecheckError::UnknownSelector {
             selector: selector_str.to_string(),
             span: selector_span.to_source_span(),
             src: source.to_string(),
-        })?;
+        },
+        ParseError::UnknownOperator(_) => {
+            unreachable!("recognize_selector should not return UnknownOperator")
+        }
+    })?;
 
     // Check if operator exists for ANY type to determine error type
     let operator_lower = operator_str.to_lowercase();
