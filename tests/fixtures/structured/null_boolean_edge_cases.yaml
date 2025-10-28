@@ -1,0 +1,8 @@
+null_value: null
+null_string: "null"
+bool_true: true
+bool_false: false
+string_true: "true"
+string_false: "false"
+empty_string: ""
+missing_is_not_present: yes

@@ -1,0 +1,20 @@
+server:
+  port: 8080
+  host: localhost
+  debug: true
+
+database:
+  host: db.example.com
+  port: 5432
+  name: myapp
+  credentials:
+    username: admin
+    password: secret123
+
+features:
+  - name: auth
+    enabled: true
+  - name: logging
+    enabled: false
+  - name: metrics
+    enabled: true

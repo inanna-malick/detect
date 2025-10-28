@@ -46,6 +46,28 @@ impl<A, B, C> Expr<Predicate<A, B, C>> {
     }
 }
 
+impl<Name, Meta, Content, Structured> Expr<Predicate<Name, Meta, Content, Structured>> {
+    /// Check if expression contains any Structured predicates
+    pub fn contains_structured_predicates(&self) -> bool {
+        MapPredicateRef(self).collapse_frames(|e| match e {
+            ExprFrame::Predicate(Predicate::Structured(_)) => true,
+            ExprFrame::And(a, b) | ExprFrame::Or(a, b) => a || b,
+            ExprFrame::Not(a) => a,
+            ExprFrame::Predicate(_) | ExprFrame::Literal(_) => false,
+        })
+    }
+
+    /// Check if expression contains any Content predicates
+    pub fn contains_content_predicates(&self) -> bool {
+        MapPredicateRef(self).collapse_frames(|e| match e {
+            ExprFrame::Predicate(Predicate::Content(_)) => true,
+            ExprFrame::And(a, b) | ExprFrame::Or(a, b) => a || b,
+            ExprFrame::Not(a) => a,
+            ExprFrame::Predicate(_) | ExprFrame::Literal(_) => false,
+        })
+    }
+}
+
 impl<P> Expr<P> {
     pub fn map_predicate_ref<'a, B>(&'a self, f: impl Fn(&'a P) -> B) -> Expr<B> {
         MapPredicateRef(self).collapse_frames(|e| match e {
@@ -96,7 +118,7 @@ impl<P: Clone> Expr<P> {
 impl<P: Clone> Expr<P> {
     pub fn reduce_predicate_and_short_circuit<B, X: Into<ShortCircuit<B>>>(
         &self,
-        f: impl Fn(P) -> X,
+        mut f: impl FnMut(P) -> X,
     ) -> Expr<B> {
         self.collapse_frames(|e| match e {
             // apply 'f' to Predicate expressions

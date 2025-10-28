@@ -1,0 +1,5 @@
+empty_array: []
+empty_object: {}
+nested_empty:
+  inner_array: []
+  inner_object: {}
