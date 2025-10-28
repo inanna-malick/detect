@@ -1,0 +1,5 @@
+value: 1.5
+negative: -2.7
+zero: 0.0
+large: 999.99
+scientific: 1.23e-4

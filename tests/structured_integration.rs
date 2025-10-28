@@ -25,6 +25,10 @@ const DEEP_NESTING_YAML: &str = include_str!("fixtures/structured/deep_nesting.y
 const UNICODE_STRINGS_JSON: &str = include_str!("fixtures/structured/unicode_strings.json");
 const EMPTY_STRUCTURES_YAML: &str = include_str!("fixtures/structured/empty_structures.yaml");
 const TYPE_MISMATCH_COERCION_TOML: &str = include_str!("fixtures/structured/type_mismatch_coercion.toml");
+const DATETIME_TOML: &str = include_str!("fixtures/structured/datetime.toml");
+const FLOATS_YAML: &str = include_str!("fixtures/structured/floats.yaml");
+const FLOATS_TOML: &str = include_str!("fixtures/structured/floats.toml");
+const LARGE_CONFIG_YAML: &str = include_str!("fixtures/structured/large_config.yaml");
 
 fn test_logger() -> Logger {
     Logger::root(Discard, o!())
@@ -1071,4 +1075,249 @@ async fn test_not_equals_with_string_matcher_coercion() {
         vec!["coercion.toml"],
     )
     .await;
+}
+
+// ============================================================================
+// Group 19: Array Bounds Edge Cases
+// ============================================================================
+
+#[tokio::test]
+async fn test_out_of_bounds_positive_index() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.features[999].name == \"anything\"",
+        vec![],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_out_of_bounds_on_empty_array() {
+    run_structured_test(
+        vec![("empty.yaml", EMPTY_STRUCTURES_YAML)],
+        "yaml:.empty_array[0] == \"anything\"",
+        vec![],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_out_of_bounds_json() {
+    run_structured_test(
+        vec![("package.json", PACKAGE_JSON)],
+        "json:.keywords[999] == \"anything\"",
+        vec![],
+    )
+    .await;
+}
+
+// ============================================================================
+// Group 20: TOML Datetime Support
+// ============================================================================
+
+#[tokio::test]
+async fn test_toml_datetime_equality() {
+    run_structured_test(
+        vec![("datetime.toml", DATETIME_TOML)],
+        "toml:.timestamp == \"2024-01-15T10:30:00Z\"",
+        vec!["datetime.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_datetime_comparison_greater() {
+    run_structured_test(
+        vec![("datetime.toml", DATETIME_TOML)],
+        "toml:.timestamp > \"2024-01-01T00:00:00Z\"",
+        vec!["datetime.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_datetime_comparison_less() {
+    run_structured_test(
+        vec![("datetime.toml", DATETIME_TOML)],
+        "toml:.created_date < \"2024-12-31T23:59:59Z\"",
+        vec!["datetime.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_datetime_nested_field() {
+    run_structured_test(
+        vec![("datetime.toml", DATETIME_TOML)],
+        "toml:.event.start == \"2024-06-15T09:00:00Z\"",
+        vec!["datetime.toml"],
+    )
+    .await;
+}
+
+// ============================================================================
+// Group 21: Document Caching (multiple structured predicates)
+// ============================================================================
+
+#[tokio::test]
+async fn test_multiple_yaml_selectors_same_file() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.server.port == 8080 AND yaml:.server.host == \"localhost\"",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_multiple_json_selectors_same_file() {
+    run_structured_test(
+        vec![("package.json", PACKAGE_JSON)],
+        "json:.name == \"my-app\" AND json:.version == \"1.2.3\"",
+        vec!["package.json"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_multiple_toml_selectors_same_file() {
+    run_structured_test(
+        vec![("Cargo.toml", CARGO_TOML)],
+        "toml:.package.name == \"detect\" AND toml:.package.edition == \"2021\"",
+        vec!["Cargo.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_three_yaml_selectors_different_paths() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.server.port > 8000 AND yaml:.database.port > 5000 AND yaml:.server.debug == true",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+// ============================================================================
+// Group 22: YAML/TOML Float Comparisons
+// ============================================================================
+
+#[tokio::test]
+async fn test_yaml_float_equality() {
+    run_structured_test(
+        vec![("floats.yaml", FLOATS_YAML)],
+        "yaml:.value == 1.5",
+        vec!["floats.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_float_greater_than() {
+    run_structured_test(
+        vec![("floats.yaml", FLOATS_YAML)],
+        "yaml:.value > 1.0",
+        vec!["floats.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_float_less_than() {
+    run_structured_test(
+        vec![("floats.yaml", FLOATS_YAML)],
+        "yaml:.value < 2.0",
+        vec!["floats.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_negative_float() {
+    run_structured_test(
+        vec![("floats.yaml", FLOATS_YAML)],
+        "yaml:.negative < 0",
+        vec!["floats.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_float_equality() {
+    run_structured_test(
+        vec![("floats.toml", FLOATS_TOML)],
+        "toml:.value == 2.5",
+        vec!["floats.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_float_greater_than() {
+    run_structured_test(
+        vec![("floats.toml", FLOATS_TOML)],
+        "toml:.value > 2.0",
+        vec!["floats.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_float_less_than() {
+    run_structured_test(
+        vec![("floats.toml", FLOATS_TOML)],
+        "toml:.value < 3.0",
+        vec!["floats.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_negative_float() {
+    run_structured_test(
+        vec![("floats.toml", FLOATS_TOML)],
+        "toml:.negative < 0",
+        vec!["floats.toml"],
+    )
+    .await;
+}
+
+// ============================================================================
+// Group 23: Synthetic Size Predicate
+// ============================================================================
+
+#[tokio::test]
+async fn test_structured_skipped_when_file_exceeds_size_limit() {
+    let t = TempDir::new("structured_test").unwrap();
+
+    // Write file that would match if parsed
+    std::fs::write(t.path().join("large.yaml"), LARGE_CONFIG_YAML).unwrap();
+
+    // Use artificially small size limit (50 bytes)
+    // large_config.yaml is >200 bytes, so it should be skipped
+    let config = detect::RuntimeConfig {
+        max_structured_size: 50,
+    };
+
+    // Query that would match if file were parsed
+    let mut matches = Vec::new();
+    detect::parse_and_run_fs(
+        test_logger(),
+        t.path(),
+        false,
+        "yaml:.server.port == 9999".to_string(),
+        config,
+        |p| {
+            if p != t.path() {
+                let name = p.file_name().unwrap().to_str().unwrap().to_string();
+                matches.push(name);
+            }
+        },
+    )
+    .await
+    .unwrap();
+
+    // File should NOT match because it exceeds size limit
+    assert_eq!(matches.len(), 0, "File should be skipped due to size limit");
 }

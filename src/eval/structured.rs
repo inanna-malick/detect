@@ -1400,4 +1400,98 @@ mod tests {
             "false"
         ));
     }
+
+    #[test]
+    fn test_navigate_yaml_out_of_bounds_index() {
+        let yaml = YamlLoader::load_from_str("items:\n  - a\n  - b\n  - c").unwrap();
+        let path = vec![
+            PathComponent::Key("items".to_string()),
+            PathComponent::Index(999),
+        ];
+        let values = navigate_yaml(&yaml[0], &path);
+        assert_eq!(values.len(), 0);
+    }
+
+    #[test]
+    fn test_navigate_yaml_out_of_bounds_on_empty_array() {
+        let yaml = YamlLoader::load_from_str("items: []").unwrap();
+        let path = vec![
+            PathComponent::Key("items".to_string()),
+            PathComponent::Index(0),
+        ];
+        let values = navigate_yaml(&yaml[0], &path);
+        assert_eq!(values.len(), 0);
+    }
+
+    #[test]
+    fn test_navigate_json_out_of_bounds() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"{"items": ["a", "b", "c"]}"#).unwrap();
+        let path = vec![
+            PathComponent::Key("items".to_string()),
+            PathComponent::Index(999),
+        ];
+        let values = navigate_json(&json, &path);
+        assert_eq!(values.len(), 0);
+    }
+
+    #[test]
+    fn test_navigate_toml_out_of_bounds() {
+        let toml: toml::Value = toml::from_str(r#"items = ["a", "b", "c"]"#).unwrap();
+        let path = vec![
+            PathComponent::Key("items".to_string()),
+            PathComponent::Index(999),
+        ];
+        let values = navigate_toml(&toml, &path);
+        assert_eq!(values.len(), 0);
+    }
+
+    #[test]
+    fn test_toml_datetime_equality() {
+        let toml: toml::Value =
+            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let expected: toml::Value =
+            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let path = vec![PathComponent::Key("timestamp".to_string())];
+        let values = navigate_toml(&toml, &path);
+
+        assert!(compare_toml_values(
+            &values,
+            StructuredOperator::Equals,
+            &expected["timestamp"],
+            "2024-01-15T10:30:00Z"
+        ));
+    }
+
+    #[test]
+    fn test_toml_datetime_string_coercion() {
+        let toml: toml::Value =
+            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let expected_string = toml::Value::String("2024-01-15T10:30:00Z".to_string());
+        let path = vec![PathComponent::Key("timestamp".to_string())];
+        let values = navigate_toml(&toml, &path);
+
+        assert!(compare_toml_values(
+            &values,
+            StructuredOperator::Equals,
+            &expected_string,
+            "2024-01-15T10:30:00Z"
+        ));
+    }
+
+    #[test]
+    fn test_toml_datetime_comparison_lexicographic() {
+        let toml: toml::Value =
+            toml::from_str(r#"timestamp = 2024-01-15T10:30:00Z"#).unwrap();
+        let expected = toml::Value::String("2024-01-01T00:00:00Z".to_string());
+        let path = vec![PathComponent::Key("timestamp".to_string())];
+        let values = navigate_toml(&toml, &path);
+
+        assert!(compare_toml_values(
+            &values,
+            StructuredOperator::Greater,
+            &expected,
+            "2024-01-01T00:00:00Z"
+        ));
+    }
 }
