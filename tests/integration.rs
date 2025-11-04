@@ -60,6 +60,7 @@ impl<'a> Case<'a> {
             tmp_dir.path(),
             false,
             self.expr.to_owned(),
+            detect::RuntimeConfig::default(),
             |p| {
                 let s = p
                     .strip_prefix(format!("{}/", tmp_dir.path().to_str().unwrap()))
@@ -407,6 +408,7 @@ async fn test_type_selectors() {
         tmp_dir.path(),
         false,
         r#"type == "file""#.to_owned(),
+        detect::RuntimeConfig::default(),
         |p| files.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -424,6 +426,7 @@ async fn test_type_selectors() {
         tmp_dir.path(),
         false,
         r#"type == "dir""#.to_owned(),
+        detect::RuntimeConfig::default(),
         |p| dirs.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -566,6 +569,7 @@ async fn test_symlinks() {
         tmp_dir.path(),
         false,
         r#"basename ~= link"#.to_owned(),
+        detect::RuntimeConfig::default(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -1088,12 +1092,12 @@ async fn test_binary_and_non_utf8_content() {
     let binary_file = tmp_dir.path().join("binary.dat");
     std::fs::write(
         &binary_file,
-        &[0x00, 0x01, 0x02, 0xFF, 0xFE, b'A', b'B', 0x00],
+        [0x00, 0x01, 0x02, 0xFF, 0xFE, b'A', b'B', 0x00],
     )
     .unwrap();
 
     let invalid_utf8 = tmp_dir.path().join("invalid.txt");
-    std::fs::write(&invalid_utf8, &[0xFF, 0xFE, 0xFD]).unwrap();
+    std::fs::write(&invalid_utf8, [0xFF, 0xFE, 0xFD]).unwrap();
 
     let mixed_file = tmp_dir.path().join("mixed.dat");
     let mut mixed_data = b"Start ".to_vec();
@@ -1108,6 +1112,7 @@ async fn test_binary_and_non_utf8_content() {
         tmp_dir.path(),
         false,
         "content contains Hello".to_owned(),
+        detect::RuntimeConfig::default(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -1123,6 +1128,7 @@ async fn test_binary_and_non_utf8_content() {
         tmp_dir.path(),
         false,
         r#"content ~= "Hello.*world""#.to_owned(),
+        detect::RuntimeConfig::default(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -1138,6 +1144,7 @@ async fn test_binary_and_non_utf8_content() {
         tmp_dir.path(),
         false,
         "size > 0 AND type == file".to_owned(),
+        detect::RuntimeConfig::default(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await
@@ -1156,6 +1163,7 @@ async fn test_binary_and_non_utf8_content() {
         tmp_dir.path(),
         false,
         "ext == dat".to_owned(),
+        detect::RuntimeConfig::default(),
         |p| found.push(p.file_name().unwrap().to_string_lossy().to_string()),
     )
     .await

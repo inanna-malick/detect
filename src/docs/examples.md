@@ -34,6 +34,54 @@ detect 'content ~= "@(Component|Injectable|Directive)"'
 detect 'content contains TODO AND NOT path ~= test'
 ```
 
+## Structured Data Queries
+
+Query configuration file contents with path-based selectors:
+
+```bash
+# Find YAML files with specific port
+detect 'yaml:.server.port == 8080'
+
+# Find package.json with React dependency
+detect 'json:.dependencies.react'
+
+# Find Cargo.toml with specific edition
+detect 'toml:.package.edition == "2021"'
+
+# Version range matching with regex
+detect 'json:.dependencies.serde ~= "^1\\."'
+
+# Find configs with debugging enabled
+detect 'yaml:.debug == true'
+
+# Array wildcard - all array elements
+detect 'yaml:.features[*].enabled == true'
+
+# Recursive descent - finds all port fields at any depth
+detect 'yaml:..port > 8000 OR json:..port > 8000 OR toml:..port > 8000'
+
+# Combine with file filters
+detect 'size < 50kb AND yaml:.database.host contains prod'
+
+# Find configs outside test directories
+detect 'yaml:.server.port == 8080 AND NOT path contains test'
+
+# Type coercion - matches both int and string
+detect 'yaml:.version == "1.0"'  # matches 1.0 or "1.0"
+
+# Nested field access
+detect 'json:.metadata.author == "test"'
+
+# Array indexing
+detect 'yaml:.features[0].name == "auth"'
+
+# Find Kubernetes manifests with high replica counts
+detect 'yaml:.spec.replicas > 3'
+
+# Security: find configs with production credentials
+detect 'yaml:..password contains prod AND NOT path contains test'
+```
+
 ## Size and Time Filters
 
 ```bash

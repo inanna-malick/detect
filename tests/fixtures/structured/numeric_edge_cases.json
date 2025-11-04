@@ -1,0 +1,9 @@
+{
+  "int_value": 42,
+  "float_value": 1.5,
+  "negative_int": -10,
+  "negative_float": -2.7,
+  "zero": 0,
+  "large_int": 9223372036854775806,
+  "mixed_array": [1, 2.5, -3, 0, 100.99]
+}

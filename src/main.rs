@@ -1,7 +1,7 @@
 use std::{env::current_dir, io::Write, path::PathBuf, str::FromStr};
 
 use clap::{command, Parser};
-use detect::parse_and_run_fs;
+use detect::{parse_and_run_fs, RuntimeConfig};
 use slog::{o, Drain, Level, Logger};
 
 const EXAMPLES: &str = include_str!("docs/examples.md");
@@ -49,6 +49,10 @@ struct Args {
     /// log level (error/warn/info/debug)
     #[arg(short = 'l', default_value = "warn")]
     log_level: String,
+    /// Maximum file size for structured data parsing (yaml/json/toml)
+    /// Supports units: kb, mb, gb (e.g., "10mb", "500kb")
+    #[arg(long = "max-structured-size", default_value = "10mb")]
+    max_structured_size: String,
 }
 
 #[tokio::main]
@@ -88,6 +92,17 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expr
         .expect("Expression is required when not in MCP mode");
 
+    // Parse max structured size
+    let max_structured_size =
+        detect::util::parse_size(&args.max_structured_size).unwrap_or_else(|e| {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        });
+
+    let config = RuntimeConfig {
+        max_structured_size,
+    };
+
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let logger = Logger::root(
         RuntimeLevelFilter {
@@ -111,23 +126,30 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut output = std::io::stdout();
 
-    let result = parse_and_run_fs(logger, &root_path, !args.visit_gitignored, expr, |s| {
-        // Convert to relative path for cleaner output
-        let display_path = s
-            .strip_prefix(&canonical_root)
-            .unwrap_or(s)
-            .to_string_lossy();
+    let result = parse_and_run_fs(
+        logger,
+        &root_path,
+        !args.visit_gitignored,
+        expr,
+        config,
+        |s| {
+            // Convert to relative path for cleaner output
+            let display_path = s
+                .strip_prefix(&canonical_root)
+                .unwrap_or(s)
+                .to_string_lossy();
 
-        if let Err(e) = writeln!(output, "{}", display_path) {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                // Unix convention: exit 0 on SIGPIPE/BrokenPipe
-                std::process::exit(0);
-            } else {
-                eprintln!("Output error: {}", e);
-                std::process::exit(1);
+            if let Err(e) = writeln!(output, "{}", display_path) {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    // Unix convention: exit 0 on SIGPIPE/BrokenPipe
+                    std::process::exit(0);
+                } else {
+                    eprintln!("Output error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-    })
+        },
+    )
     .await;
 
     match result {

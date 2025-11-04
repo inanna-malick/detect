@@ -1,0 +1,7 @@
+a:
+  b:
+    c:
+      d:
+        e:
+          f: "deeply_nested_value"
+          g: 123

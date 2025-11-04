@@ -32,6 +32,21 @@ pub enum DetectError {
         src: String,
     },
 
+    #[error("Invalid {format} selector path: {path}")]
+    #[diagnostic(
+        code(detect::invalid_structured_path),
+        help("Structured selectors use format: {format}:.path.to.field")
+    )]
+    InvalidStructuredPath {
+        format: String,
+        path: String,
+        #[label("invalid path: {reason}")]
+        span: SourceSpan,
+        reason: String,
+        #[source_code]
+        src: String,
+    },
+
     #[error("Unknown operator: {operator}")]
     #[diagnostic(
         code(detect::unknown_operator),
@@ -356,6 +371,7 @@ impl DetectError {
         match &mut self {
             DetectError::Syntax { src: s, .. }
             | DetectError::UnknownSelector { src: s, .. }
+            | DetectError::InvalidStructuredPath { src: s, .. }
             | DetectError::UnknownOperator { src: s, .. }
             | DetectError::UnknownAlias { src: s, .. }
             | DetectError::IncompatibleOperator { src: s, .. }

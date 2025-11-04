@@ -1,0 +1,8 @@
+# This file is intentionally large to test size limits
+# Adding comments to increase file size beyond the test threshold
+# More comments here to make sure we exceed 100 bytes easily
+# Yet another comment line for padding
+server:
+  port: 9999
+  host: testhost
+  debug: false

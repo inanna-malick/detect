@@ -12,7 +12,7 @@ use detect::{
 /// Helper to parse and typecheck an expression
 fn parse_and_typecheck(input: &str) -> Result<Expr<Predicate>, detect::parser::error::DetectError> {
     let raw = RawParser::parse_raw_expr(input)?;
-    Typechecker::typecheck(raw, input)
+    Typechecker::typecheck(raw, input, &detect::RuntimeConfig::default())
 }
 
 #[test]

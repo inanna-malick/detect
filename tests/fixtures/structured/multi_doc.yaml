@@ -1,0 +1,12 @@
+---
+service: web
+port: 8080
+enabled: true
+---
+service: api
+port: 3000
+enabled: false
+---
+service: cache
+port: 6379
+enabled: true

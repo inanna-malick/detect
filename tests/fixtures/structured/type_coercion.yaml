@@ -1,0 +1,9 @@
+port: 8080
+version: "1.2.3"
+count: "42"
+flag: true
+items:
+  - id: 1
+    name: "first"
+  - id: 2
+    name: "second"

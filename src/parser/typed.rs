@@ -2,6 +2,7 @@
 ///
 /// This module provides strongly-typed enums for selectors and operators,
 /// ensuring that only valid combinations can be constructed at compile time.
+use super::structured_path::PathComponent as StructuredPathComponent;
 use super::typechecker::TypecheckError;
 
 /// Error type for parsing selectors and operators
@@ -11,6 +12,12 @@ pub enum ParseError {
     UnknownSelector(String),
     /// Unknown operator name
     UnknownOperator(String),
+    /// Invalid structured selector path
+    InvalidStructuredPath {
+        format: String,
+        path: String,
+        reason: String,
+    },
 }
 
 // ============================================================================
@@ -113,23 +120,51 @@ pub enum EnumSelector {
     Type, // type, filetype - file type enum
 }
 
-/// Selector categories - groups selectors by their value type
+// ============================================================================
+// Structured Data Selectors (yaml, json, toml)
+// ============================================================================
+
+/// Supported structured data formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataFormat {
+    Yaml,
+    Json,
+    Toml,
+}
+
+/// Selector categories - groups selectors by their value type
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectorCategory {
     String(StringSelector),
     Numeric(NumericSelector),
     Temporal(TemporalSelector),
     Enum(EnumSelector),
+    StructuredData(DataFormat, Vec<StructuredPathComponent>),
 }
 
 /// A typed selector paired with its compatible operator
 /// This ensures type safety - you can't create invalid combinations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedSelector {
     String(StringSelector, StringOperator),
     Numeric(NumericSelector, NumericOperator),
     Enum(EnumSelector, EnumOperator),
     Temporal(TemporalSelector, TemporalOperator),
+    StructuredData(DataFormat, Vec<StructuredPathComponent>, StructuredOperator),
+    StructuredDataString(DataFormat, Vec<StructuredPathComponent>, StringOperator),
+}
+
+/// Operators for structured data selectors
+/// Operator semantics depend on RHS type during evaluation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructuredOperator {
+    Equals,         // ==, =
+    NotEquals,      // !=
+    Greater,        // >
+    GreaterOrEqual, // >=
+    Less,           // <
+    LessOrEqual,    // <=
+                    // Regex/contains handled via StringMatcher in separate predicate variants
 }
 
 // ============================================================================
@@ -141,6 +176,48 @@ pub enum TypedSelector {
 /// # Errors
 /// Returns `ParseError::UnknownSelector` if the selector name is not recognized.
 pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
+    // Check for structured data prefix first
+    if let Some(path_str) = s.strip_prefix("yaml:") {
+        let components = super::structured_path::parse_path(path_str).map_err(|e| {
+            ParseError::InvalidStructuredPath {
+                format: "yaml".to_string(),
+                path: path_str.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
+        return Ok(SelectorCategory::StructuredData(
+            DataFormat::Yaml,
+            components,
+        ));
+    }
+    if let Some(path_str) = s.strip_prefix("json:") {
+        let components = super::structured_path::parse_path(path_str).map_err(|e| {
+            ParseError::InvalidStructuredPath {
+                format: "json".to_string(),
+                path: path_str.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
+        return Ok(SelectorCategory::StructuredData(
+            DataFormat::Json,
+            components,
+        ));
+    }
+    if let Some(path_str) = s.strip_prefix("toml:") {
+        let components = super::structured_path::parse_path(path_str).map_err(|e| {
+            ParseError::InvalidStructuredPath {
+                format: "toml".to_string(),
+                path: path_str.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
+        return Ok(SelectorCategory::StructuredData(
+            DataFormat::Toml,
+            components,
+        ));
+    }
+
+    // Standard selector matching
     match s {
         // File Identity (5) + aliases
         "name" | "filename" => Ok(SelectorCategory::String(StringSelector::Path(
@@ -241,6 +318,33 @@ pub fn parse_enum_operator(s: &str) -> Result<EnumOperator, ParseError> {
     }
 }
 
+/// Parse a structured data operator with aliases
+///
+/// # Errors
+/// Returns `ParseError::UnknownOperator` if the operator is not recognized.
+pub fn parse_structured_operator(s: &str) -> Result<StructuredOperator, ParseError> {
+    let s_lower = s.to_lowercase();
+    match s_lower.as_str() {
+        "==" | "=" | "eq" => Ok(StructuredOperator::Equals),
+        "!=" | "<>" | "ne" | "neq" => Ok(StructuredOperator::NotEquals),
+        ">" | "gt" => Ok(StructuredOperator::Greater),
+        ">=" | "=>" | "gte" | "ge" => Ok(StructuredOperator::GreaterOrEqual),
+        "<" | "lt" => Ok(StructuredOperator::Less),
+        "<=" | "=<" | "lte" | "le" => Ok(StructuredOperator::LessOrEqual),
+        // String operations (~=, contains) handled separately
+        _ => Err(ParseError::UnknownOperator(s.to_string())),
+    }
+}
+
+/// Check if operator is a string operation (regex or contains)
+pub fn is_string_operator(s: &str) -> bool {
+    let s_lower = s.to_lowercase();
+    matches!(
+        s_lower.as_str(),
+        "~=" | "=~" | "~" | "matches" | "regex" | "contains"
+    )
+}
+
 /// Parse selector and operator together, ensuring type compatibility
 ///
 /// # Errors
@@ -253,18 +357,34 @@ pub fn parse_selector_operator(
     source: &str,
 ) -> Result<TypedSelector, TypecheckError> {
     use crate::parser::error::SpanExt;
-    let selector_category =
-        recognize_selector(selector_str).map_err(|_| TypecheckError::UnknownSelector {
+    let selector_category = recognize_selector(selector_str).map_err(|e| match e {
+        ParseError::InvalidStructuredPath {
+            format,
+            path,
+            reason,
+        } => TypecheckError::InvalidStructuredPath {
+            format,
+            path,
+            span: selector_span.to_source_span(),
+            reason,
+            src: source.to_string(),
+        },
+        ParseError::UnknownSelector(_) => TypecheckError::UnknownSelector {
             selector: selector_str.to_string(),
             span: selector_span.to_source_span(),
             src: source.to_string(),
-        })?;
+        },
+        ParseError::UnknownOperator(_) => {
+            unreachable!("recognize_selector should not return UnknownOperator")
+        }
+    })?;
 
     // Check if operator exists for ANY type to determine error type
     let operator_lower = operator_str.to_lowercase();
     let is_known_operator = parse_string_operator(&operator_lower).is_ok()
         || parse_numeric_operator(&operator_lower).is_ok()
-        || parse_temporal_operator(&operator_lower).is_ok();
+        || parse_temporal_operator(&operator_lower).is_ok()
+        || parse_structured_operator(&operator_lower).is_ok();
 
     match selector_category {
         SelectorCategory::Enum(selector) => {
@@ -366,6 +486,52 @@ pub fn parse_selector_operator(
                 }
             })?;
             Ok(TypedSelector::Temporal(selector, operator))
+        }
+
+        SelectorCategory::StructuredData(format, components) => {
+            // Check if it's a string operator (regex, contains)
+            if is_string_operator(operator_str) {
+                let string_op = parse_string_operator(operator_str).map_err(|_| {
+                    if is_known_operator {
+                        TypecheckError::IncompatibleOperator {
+                            selector: selector_str.to_string(),
+                            operator: operator_str.to_string(),
+                            selector_span: selector_span.to_source_span(),
+                            operator_span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
+                    } else {
+                        TypecheckError::UnknownOperator {
+                            operator: operator_str.to_string(),
+                            span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
+                    }
+                })?;
+                Ok(TypedSelector::StructuredDataString(
+                    format, components, string_op,
+                ))
+            } else {
+                // Value operator (==, >, <, etc)
+                let operator = parse_structured_operator(operator_str).map_err(|_| {
+                    if is_known_operator {
+                        TypecheckError::IncompatibleOperator {
+                            selector: selector_str.to_string(),
+                            operator: operator_str.to_string(),
+                            selector_span: selector_span.to_source_span(),
+                            operator_span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
+                    } else {
+                        TypecheckError::UnknownOperator {
+                            operator: operator_str.to_string(),
+                            span: operator_span.to_source_span(),
+                            src: source.to_string(),
+                        }
+                    }
+                })?;
+                Ok(TypedSelector::StructuredData(format, components, operator))
+            }
         }
     }
 }

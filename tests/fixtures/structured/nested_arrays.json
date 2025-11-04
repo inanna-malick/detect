@@ -1,0 +1,23 @@
+{
+  "services": [
+    {
+      "name": "web",
+      "ports": [8080, 8443],
+      "enabled": true
+    },
+    {
+      "name": "api",
+      "ports": [3000],
+      "enabled": true
+    },
+    {
+      "name": "cache",
+      "ports": [6379],
+      "enabled": false
+    }
+  ],
+  "metadata": {
+    "version": "2.0",
+    "author": "test"
+  }
+}

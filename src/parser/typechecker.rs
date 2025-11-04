@@ -21,55 +21,23 @@ pub use crate::parser::error::DetectError as TypecheckError;
 
 /// Parse size values like "1mb", "100kb", etc. into bytes
 fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64, TypecheckError> {
-    let s = s.trim().to_lowercase();
+    crate::util::parse_size(s).map_err(|err_msg| TypecheckError::InvalidValue {
+        expected: "size with unit (e.g., 1mb, 100kb)".to_string(),
+        found: err_msg,
+        span: value_span.to_source_span(),
+        src: source.to_string(),
+    })
+}
 
-    // Find where the unit starts
-    let mut unit_start = 0;
-    for (i, ch) in s.char_indices() {
-        if !ch.is_ascii_digit() && ch != '.' {
-            unit_start = i;
-            break;
-        }
-    }
-
-    if unit_start == 0 {
-        return Err(TypecheckError::InvalidValue {
-            expected: "size with unit (e.g., 1mb, 100kb)".to_string(),
-            found: s,
-            span: value_span.to_source_span(),
-            src: source.to_string(),
-        });
-    }
-
-    let number_str = &s[..unit_start];
-    let unit_str = &s[unit_start..];
-
-    let number: f64 = number_str
-        .parse()
-        .map_err(|_| TypecheckError::InvalidValue {
-            expected: "numeric value".to_string(),
-            found: number_str.to_string(),
-            span: value_span.to_source_span(),
-            src: source.to_string(),
-        })?;
-
-    let multiplier = match unit_str {
-        "b" | "byte" | "bytes" => 1.0,
-        "k" | "kb" | "kilobyte" | "kilobytes" => 1024.0,
-        "m" | "mb" | "megabyte" | "megabytes" => 1024.0 * 1024.0,
-        "g" | "gb" | "gigabyte" | "gigabytes" => 1024.0 * 1024.0 * 1024.0,
-        "t" | "tb" | "terabyte" | "terabytes" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
-        _ => {
-            return Err(TypecheckError::InvalidValue {
-                expected: "size unit (b, kb, mb, gb, tb)".to_string(),
-                found: unit_str.to_string(),
-                span: value_span.to_source_span(),
-                src: source.to_string(),
-            })
-        }
-    };
-
-    Ok((number * multiplier) as u64)
+/// Check if an operator is an ordering comparison (>, >=, <, <=)
+fn is_ordering_operator(op: typed::StructuredOperator) -> bool {
+    matches!(
+        op,
+        typed::StructuredOperator::Greater
+            | typed::StructuredOperator::GreaterOrEqual
+            | typed::StructuredOperator::Less
+            | typed::StructuredOperator::LessOrEqual
+    )
 }
 
 /// Main typechecker that transforms raw AST to typed expressions
@@ -80,31 +48,33 @@ impl Typechecker {
     ///
     /// # Errors
     /// Returns `DetectError` for syntax errors, unknown selectors, incompatible operators, or invalid values.
-    pub fn typecheck(raw_expr: RawExpr<'_>, source: &str) -> Result<Expr<Predicate>, DetectError> {
-        Self::typecheck_inner(raw_expr, source)
+    pub fn typecheck(
+        raw_expr: RawExpr<'_>,
+        source: &str,
+        config: &crate::RuntimeConfig,
+    ) -> Result<Expr<Predicate>, DetectError> {
+        Self::typecheck_inner(raw_expr, source, config)
     }
 
     fn typecheck_inner(
         raw_expr: RawExpr<'_>,
         source: &str,
+        config: &crate::RuntimeConfig,
     ) -> Result<Expr<Predicate>, DetectError> {
         match raw_expr {
-            RawExpr::Predicate(pred) => {
-                let typed_pred = Self::typecheck_predicate(pred, source)?;
-                Ok(Expr::Predicate(typed_pred))
-            }
+            RawExpr::Predicate(pred) => Self::typecheck_predicate(pred, source, config),
             RawExpr::And(lhs, rhs) => {
-                let typed_lhs = Self::typecheck_inner(*lhs, source)?;
-                let typed_rhs = Self::typecheck_inner(*rhs, source)?;
+                let typed_lhs = Self::typecheck_inner(*lhs, source, config)?;
+                let typed_rhs = Self::typecheck_inner(*rhs, source, config)?;
                 Ok(Expr::and(typed_lhs, typed_rhs))
             }
             RawExpr::Or(lhs, rhs) => {
-                let typed_lhs = Self::typecheck_inner(*lhs, source)?;
-                let typed_rhs = Self::typecheck_inner(*rhs, source)?;
+                let typed_lhs = Self::typecheck_inner(*lhs, source, config)?;
+                let typed_rhs = Self::typecheck_inner(*rhs, source, config)?;
                 Ok(Expr::or(typed_lhs, typed_rhs))
             }
             RawExpr::Not(expr) => {
-                let typed_expr = Self::typecheck_inner(*expr, source)?;
+                let typed_expr = Self::typecheck_inner(*expr, source, config)?;
                 Ok(Expr::negate(typed_expr))
             }
             RawExpr::SingleWord(span) => {
@@ -137,8 +107,48 @@ impl Typechecker {
         }
     }
 
+    /// Build synthetic precondition for structured data predicates
+    /// Wraps actual predicate in: (ext in [exts]) AND (size < max) AND actual_predicate
+    fn build_synthetic_precondition(
+        format: typed::DataFormat,
+        config: &crate::RuntimeConfig,
+        actual_predicate: Predicate,
+    ) -> Expr<Predicate> {
+        use std::collections::HashSet;
+        use typed::DataFormat;
+
+        // Map format to file extensions
+        let extensions: Vec<&str> = match format {
+            DataFormat::Yaml => vec!["yaml", "yml"],
+            DataFormat::Json => vec!["json"],
+            DataFormat::Toml => vec!["toml"],
+        };
+
+        // Build: ext in [extensions]
+        let ext_set: HashSet<String> = extensions.iter().map(|s| s.to_string()).collect();
+        let ext_predicate = Predicate::name(NamePredicate::Extension(StringMatcher::In(ext_set)));
+
+        // Build: size < max_structured_size
+        let size_predicate = Predicate::meta(MetadataPredicate::Filesize(NumberMatcher::In(
+            Bound::Right(..config.max_structured_size),
+        )));
+
+        // Construct: ext_check AND size_check AND actual_predicate
+        Expr::and(
+            Expr::and(
+                Expr::Predicate(ext_predicate),
+                Expr::Predicate(size_predicate),
+            ),
+            Expr::Predicate(actual_predicate),
+        )
+    }
+
     /// Transform a raw predicate into a typed predicate using the new type system
-    fn typecheck_predicate(pred: RawPredicate<'_>, source: &str) -> Result<Predicate, DetectError> {
+    fn typecheck_predicate(
+        pred: RawPredicate<'_>,
+        source: &str,
+        config: &crate::RuntimeConfig,
+    ) -> Result<Expr<Predicate>, DetectError> {
         // Parse selector and operator together with type safety, passing spans
         let typed_selector = typed::parse_selector_operator(
             pred.selector,
@@ -149,29 +159,71 @@ impl Typechecker {
         )?;
 
         match typed_selector {
-            TypedSelector::String(selector, operator) => Self::build_string_predicate(
-                selector,
-                operator,
-                &pred.value,
-                pred.value_span,
-                source,
-            ),
-            TypedSelector::Numeric(selector, operator) => Self::build_numeric_predicate(
-                selector,
-                operator,
-                &pred.value,
-                pred.value_span,
-                source,
-            ),
-            TypedSelector::Temporal(selector, operator) => Self::build_temporal_predicate(
-                selector,
-                operator,
-                &pred.value,
-                pred.value_span,
-                source,
-            ),
+            TypedSelector::String(selector, operator) => {
+                let predicate = Self::build_string_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
+            TypedSelector::Numeric(selector, operator) => {
+                let predicate = Self::build_numeric_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
+            TypedSelector::Temporal(selector, operator) => {
+                let predicate = Self::build_temporal_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
             TypedSelector::Enum(selector, operator) => {
-                Self::build_enum_predicate(selector, operator, &pred.value, pred.value_span, source)
+                let predicate = Self::build_enum_predicate(
+                    selector,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Expr::Predicate(predicate))
+            }
+            TypedSelector::StructuredData(format, path, operator) => {
+                let predicate = Self::build_structured_predicate(
+                    format,
+                    path,
+                    operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Self::build_synthetic_precondition(
+                    format, config, predicate,
+                ))
+            }
+            TypedSelector::StructuredDataString(format, path, string_operator) => {
+                let predicate = Self::build_structured_string_predicate(
+                    format,
+                    path,
+                    string_operator,
+                    &pred.value,
+                    pred.value_span,
+                    source,
+                )?;
+                Ok(Self::build_synthetic_precondition(
+                    format, config, predicate,
+                ))
             }
         }
     }
@@ -265,6 +317,183 @@ impl Typechecker {
                 Ok(Predicate::meta(MetadataPredicate::Type(enum_matcher)))
             }
         }
+    }
+
+    /// Build a structured data value predicate (yaml/json/toml with value operations)
+    fn build_structured_predicate(
+        format: typed::DataFormat,
+        path: Vec<super::structured_path::PathComponent>,
+        operator: typed::StructuredOperator,
+        value: &RawValue,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        use crate::predicate::StructuredDataPredicate;
+        use typed::DataFormat;
+
+        // Capture raw string for string coercion fallback (preserves original formatting)
+        let raw_string = value.as_string().to_string();
+
+        // Build native value based on format
+        let predicate = match format {
+            DataFormat::Yaml => {
+                let yaml_value = Self::build_yaml_rhs(value);
+
+                // Validate comparison operators require numeric values
+                if is_ordering_operator(operator) && !Self::is_comparable_yaml(&yaml_value)
+                {
+                    return Err(DetectError::InvalidValue {
+                        expected: "numeric or date value".to_string(),
+                        found: format!("{:?}", yaml_value),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    });
+                }
+
+                StructuredDataPredicate::YamlValue {
+                    path,
+                    operator,
+                    value: yaml_value,
+                    raw_string,
+                }
+            }
+
+            DataFormat::Json => {
+                let json_value = Self::build_json_rhs(value);
+
+                if is_ordering_operator(operator) && !Self::is_comparable_json(&json_value)
+                {
+                    return Err(DetectError::InvalidValue {
+                        expected: "numeric or date value".to_string(),
+                        found: format!("{:?}", json_value),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    });
+                }
+
+                StructuredDataPredicate::JsonValue {
+                    path,
+                    operator,
+                    value: json_value,
+                    raw_string,
+                }
+            }
+
+            DataFormat::Toml => {
+                let toml_value = Self::build_toml_rhs(value);
+
+                if is_ordering_operator(operator) && !Self::is_comparable_toml(&toml_value)
+                {
+                    return Err(DetectError::InvalidValue {
+                        expected: "numeric or date value".to_string(),
+                        found: format!("{:?}", toml_value),
+                        span: value_span.to_source_span(),
+                        src: source.to_string(),
+                    });
+                }
+
+                StructuredDataPredicate::TomlValue {
+                    path,
+                    operator,
+                    value: toml_value,
+                    raw_string,
+                }
+            }
+        };
+
+        Ok(Predicate::structured(predicate))
+    }
+
+    /// Build a structured data string predicate (yaml/json/toml with string operations like regex/contains)
+    fn build_structured_string_predicate(
+        format: typed::DataFormat,
+        path: Vec<super::structured_path::PathComponent>,
+        string_operator: typed::StringOperator,
+        value: &RawValue,
+        value_span: pest::Span,
+        source: &str,
+    ) -> Result<Predicate, DetectError> {
+        use crate::predicate::StructuredDataPredicate;
+        use typed::DataFormat;
+
+        // Build StringMatcher using existing logic
+        let matcher = Self::parse_string_value(value, string_operator, value_span, source)?;
+
+        let predicate = match format {
+            DataFormat::Yaml => StructuredDataPredicate::YamlString { path, matcher },
+            DataFormat::Json => StructuredDataPredicate::JsonString { path, matcher },
+            DataFormat::Toml => StructuredDataPredicate::TomlString { path, matcher },
+        };
+
+        Ok(Predicate::structured(predicate))
+    }
+
+    /// Build a YAML value from RHS, always attempting parse with string fallback
+    ///
+    /// Quotes are transparent (only for shell escaping).
+    /// Always tries to parse content as YAML, falls back to string literal.
+    fn build_yaml_rhs(value: &RawValue) -> yaml_rust::Yaml {
+        let content = value.as_string();
+
+        yaml_rust::YamlLoader::load_from_str(content)
+            .ok()
+            .and_then(|mut docs| docs.pop())
+            .unwrap_or_else(|| yaml_rust::Yaml::String(content.to_string()))
+    }
+
+    /// Build a JSON value from RHS, always attempting parse with string fallback
+    fn build_json_rhs(value: &RawValue) -> serde_json::Value {
+        let content = value.as_string();
+
+        serde_json::from_str(content)
+            .unwrap_or_else(|_| serde_json::Value::String(content.to_string()))
+    }
+
+    /// Build a TOML value from RHS, always attempting parse with string fallback
+    fn build_toml_rhs(value: &RawValue) -> toml::Value {
+        let content = value.as_string();
+
+        // Try 1: Synthetic document approach
+        // Construct synthetic TOML document and parse it
+        // This lets TOML parser handle all types (bool, int, float, datetime, arrays, inline tables, etc)
+        let synthetic_doc = format!("_v = {}", content);
+        if let Ok(parsed) = toml::from_str::<toml::Table>(&synthetic_doc) {
+            if let Some(value) = parsed.get("_v") {
+                return value.clone();
+            }
+        }
+
+        // Try 2: Direct TOML value parsing
+        // Handles edge cases where synthetic approach fails
+        // Example: toml:.foo == "v = 1" → synthetic produces "_v = v = 1" (invalid)
+        //          but direct parsing can handle it as a complete document
+        if let Ok(value) = toml::from_str::<toml::Value>(content) {
+            return value;
+        }
+
+        // Try 3: Fallback to string
+        toml::Value::String(content.to_string())
+    }
+
+    /// Check if a YAML value is comparable (numeric or date-like)
+    fn is_comparable_yaml(value: &yaml_rust::Yaml) -> bool {
+        matches!(
+            value,
+            yaml_rust::Yaml::Integer(_) | yaml_rust::Yaml::Real(_)
+        )
+    }
+
+    /// Check if a JSON value is comparable
+    fn is_comparable_json(value: &serde_json::Value) -> bool {
+        value.is_number()
+    }
+
+    /// Check if a TOML value is comparable
+    fn is_comparable_toml(value: &toml::Value) -> bool {
+        matches!(
+            value,
+            toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Datetime(_)
+        )
     }
 
     /// Parse string value based on operator type

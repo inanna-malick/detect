@@ -1,0 +1,6 @@
+port = 8080
+version_string = "1.2.3"
+version_int = 123
+enabled = true
+disabled = false
+count = 42

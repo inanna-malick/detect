@@ -1,0 +1,5 @@
+invalid: [unclosed array
+missing_quote: "unterminated string
+bad_indent:
+  - item1
+ - item2

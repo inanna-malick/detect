@@ -33,7 +33,7 @@ detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
 - **Natural syntax** - readable boolean expressions instead of cryptic flags
 - **Full regex support** - powerful PCRE2-compatible pattern matching
 - **Type safety** - prevents nonsensical queries at parse time with helpful errors
-- **Fast execution** - optimized three-phase evaluation (metadata before content scanning)
+- **Fast execution** - optimized four-phase evaluation (metadata before content scanning)
 - **Beginner friendly** - approachable for CLI newcomers, powerful for experts
 
 ## Installation
@@ -152,6 +152,27 @@ Selectors identify what aspect of a file to examine:
 
 **Aliases:** `contents`, `text`
 
+#### Structured Data
+
+Query YAML, JSON, and TOML file contents:
+
+| Selector | Type | Description | Example |
+|----------|------|-------------|---------|
+| `yaml:.path` | Structured | YAML navigation | `yaml:.server.port == 8080` |
+| `json:.path` | Structured | JSON navigation | `json:.dependencies.react` |
+| `toml:.path` | Structured | TOML navigation | `toml:.package.edition == "2021"` |
+
+**Navigation:**
+- `.field` - Access object field
+- `.nested.field` - Access nested fields
+- `[0]` - Array element by index
+- `[*]` - Wildcard - all array elements
+- `..field` - Recursive descent - all fields at any depth
+
+**Type coercion:** Auto-converts types (`yaml:.port == 8080` matches both `8080` and `"8080"`)
+
+**Configuration:** Use `--max-structured-size <size>` to set max file size (default: 10MB)
+
 ### Operators
 
 #### String Operators
@@ -245,6 +266,42 @@ detect 'content ~= "(TODO|FIXME|NOTE):"'
 detect 'content ~= "import .* from .+(react|vue)"'
 ```
 
+### Structured Data Queries
+
+Query configuration file contents with path-based selectors:
+
+```bash
+# Find YAML files with specific server port
+detect 'yaml:.server.port == 8080'
+
+# Find package.json files with React dependency
+detect 'json:.dependencies.react'
+
+# Find Cargo.toml files using 2021 edition
+detect 'toml:.package.edition == "2021"'
+
+# Version range matching with regex
+detect 'json:.dependencies.serde ~= "^1\\."'
+
+# Find configs with debugging enabled
+detect 'yaml:.debug == true'
+
+# Array wildcard example
+detect 'yaml:.features[*].enabled == true'
+
+# Recursive descent across all formats
+detect 'yaml:..port > 8000 OR json:..port > 8000 OR toml:..port > 8000'
+
+# Combine with metadata filters
+detect 'size < 50kb AND yaml:.database.host contains prod'
+
+# Kubernetes manifests with high replica counts
+detect 'yaml:.spec.replicas > 3'
+
+# Security: find production credentials outside tests
+detect 'yaml:..password contains prod AND NOT path contains test'
+```
+
 ### Complex Queries
 
 ```bash
@@ -267,19 +324,29 @@ detect 'ext == rs' ./src
 # Include gitignored files
 detect -i 'content contains SECRET'
 
+# Configure max file size for structured parsing
+detect --max-structured-size 50mb 'yaml:.config'
+
 # Debug logging
 detect -l debug 'complex query here'
 ```
 
 ## Performance
 
-detect optimizes query execution automatically using a **three-phase evaluation strategy**:
+detect optimizes query execution automatically using a **four-phase evaluation strategy**:
 
 1. **Name predicates** - Fast path-based filtering (no file I/O)
 2. **Metadata predicates** - Stat calls only for size/timestamps
-3. **Content predicates** - Streaming regex evaluation with DFAs
+3. **Structured predicates** - Parse YAML/JSON/TOML and navigate structure
+4. **Content predicates** - Streaming regex evaluation with DFAs
 
-Files are eliminated as early as possible in the pipeline, minimizing expensive operations. Content is never read unless metadata filters pass first.
+Early elimination minimizes I/O. Content is never read unless metadata and structured filters pass first.
+
+**Structured data optimizations:**
+- Single read for combined predicates
+- Caches parsed documents
+- Size limit: 10MB (configurable)
+- UTF-8 detection short-circuits on binary files
 
 Additional optimizations:
 - Respects `.gitignore` by default (override with `-i`)
