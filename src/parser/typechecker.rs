@@ -496,7 +496,6 @@ impl Typechecker {
         value_span: pest::Span,
         source: &str,
     ) -> Result<StringMatcher, DetectError> {
-        // Extract the raw string regardless of Quoted or Raw variant
         let value_str = match value {
             RawValue::Quoted(s) | RawValue::Raw(s) => s,
         };
