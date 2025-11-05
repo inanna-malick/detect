@@ -40,9 +40,7 @@ pub async fn eval<'dfa>(
 
     debug!(logger, "reduced expr after path predicate eval";  "expr" => %e);
 
-    // open file handle and read metadata
     let file = File::open(path).await?;
-
     let metadata = file.metadata().await?;
 
     let e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'dfa>>> =
@@ -87,10 +85,8 @@ pub async fn eval<'dfa>(
                 logger,
                 "evaluating both structured and content predicates - single file read"
             );
-            // Read file once as bytes
             let bytes = tokio::fs::read(path).await?;
 
-            // Try to interpret as UTF-8
             match std::str::from_utf8(&bytes) {
                 Ok(contents) => {
                     // UTF-8: evaluate structured predicates first
@@ -106,7 +102,6 @@ pub async fn eval<'dfa>(
                         _ => unreachable!("only Structured and Content predicates should remain"),
                     });
 
-                    // Check if short-circuited after structured
                     if let Expr::Literal(b) = e {
                         debug!(logger, "short circuit after structured predicates"; "result" => b);
                         return Ok(b);
@@ -147,7 +142,6 @@ pub async fn eval<'dfa>(
                         return Ok(b);
                     }
 
-                    // Stream bytes for content matching
                     const CHUNK_SIZE: usize = 8192;
                     let chunks: Vec<Result<Vec<u8>, std::io::Error>> = bytes
                         .chunks(CHUNK_SIZE)
@@ -169,7 +163,6 @@ pub async fn eval<'dfa>(
         }
         (true, false) => {
             debug!(logger, "evaluating structured predicates only");
-            // Read file as string for structured evaluation
             let e = match tokio::fs::read_to_string(path).await {
                 Ok(contents) => {
                     let mut cache = ParsedDocuments::new();
@@ -211,7 +204,6 @@ pub async fn eval<'dfa>(
         }
         (false, true) => {
             debug!(logger, "evaluating content predicates only - streaming");
-            // Original streaming path
             let e = run_contents_predicate_stream(
                 e,
                 ReaderStream::new(BufStream::new(file)).map_ok(|b| b.to_vec()),

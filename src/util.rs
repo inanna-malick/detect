@@ -23,7 +23,6 @@ impl std::fmt::Display for Done {
 pub fn parse_size(s: &str) -> Result<u64, String> {
     let s = s.trim().to_lowercase();
 
-    // Find where the unit starts
     let mut unit_start = 0;
     for (i, ch) in s.char_indices() {
         if !ch.is_ascii_digit() && ch != '.' {

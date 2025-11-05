@@ -20,7 +20,6 @@ pub enum ResolveError {
 ///
 /// Example: `resolve_alias("dir")` is equivalent to `type == dir`
 pub fn resolve_alias(word: &str) -> Result<Predicate, ResolveError> {
-    // Try file type aliases
     match DetectFileType::from_str(word) {
         Ok(file_type) => Ok(Predicate::Metadata(Arc::new(MetadataPredicate::Type(
             EnumMatcher::Equals(file_type),

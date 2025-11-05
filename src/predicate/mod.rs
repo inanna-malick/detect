@@ -35,32 +35,6 @@ pub enum DetectFileType {
 }
 
 impl DetectFileType {
-    /// Primary string representation for this file type
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DetectFileType::File => "file",
-            DetectFileType::Directory => "dir",
-            DetectFileType::Symlink => "symlink",
-            DetectFileType::Socket => "socket",
-            DetectFileType::Fifo => "fifo",
-            DetectFileType::BlockDevice => "block",
-            DetectFileType::CharDevice => "char",
-        }
-    }
-
-    /// All aliases that match this file type
-    pub fn aliases(&self) -> &'static [&'static str] {
-        match self {
-            DetectFileType::File => &["file"],
-            DetectFileType::Directory => &["dir", "directory"],
-            DetectFileType::Symlink => &["symlink", "link"],
-            DetectFileType::Socket => &["socket", "sock"],
-            DetectFileType::Fifo => &["fifo", "pipe"],
-            DetectFileType::BlockDevice => &["block", "blockdev"],
-            DetectFileType::CharDevice => &["char", "chardev"],
-        }
-    }
-
     /// Check if a string matches any alias for this file type
     pub fn matches(&self, s: &str) -> bool {
         self.aliases().contains(&s)
@@ -97,9 +71,7 @@ impl DetectFileType {
 /// Implement EnumPredicate trait for parse-time validation
 impl EnumPredicate for DetectFileType {
     fn from_str(s: &str) -> Result<Self, String> {
-        // Case-insensitive comparison
         let s_lower = s.to_lowercase();
-        // Check all variants and their aliases
         for variant in Self::all_variants() {
             if variant.aliases().contains(&s_lower.as_str()) {
                 return Ok(*variant);
@@ -131,7 +103,6 @@ impl EnumPredicate for DetectFileType {
     }
 
     fn as_str(&self) -> &'static str {
-        // Delegate to existing method
         match self {
             DetectFileType::File => "file",
             DetectFileType::Directory => "dir",
@@ -144,7 +115,6 @@ impl EnumPredicate for DetectFileType {
     }
 
     fn aliases(&self) -> &'static [&'static str] {
-        // Delegate to existing method
         match self {
             DetectFileType::File => &["file"],
             DetectFileType::Directory => &["dir", "directory"],

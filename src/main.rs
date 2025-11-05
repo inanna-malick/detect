@@ -51,7 +51,6 @@ struct Args {
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    // Handle info flags first
     if args.examples {
         println!("{}", EXAMPLES);
         return Ok(());
@@ -71,7 +70,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expr
         .expect("Expression required when above flags aren't set, should be present");
 
-    // Parse max structured size
     let max_structured_size =
         detect::util::parse_size(&args.max_structured_size).unwrap_or_else(|e| {
             eprintln!("Error: {e}");
@@ -112,7 +110,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         expr,
         config,
         |s| {
-            // Convert to relative path for cleaner output
             let display_path = s
                 .strip_prefix(&canonical_root)
                 .unwrap_or(s)
@@ -134,14 +131,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match result {
         Ok(_) => Ok(()),
         Err(e) => {
-            // Display the error using miette's formatting
             eprintln!("{:?}", miette::Report::new(e));
             std::process::exit(1);
         }
     }
 }
 
-/// Custom Drain logic
 struct RuntimeLevelFilter<D> {
     drain: D,
     level: Level,

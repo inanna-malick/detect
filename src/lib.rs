@@ -40,14 +40,12 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     config: RuntimeConfig,
     mut on_match: F,
 ) -> Result<(), DetectError> {
-    // Use parser: parse then typecheck
     let original_query = expr.clone();
     let parse_result = RawParser::parse_raw_expr(&expr)
         .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr, &config));
 
     match parse_result {
         Ok(parsed_expr) => {
-            // Validate root path exists and is a directory
             if !root.exists() {
                 return Err(DetectError::DirectoryNotFound {
                     path: root.display().to_string(),
@@ -108,7 +106,6 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 }
             }
 
-            // Provide helpful feedback when no matches are found
             if match_count == 0 {
                 eprintln!("No files matched the query: {}", original_query);
                 eprintln!("Searched in: {}", root.display());
