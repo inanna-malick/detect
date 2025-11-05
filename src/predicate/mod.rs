@@ -2,7 +2,7 @@ mod enum_matcher;
 
 pub use enum_matcher::{EnumMatcher, EnumPredicate};
 
-use crate::hybrid_regex::{HybridRegex, HybridStringRegex};
+use crate::hybrid_regex::{HybridRegex, StreamingHybridRegex};
 use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
 use std::fs::FileType;
@@ -240,7 +240,7 @@ pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StringMatcher {
-    Regex(HybridStringRegex),
+    Regex(HybridRegex),
     Equals(String),
     NotEquals(String),
     Contains(String),
@@ -249,7 +249,7 @@ pub enum StringMatcher {
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
-        Ok(Self::Regex(HybridStringRegex::new(s)?))
+        Ok(Self::Regex(HybridRegex::new(s)?))
     }
 
     // Helper constructors for tests and programmatic usage
@@ -583,7 +583,6 @@ pub enum NamePredicate {
 }
 
 impl NamePredicate {
-    // Helper constructors for common patterns
     pub fn file_eq(name: &str) -> Self {
         Self::FileName(StringMatcher::eq(name))
     }
@@ -617,20 +616,17 @@ impl NamePredicate {
                     .is_some_and(|s| x.is_match(s))
             }
             NamePredicate::FileName(x) => {
-                // Match against complete filename with extension
                 path.file_name()
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s))
             }
             NamePredicate::DirPath(x) => {
-                // Match against directory path only (parent)
                 // If base_path is provided, make the parent path relative to it
                 if let Some(base) = base_path {
                     if let Some(parent) = path.parent() {
                         // Try to make parent relative to base
                         match parent.strip_prefix(base) {
                             Ok(relative) => {
-                                // Use relative path
                                 relative.as_os_str().to_str().is_some_and(|s| x.is_match(s))
                             }
                             Err(_) => {
@@ -649,7 +645,6 @@ impl NamePredicate {
                 }
             }
             NamePredicate::FullPath(x) => {
-                // Match against complete path including filename
                 // If base_path is provided, make it relative
                 if let Some(base) = base_path {
                     match path.strip_prefix(base) {
@@ -666,7 +661,6 @@ impl NamePredicate {
                 }
             }
             NamePredicate::Extension(x) => {
-                // Match against extension without dot
                 // Handle empty extension case for files without extensions
                 match path.extension() {
                     Some(ext) => ext.to_str().is_some_and(|s| x.is_match(s)),
@@ -677,7 +671,6 @@ impl NamePredicate {
                 }
             }
             NamePredicate::ParentDir(x) => {
-                // Match against immediate parent directory name only
                 // e.g., for "src/utils/helper.rs", parent_dir would be "utils"
                 path.parent()
                     .and_then(|p| p.file_name())
@@ -737,7 +730,6 @@ impl MetadataPredicate {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
             MetadataPredicate::Type(enum_matcher) => {
                 let ft: FileType = metadata.file_type();
-                // Convert filesystem type to DetectFileType and match
                 if let Some(detect_type) = DetectFileType::from_fs_type(&ft) {
                     enum_matcher.is_match(&detect_type)
                 } else {
@@ -794,13 +786,13 @@ pub enum StructuredDataPredicate {
 
 #[derive(Debug)]
 pub struct StreamingCompiledContentPredicate {
-    inner: HybridRegex,
+    inner: StreamingHybridRegex,
     source: String,
 }
 
 impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
-        match HybridRegex::new(&source) {
+        match StreamingHybridRegex::new(&source) {
             Ok(inner) => Ok(Self { inner, source }),
             Err(e) => Err(PredicateParseError::Dfa(e)),
         }
@@ -822,6 +814,6 @@ impl PartialEq for StreamingCompiledContentPredicate {
 
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    pub inner: &'a HybridRegex,
+    pub inner: &'a StreamingHybridRegex,
     pub source: &'a str,
 }

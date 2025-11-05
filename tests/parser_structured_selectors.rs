@@ -426,7 +426,7 @@ fn parse_regex_operator() {
         Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let matcher =
-        StringMatcher::Regex(detect::hybrid_regex::HybridStringRegex::new("test.*").unwrap());
+        StringMatcher::Regex(detect::hybrid_regex::HybridRegex::new("test.*").unwrap());
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -760,7 +760,7 @@ fn parse_recursive_with_regex() {
         Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
     let matcher = StringMatcher::Regex(
-        detect::hybrid_regex::HybridStringRegex::new(r".*@example\.com").unwrap(),
+        detect::hybrid_regex::HybridRegex::new(r".*@example\.com").unwrap(),
     );
 
     let expected = build_expected_synthetic(
@@ -859,7 +859,7 @@ fn parse_complex_recursive_query() {
 
     // Right: Synthetic wrapper with YamlString predicate
     let matcher =
-        StringMatcher::Regex(detect::hybrid_regex::HybridStringRegex::new(r"secure.*").unwrap());
+        StringMatcher::Regex(detect::hybrid_regex::HybridRegex::new(r"secure.*").unwrap());
     let yaml_synthetic = build_expected_synthetic(
         "yaml",
         StructuredDataPredicate::YamlString {

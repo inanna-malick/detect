@@ -124,11 +124,9 @@ impl Typechecker {
             DataFormat::Toml => vec!["toml"],
         };
 
-        // Build: ext in [extensions]
         let ext_set: HashSet<String> = extensions.iter().map(|s| s.to_string()).collect();
         let ext_predicate = Predicate::name(NamePredicate::Extension(StringMatcher::In(ext_set)));
 
-        // Build: size < max_structured_size
         let size_predicate = Predicate::meta(MetadataPredicate::Filesize(NumberMatcher::In(
             Bound::Right(..config.max_structured_size),
         )));
@@ -149,7 +147,6 @@ impl Typechecker {
         source: &str,
         config: &crate::RuntimeConfig,
     ) -> Result<Expr<Predicate>, DetectError> {
-        // Parse selector and operator together with type safety, passing spans
         let typed_selector = typed::parse_selector_operator(
             pred.selector,
             pred.selector_span,
@@ -335,7 +332,6 @@ impl Typechecker {
         // Capture raw string for string coercion fallback (preserves original formatting)
         let raw_string = value.as_string().to_string();
 
-        // Build native value based on format
         let predicate = match format {
             DataFormat::Yaml => {
                 let yaml_value = Self::build_yaml_rhs(value);
@@ -414,7 +410,6 @@ impl Typechecker {
         use crate::predicate::StructuredDataPredicate;
         use typed::DataFormat;
 
-        // Build StringMatcher using existing logic
         let matcher = Self::parse_string_value(value, string_operator, value_span, source)?;
 
         let predicate = match format {
@@ -547,7 +542,6 @@ impl Typechecker {
             value_str
         };
 
-        // Use dedicated set parser for proper handling
         use crate::parser::RawParser;
         let items =
             RawParser::parse_set_contents(inner).map_err(|e| DetectError::InvalidValue {
@@ -568,7 +562,6 @@ impl Typechecker {
         _value_span: pest::Span,
         source: &str,
     ) -> Result<String, DetectError> {
-        // Extract string value
         let s = match value {
             RawValue::Quoted(s) | RawValue::Raw(s) => s,
         };
@@ -600,10 +593,8 @@ impl Typechecker {
         };
 
         if matches!(selector, NumericSelector::Size) && s.chars().any(|c| c.is_alphabetic()) {
-            // Parse as size with unit
             parse_size_value(s, value_span, source)
         } else {
-            // Parse as plain number
             s.parse().map_err(|_| DetectError::InvalidValue {
                 expected: "numeric value".to_string(),
                 found: s.to_string(),
@@ -696,7 +687,6 @@ impl Typechecker {
                 // Reuse existing set parsing logic, then validate each item
                 let string_matcher = Self::parse_as_set(value_str, value_span, source)?;
 
-                // Extract strings from the StringMatcher::In variant
                 let items = match string_matcher {
                     StringMatcher::In(set) => set,
                     _ => unreachable!("parse_as_set should return StringMatcher::In"),

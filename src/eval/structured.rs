@@ -79,7 +79,6 @@ fn collect_recursive_yaml_key<'a>(
     while let Some(node) = work_queue.pop() {
         match node {
             yaml_rust::Yaml::Hash(map) => {
-                // Check if this hash contains the target key
                 for (k, v) in map.iter() {
                     if let yaml_rust::Yaml::String(key_str) = k {
                         if key_str == key {
@@ -169,7 +168,6 @@ fn collect_recursive_json_key<'a>(
     while let Some(node) = work_queue.pop() {
         match node {
             serde_json::Value::Object(map) => {
-                // Check if this object contains the target key
                 if let Some(v) = map.get(key) {
                     results.push(v);
                 }
@@ -252,7 +250,6 @@ fn collect_recursive_toml_key<'a>(
     while let Some(node) = work_queue.pop() {
         match node {
             toml::Value::Table(map) => {
-                // Check if this table contains the target key
                 if let Some(v) = map.get(key) {
                     results.push(v);
                 }
