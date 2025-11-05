@@ -94,7 +94,7 @@ pub mod test_utils {
         Raw(&'a str),    // Raw token (bare word, [brackets], (parens), {curlies})
     }
 
-    impl<'a> std::fmt::Display for RawTestValue<'a> {
+    impl std::fmt::Display for RawTestValue<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 RawTestValue::Quoted(s) | RawTestValue::Raw(s) => write!(f, "{}", s),

@@ -3,8 +3,6 @@
 pub mod eval;
 pub mod expr;
 pub mod hybrid_regex;
-#[cfg(feature = "mcp")]
-pub mod mcp_server;
 pub mod parser;
 pub mod predicate;
 mod predicate_error;

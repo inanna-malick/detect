@@ -45,10 +45,8 @@ pub async fn eval<'dfa>(
 
     let metadata = file.metadata().await?;
 
-    let e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'dfa>>> = e
-        .reduce_predicate_and_short_circuit(|p| {
-            p.eval_metadata_predicate(&metadata)
-        });
+    let e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'dfa>>> =
+        e.reduce_predicate_and_short_circuit(|p| p.eval_metadata_predicate(&metadata));
 
     if let Expr::Literal(b) = e {
         debug!(logger, "short circuit after metadata predicate eval";  "expr" => %e, "result" => %b);

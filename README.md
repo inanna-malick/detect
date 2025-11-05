@@ -326,17 +326,6 @@ Queries are evaluated in four phases: name → metadata → structured → conte
 
 Respects `.gitignore` by default. Traverses directories in parallel. Structured data parsing is limited to 10MB files (configurable).
 
-## MCP Server Integration
-
-detect includes built-in MCP (Model Context Protocol) support for AI assistants like [Claude Code](https://claude.ai/code):
-
-```bash
-# Run as MCP server
-detect --mcp
-```
-
-This enables AI assistants to perform filesystem searches using detect's expressive query language. See [MCP.md](MCP.md) for full configuration details.
-
 ## License
 
 Licensed under either of:
