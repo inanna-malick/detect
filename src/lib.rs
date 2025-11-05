@@ -89,6 +89,10 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 let entry = entry.map_err(|e| DetectError::from(anyhow::Error::from(e)))?;
                 let path = entry.path();
 
+                if path == root {
+                    continue;
+                }
+
                 let start = Instant::now();
 
                 let is_match = eval::fs::eval(&logger, &expr, path, Some(root))

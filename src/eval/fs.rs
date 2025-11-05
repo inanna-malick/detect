@@ -31,7 +31,7 @@ pub async fn eval<'dfa>(
     debug!(logger, "visit entity"; "expr" => %e);
 
     let e: Expr<Predicate<Done, MetadataPredicate, StreamingCompiledContentPredicateRef<'dfa>>> =
-        e.reduce_predicate_and_short_circuit(|p| p.eval_name_predicate_with_base(path, base_path));
+        e.reduce_predicate_and_short_circuit(|p| p.eval_name_predicate(path, base_path));
 
     if let Expr::Literal(b) = e {
         debug!(logger, "short circuit after path predicate eval"; "expr" => %e, "result" => %b);
@@ -47,7 +47,7 @@ pub async fn eval<'dfa>(
 
     let e: Expr<Predicate<Done, Done, StreamingCompiledContentPredicateRef<'dfa>>> = e
         .reduce_predicate_and_short_circuit(|p| {
-            p.eval_metadata_predicate_with_path(&metadata, path, base_path)
+            p.eval_metadata_predicate(&metadata)
         });
 
     if let Expr::Literal(b) = e {

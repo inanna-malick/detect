@@ -18,11 +18,7 @@ pub enum ResolveError {
 ///
 /// Currently supports file type aliases: `file`, `dir`, `symlink`, etc.
 ///
-/// # Examples
-/// ```ignore
-/// let pred = resolve_alias("dir").unwrap();
-/// // Equivalent to: type == dir
-/// ```
+/// Example: `resolve_alias("dir")` is equivalent to `type == dir`
 pub fn resolve_alias(word: &str) -> Result<Predicate, ResolveError> {
     // Try file type aliases
     match DetectFileType::from_str(word) {

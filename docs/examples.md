@@ -1,6 +1,10 @@
 # detect Examples
 
-Quick examples for common file search tasks.
+**Quick tips:**
+- Start with metadata filters (`ext`, `size`) before expensive content searches
+- Use `ext == value` not wildcards (`*.rs`)
+- Quote expressions with spaces or special characters
+- Use `-i` to include gitignored files
 
 ## Basic File Finding
 
@@ -41,9 +45,6 @@ Query configuration file contents with path-based selectors:
 ```bash
 # Find YAML files with specific port
 detect 'yaml:.server.port == 8080'
-
-# Find package.json with React dependency
-detect 'json:.dependencies.react'
 
 # Find Cargo.toml with specific edition
 detect 'toml:.package.edition == "2021"'
@@ -149,43 +150,3 @@ detect 'type == dir'
 detect 'ext == ts AND content ~= "class.*Service"'
 ```
 
-## File Type Aliases (Convenience Shortcuts)
-
-For common file type queries, single-word aliases provide shorthand:
-
-```bash
-# Regular files only
-detect 'file'
-
-# Directories only
-detect 'dir'
-
-# Symbolic links
-detect 'symlink'
-
-# Subdirectories (not root)
-detect 'dir && depth > 0'
-
-# Large regular files
-detect 'file && size > 10mb'
-
-# Recent directories
-detect 'dir && modified > -7d'
-```
-
-**Available aliases:** `file`, `dir`/`directory`, `symlink`/`link`, `socket`/`sock`, `fifo`/`pipe`, `block`/`blockdev`, `char`/`chardev` (case-insensitive)
-
-**Equivalence:**
-- `file` is shorthand for `type == file`
-- `dir && depth > 0` is shorthand for `type == dir AND depth > 0`
-
-## Tips
-
-- Use `ext == value` for extension matching (not wildcards)
-- Use `name contains text` for filename substring searches
-- Use regex for complex patterns: `name ~= "pattern"`
-- File type aliases (`file`, `dir`, `symlink`) are convenient shortcuts
-- Combine aliases with predicates: `file && size > 1mb`
-- Quote expressions with spaces or special characters
-- Use `-i` flag to include gitignored files
-- Start with metadata filters before content searches for performance

@@ -21,20 +21,14 @@ detect 'ext in [jsx,tsx] AND content ~= "function \w+\(" AND NOT path contains t
 Traditional Unix tools require chaining multiple commands with cryptic syntax:
 
 ```bash
-# Old way: find TypeScript files >5KB modified in last week containing TODO
+# find + grep
 find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 
-# New way: readable, unified query
+# detect
 detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
 ```
 
-**Key Features:**
-- **Unified search** - query content AND metadata in a single expression
-- **Natural syntax** - readable boolean expressions instead of cryptic flags
-- **Full regex support** - powerful PCRE2-compatible pattern matching
-- **Type safety** - prevents nonsensical queries at parse time with helpful errors
-- **Fast execution** - optimized four-phase evaluation (metadata before content scanning)
-- **Beginner friendly** - approachable for CLI newcomers, powerful for experts
+One tool, one expression. Query filename, size, timestamps, and content together. Validates queries at parse-time so you catch typos immediately.
 
 ## Installation
 
@@ -106,8 +100,6 @@ detect 'NOT symlink && modified > -7d'  # Recent non-symlink files
 
 ### Selectors
 
-Selectors identify what aspect of a file to examine:
-
 #### File Identity
 | Selector | Type | Description | Example |
 |----------|------|-------------|---------|
@@ -141,7 +133,6 @@ Selectors identify what aspect of a file to examine:
 - Relative: `-7d` / `-7days`, `-2h` / `-2hours`, `-30m` / `-30minutes`, `-1w` / `-1week`
   - Supported units: `s`/`sec`/`second`, `m`/`min`/`minute`, `h`/`hr`/`hour`, `d`/`day`, `w`/`week` (+ plurals)
 - Absolute: `2024-01-15`, `2024-01-15T10:30:00`
-- Keywords: `now`, `today`, `yesterday`
 
 **Aliases:** `mtime` → `modified`, `ctime` → `created`, `atime` → `accessed`
 
@@ -154,29 +145,21 @@ Selectors identify what aspect of a file to examine:
 
 #### Structured Data
 
-Query YAML, JSON, and TOML file contents:
+Query YAML, JSON, and TOML:
 
-| Selector | Type | Description | Example |
-|----------|------|-------------|---------|
-| `yaml:.path` | Structured | YAML navigation | `yaml:.server.port == 8080` |
-| `json:.path` | Structured | JSON navigation | `json:.dependencies.react` |
-| `toml:.path` | Structured | TOML navigation | `toml:.package.edition == "2021"` |
+```bash
+yaml:.server.port == 8080           # nested field
+toml:.package.edition == "2021"     # value match
+yaml:.features[*].enabled == true   # wildcard - any array element
+yaml:..password contains prod       # recursive - any depth
+```
 
-**Navigation:**
-- `.field` - Access object field
-- `.nested.field` - Access nested fields
-- `[0]` - Array element by index
-- `[*]` - Wildcard - all array elements
-- `..field` - Recursive descent - all fields at any depth
-
-**Type coercion:** Auto-converts types (`yaml:.port == 8080` matches both `8080` and `"8080"`)
-
-**Configuration:** Use `--max-structured-size <size>` to set max file size (default: 10MB)
+Navigate with `.field`, `.nested.field`, `[0]`, `[*]`, `..field`. Auto-converts between numbers and strings (`yaml:.port == 8080` matches both `8080` and `"8080"`). Default max file size: 10MB (configurable with `--max-structured-size`).
 
 ### Operators
 
 #### String Operators
-For: `name`, `basename`, `ext`, `path`, `dir`, `type`, `content`
+For: `name`, `basename`, `ext`, `path`, `dir`, `content`
 
 | Operator | Description | Example |
 |----------|-------------|---------|
@@ -202,8 +185,19 @@ For: `modified`, `created`, `accessed`
 |----------|-------------|---------|
 | `>` | After (newer than) | `modified > -7d` |
 | `<` | Before (older than) | `created < 2024-01-01` |
-| `>=`, `<=` | At or after/before | `modified >= yesterday` |
-| `==`, `!=` | Exact time match | `modified == today` |
+| `>=`, `<=` | At or after/before | `modified >= -1d` |
+| `==`, `!=` | Exact time match | `modified == 2024-01-01` |
+
+#### Enum Operators
+For: `type`
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Exact match (validated at parse-time) | `type == file` |
+| `!=` | Not equal | `type != dir` |
+| `in [a,b,c]` | Match any type in set | `type in [file,dir,symlink]` |
+
+**Valid file types** (case-insensitive): `file`, `dir`/`directory`, `symlink`/`link`, `socket`/`sock`, `fifo`/`pipe`, `block`/`blockdev`, `char`/`chardev`
 
 #### Boolean Operators
 
@@ -268,14 +262,9 @@ detect 'content ~= "import .* from .+(react|vue)"'
 
 ### Structured Data Queries
 
-Query configuration file contents with path-based selectors:
-
 ```bash
 # Find YAML files with specific server port
 detect 'yaml:.server.port == 8080'
-
-# Find package.json files with React dependency
-detect 'json:.dependencies.react'
 
 # Find Cargo.toml files using 2021 edition
 detect 'toml:.package.edition == "2021"'
@@ -333,25 +322,9 @@ detect -l debug 'complex query here'
 
 ## Performance
 
-detect optimizes query execution automatically using a **four-phase evaluation strategy**:
+Queries are evaluated in four phases: name → metadata → structured → content. Each phase can eliminate files before more expensive operations. Content is never read unless the file passes all earlier checks.
 
-1. **Name predicates** - Fast path-based filtering (no file I/O)
-2. **Metadata predicates** - Stat calls only for size/timestamps
-3. **Structured predicates** - Parse YAML/JSON/TOML and navigate structure
-4. **Content predicates** - Streaming regex evaluation with DFAs
-
-Early elimination minimizes I/O. Content is never read unless metadata and structured filters pass first.
-
-**Structured data optimizations:**
-- Single read for combined predicates
-- Caches parsed documents
-- Size limit: 10MB (configurable)
-- UTF-8 detection short-circuits on binary files
-
-Additional optimizations:
-- Respects `.gitignore` by default (override with `-i`)
-- Uses streaming regex engines for large files
-- Parallel directory traversal with the `ignore` crate
+Respects `.gitignore` by default. Traverses directories in parallel. Structured data parsing is limited to 10MB files (configurable).
 
 ## MCP Server Integration
 

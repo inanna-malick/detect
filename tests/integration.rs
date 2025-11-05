@@ -123,7 +123,7 @@ async fn test_path_operations() {
         // Test not name
         (
             "!basename == foo",
-            &["", "bar", "bar/baz"][..],
+            &["bar", "bar/baz"][..],
             vec![f("foo", "foo"), f("bar/foo", "baz"), f("bar/baz", "foo")],
         ),
         // Test name and content
@@ -177,7 +177,6 @@ async fn test_extension_operations() {
         (
             "ext != rs",
             &[
-                "",
                 "style.css",
                 "app.js",
                 "component.jsx",
@@ -217,7 +216,7 @@ async fn test_size_operations() {
         ("size == 5", &["exact.txt"][..], size_files.clone()),
         (
             "size >= 5",
-            &["", "large.txt", "exact.txt"][..],
+            &["large.txt", "exact.txt"][..],
             size_files.clone(),
         ),
         (
@@ -297,7 +296,7 @@ async fn test_boolean_operations() {
         // NOT operation
         (
             r#"!(basename contains "test")"#,
-            &["", "main.rs", "lib.rs", "doc.txt"][..],
+            &["main.rs", "lib.rs", "doc.txt"][..],
             bool_files.clone(),
         ),
         // Complex: (A || B) && !C
@@ -599,7 +598,7 @@ async fn test_alias_smoke_test() {
         // Test filesize alias
         (
             "filesize > 10",
-            &["", "large.txt"][..], // Empty string is the directory itself
+            &["large.txt"][..],
             vec![f("small.txt", "x"), f("large.txt", "xxxxxxxxxxxxxxxxxxxx")],
         ),
         // Test filetype alias
@@ -611,7 +610,7 @@ async fn test_alias_smoke_test() {
         // Test mtime alias (all files are recently created)
         (
             "mtime > -1h",
-            &["", "recent.txt"][..], // All files match, including directory
+            &["recent.txt"][..],
             vec![f("recent.txt", "new")],
         ),
         // Test contents alias

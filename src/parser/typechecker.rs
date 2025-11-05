@@ -276,11 +276,12 @@ impl Typechecker {
         let number_value = Self::parse_numeric_value(value, &selector, value_span, source)?;
         let number_matcher = Self::build_number_matcher(operator, number_value);
 
-        let meta_pred = match selector {
-            NumericSelector::Size => MetadataPredicate::Filesize(number_matcher),
-            NumericSelector::Depth => MetadataPredicate::Depth(number_matcher),
-        };
-        Ok(Predicate::meta(meta_pred))
+        match selector {
+            NumericSelector::Size => {
+                Ok(Predicate::meta(MetadataPredicate::Filesize(number_matcher)))
+            }
+            NumericSelector::Depth => Ok(Predicate::name(NamePredicate::Depth(number_matcher))),
+        }
     }
 
     /// Build a temporal-type predicate
@@ -340,8 +341,7 @@ impl Typechecker {
                 let yaml_value = Self::build_yaml_rhs(value);
 
                 // Validate comparison operators require numeric values
-                if is_ordering_operator(operator) && !Self::is_comparable_yaml(&yaml_value)
-                {
+                if is_ordering_operator(operator) && !Self::is_comparable_yaml(&yaml_value) {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
                         found: format!("{:?}", yaml_value),
@@ -361,8 +361,7 @@ impl Typechecker {
             DataFormat::Json => {
                 let json_value = Self::build_json_rhs(value);
 
-                if is_ordering_operator(operator) && !Self::is_comparable_json(&json_value)
-                {
+                if is_ordering_operator(operator) && !Self::is_comparable_json(&json_value) {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
                         found: format!("{:?}", json_value),
@@ -382,8 +381,7 @@ impl Typechecker {
             DataFormat::Toml => {
                 let toml_value = Self::build_toml_rhs(value);
 
-                if is_ordering_operator(operator) && !Self::is_comparable_toml(&toml_value)
-                {
+                if is_ordering_operator(operator) && !Self::is_comparable_toml(&toml_value) {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
                         found: format!("{:?}", toml_value),

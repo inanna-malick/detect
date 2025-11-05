@@ -4,9 +4,9 @@ use clap::{command, Parser};
 use detect::{parse_and_run_fs, RuntimeConfig};
 use slog::{o, Drain, Level, Logger};
 
-const EXAMPLES: &str = include_str!("docs/examples.md");
-const PREDICATES: &str = include_str!("docs/predicates.md");
-const OPERATORS: &str = include_str!("docs/operators.md");
+const EXAMPLES: &str = include_str!("../docs/examples.md");
+const PREDICATES: &str = include_str!("../docs/predicates.md");
+const OPERATORS: &str = include_str!("../docs/operators.md");
 
 #[derive(Parser, Debug)]
 #[command(

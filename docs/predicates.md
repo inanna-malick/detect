@@ -7,6 +7,7 @@ All available selectors and their data types.
 | Selector | Type   | Description | Example |
 |----------|--------|-------------|---------|
 | `name`   | String | Full filename with extension | `name == "README.md"` |
+| `basename` | String | Filename without extension | `basename == README` |
 | `ext`    | String | File extension without dot | `ext == rs` |
 | `path`   | String | Full absolute path | `path ~= "/src/"` |
 | `dir`    | String | Parent directory path | `dir == "/usr/bin"` |
@@ -42,7 +43,6 @@ All available selectors and their data types.
 - Relative: `-7d` / `-7days`, `-2h` / `-2hours`, `-30m` / `-30minutes`, `-1w` / `-1week`
   - Units: `s`/`sec`/`second`, `m`/`min`/`minute`, `h`/`hr`/`hour`, `d`/`day`, `w`/`week` (+ plurals)
 - Absolute: `2024-01-15`, `2024-01-15T10:30:00`
-- Keywords: `now`, `today`, `yesterday`
 
 ## Content Selector
 
@@ -106,39 +106,15 @@ yaml:.port == "8080"  # matches port: 8080 or port: "8080"
 
 ## Selector Aliases
 
-Some selectors have alternative names for convenience:
+Alternative names for convenience:
 
-- `name` = `filename` (full filename with extension)
-- `stem` = `basename` (filename without extension)
-- `ext` = `extension` (file extension)
-- `dir` = `parent` = `directory` (parent directory)
-- `size` = `filesize` = `bytes` (file size)
-- `type` = `filetype` (file type)
-- `modified` = `mtime` (modification time)
-- `created` = `ctime` (creation time)
-- `accessed` = `atime` (access time)
-- `content` = `text` = `contents` (file contents)
-
-## Type Details
-
-### String Selectors
-Work with: `name`, `ext`, `path`, `dir`, `content`
-
-Operators: `==`, `!=`, `contains`, `~=` (regex), `in [...]`
-
-### Numeric Selectors
-Work with: `size`, `depth`
-
-Operators: `==`, `!=`, `>`, `<`, `>=`, `<=`
-
-### Temporal Selectors
-Work with: `modified`, `created`, `accessed`
-
-Operators: `==`, `!=`, `>` (after), `<` (before)
-
-### Enum Selectors
-Work with: `type`
-
-Operators: `==`, `!=`, `in [...]`
-
-**Note**: Enum values are validated at parse-time. Invalid values produce errors listing all valid options.
+- `name` = `filename`
+- `stem` = `basename`
+- `ext` = `extension`
+- `dir` = `parent` = `directory`
+- `size` = `filesize` = `bytes`
+- `type` = `filetype`
+- `modified` = `mtime`
+- `created` = `ctime`
+- `accessed` = `atime`
+- `content` = `text` = `contents`

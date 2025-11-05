@@ -175,15 +175,6 @@ fn parse_duration(
     }
 }
 
-fn naive_date_to_local(date: NaiveDate) -> Result<DateTime<Local>, PredicateParseError> {
-    date.and_hms_opt(0, 0, 0)
-        .and_then(|time| match time.and_local_timezone(Local) {
-            chrono::LocalResult::Single(lt) => Some(lt),
-            _ => None,
-        })
-        .ok_or_else(|| PredicateParseError::Temporal("invalid date".to_string()))
-}
-
 pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, PredicateParseError> {
     let (is_negative, stripped) = if let Some(rest) = s.strip_prefix('-') {
         (true, rest)
@@ -220,13 +211,6 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, PredicateParseError>
                 }
             }
         }
-    }
-
-    match s {
-        "now" => return Ok(Local::now()),
-        "today" => return naive_date_to_local(Local::now().date_naive()),
-        "yesterday" => return naive_date_to_local(Local::now().date_naive() - Duration::days(1)),
-        _ => {}
     }
 
     if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
@@ -284,7 +268,7 @@ pub enum TimeUnit {
 
 pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StringMatcher {
     Regex(HybridStringRegex),
     Equals(String),
@@ -292,21 +276,6 @@ pub enum StringMatcher {
     Contains(String),
     In(HashSet<String>),
 }
-
-impl PartialEq for StringMatcher {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
-            (Self::Equals(l0), Self::Equals(r0)) => l0 == r0,
-            (Self::NotEquals(l0), Self::NotEquals(r0)) => l0 == r0,
-            (Self::Contains(l0), Self::Contains(r0)) => l0 == r0,
-            (Self::In(l0), Self::In(r0)) => l0 == r0,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for StringMatcher {}
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
@@ -348,7 +317,7 @@ pub enum NumberMatcher {
     NotEquals(u64),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TimeMatcher {
     Before(DateTime<Local>),
     After(DateTime<Local>),
@@ -375,22 +344,6 @@ impl TimeMatcher {
         }
     }
 }
-
-impl PartialEq for TimeMatcher {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (TimeMatcher::Before(a), TimeMatcher::Before(b)) => a == b,
-            (TimeMatcher::After(a), TimeMatcher::After(b)) => a == b,
-            (TimeMatcher::BeforeOrEqual(a), TimeMatcher::BeforeOrEqual(b)) => a == b,
-            (TimeMatcher::AfterOrEqual(a), TimeMatcher::AfterOrEqual(b)) => a == b,
-            (TimeMatcher::Equals(a), TimeMatcher::Equals(b)) => a == b,
-            (TimeMatcher::NotEquals(a), TimeMatcher::NotEquals(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for TimeMatcher {}
 
 impl NumberMatcher {
     pub fn is_match(&self, x: u64) -> bool {
@@ -423,6 +376,7 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
         RhsValue::String(s) => {
             Ok(match op {
                 Op::Matches => {
+                    // treat '*' as match-all, for convenience
                     let pattern = if s == "*" { ".*" } else { s };
                     StringMatcher::regex(pattern)?
                 }
@@ -619,16 +573,7 @@ impl<A: Display, B: Display, C: Display, S: std::fmt::Debug> Display for Predica
 }
 
 impl<A, B, S> Predicate<NamePredicate, A, B, S> {
-    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, S>> {
-        match self {
-            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
-            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
-            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
-        }
-    }
-
-    pub fn eval_name_predicate_with_base(
+    pub fn eval_name_predicate(
         self,
         path: &Path,
         base_path: Option<&Path>,
@@ -654,22 +599,6 @@ impl<A, B, S> Predicate<A, MetadataPredicate, B, S> {
             Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
         }
     }
-
-    pub fn eval_metadata_predicate_with_path(
-        self,
-        metadata: &Metadata,
-        path: &Path,
-        base_path: Option<&Path>,
-    ) -> ShortCircuit<Predicate<A, Done, B, S>> {
-        match self {
-            Predicate::Metadata(p) => {
-                ShortCircuit::Known(p.is_match_with_path(metadata, Some(path), base_path))
-            }
-            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -680,6 +609,7 @@ pub enum NamePredicate {
     FullPath(StringMatcher),  // complete path including filename
     Extension(StringMatcher), // file extension
     ParentDir(StringMatcher), // immediate parent directory name
+    Depth(NumberMatcher),     // directory depth from base path
 }
 
 impl NamePredicate {
@@ -784,6 +714,18 @@ impl NamePredicate {
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s))
             }
+            NamePredicate::Depth(matcher) => {
+                // Calculate depth from base path (or from root if no base)
+                let depth = if let Some(base) = base_path {
+                    match path.strip_prefix(base) {
+                        Ok(relative) => relative.components().count() as u64,
+                        Err(_) => path.components().count() as u64,
+                    }
+                } else {
+                    path.components().count() as u64
+                };
+                matcher.is_match(depth)
+            }
         }
     }
 }
@@ -806,43 +748,21 @@ impl Bound {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MetadataPredicate {
     Filesize(NumberMatcher),
     Type(EnumMatcher<DetectFileType>), // file type with parse-time validation
     Modified(TimeMatcher),
     Created(TimeMatcher),
     Accessed(TimeMatcher),
-    Depth(NumberMatcher), // Directory depth from base path
 }
-
-impl PartialEq for MetadataPredicate {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (MetadataPredicate::Filesize(a), MetadataPredicate::Filesize(b)) => a == b,
-            (MetadataPredicate::Type(a), MetadataPredicate::Type(b)) => a == b,
-            (MetadataPredicate::Modified(a), MetadataPredicate::Modified(b)) => a == b,
-            (MetadataPredicate::Created(a), MetadataPredicate::Created(b)) => a == b,
-            (MetadataPredicate::Accessed(a), MetadataPredicate::Accessed(b)) => a == b,
-            (MetadataPredicate::Depth(a), MetadataPredicate::Depth(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for MetadataPredicate {}
 
 impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
-        self.is_match_with_path(metadata, None, None)
+        self.is_match_with_path(metadata)
     }
 
-    pub fn is_match_with_path(
-        &self,
-        metadata: &Metadata,
-        path: Option<&Path>,
-        base_path: Option<&Path>,
-    ) -> bool {
+    pub fn is_match_with_path(&self, metadata: &Metadata) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
             MetadataPredicate::Type(enum_matcher) => {
@@ -857,21 +777,6 @@ impl MetadataPredicate {
             MetadataPredicate::Modified(matcher) => matcher.is_match(metadata.mtime()),
             MetadataPredicate::Created(matcher) => matcher.is_match(metadata.ctime()),
             MetadataPredicate::Accessed(matcher) => matcher.is_match(metadata.atime()),
-            MetadataPredicate::Depth(matcher) => {
-                if let Some(path) = path {
-                    let depth = if let Some(base) = base_path {
-                        match path.strip_prefix(base) {
-                            Ok(relative) => relative.components().count() as u64,
-                            Err(_) => path.components().count() as u64,
-                        }
-                    } else {
-                        path.components().count() as u64
-                    };
-                    matcher.is_match(depth)
-                } else {
-                    false
-                }
-            }
         }
     }
 }

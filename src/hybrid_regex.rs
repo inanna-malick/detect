@@ -39,12 +39,25 @@ impl HybridRegex {
     }
 }
 
-/// Helper for StringMatcher to support both engines
+/// Helper for StringMatcher to support both regex engines
 #[derive(Clone)]
 pub enum HybridStringRegex {
     Rust(regex::Regex),
     Pcre2(pcre2::bytes::Regex),
 }
+
+// use string representation as a heuristic for regex equality
+impl PartialEq for HybridStringRegex {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Rust(l0), Self::Rust(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Pcre2(l0), Self::Pcre2(r0)) => l0.as_str() == r0.as_str(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for HybridStringRegex {}
 
 impl HybridStringRegex {
     pub fn new(pattern: &str) -> Result<Self, regex::Error> {
@@ -74,10 +87,7 @@ impl HybridStringRegex {
     pub fn as_str(&self) -> Cow<'_, str> {
         match self {
             HybridStringRegex::Rust(re) => Cow::Borrowed(re.as_str()),
-            HybridStringRegex::Pcre2(_re) => {
-                // PCRE2 doesn't provide pattern access, return placeholder
-                Cow::Borrowed("<pcre2 pattern>")
-            }
+            HybridStringRegex::Pcre2(_re) => Cow::Borrowed(_re.as_str()),
         }
     }
 }

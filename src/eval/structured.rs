@@ -11,14 +11,6 @@ use crate::predicate::StringMatcher;
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
-///
-/// # Examples
-/// ```ignore
-/// let yaml = YamlLoader::load_from_str("port: 8080").unwrap();
-/// let path = vec![PathComponent::Key("port".to_string())];
-/// let results = navigate_yaml(&yaml[0], &path);
-/// assert_eq!(results.len(), 1);
-/// ```
 pub fn navigate_yaml<'a>(
     root: &'a yaml_rust::Yaml,
     path: &[PathComponent],
@@ -425,9 +417,7 @@ fn compare_json_value(
             (serde_json::Value::String(a), serde_json::Value::String(e)) => {
                 compare_strings(a, e, operator)
             }
-            _ => {
-                json_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator))
-            }
+            _ => json_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator)),
         },
     }
 }
@@ -456,9 +446,7 @@ fn compare_toml_value(
         _ => match (actual, expected) {
             (toml::Value::Integer(a), toml::Value::Integer(e)) => compare_i64(*a, *e, operator),
             (toml::Value::String(a), toml::Value::String(e)) => compare_strings(a, e, operator),
-            _ => {
-                toml_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator))
-            }
+            _ => toml_to_string(actual).is_some_and(|s| compare_strings(&s, raw_string, operator)),
         },
     }
 }
