@@ -1,6 +1,6 @@
 use slog::{o, Discard, Logger};
 use std::{fs, time::SystemTime};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 // Shared helper to run temporal test cases
 async fn run_temporal_test(
@@ -44,7 +44,10 @@ async fn run_temporal_test(
 
 #[tokio::test]
 async fn test_relative_time_operations() {
-    let tmp_dir = TempDir::new("detect-temporal-relative").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-relative")
+        .tempdir()
+        .unwrap();
 
     // Create files with different ages
     let files = vec![
@@ -184,7 +187,10 @@ async fn test_relative_time_operations() {
 
 #[tokio::test]
 async fn test_absolute_dates() {
-    let tmp_dir = TempDir::new("detect-temporal-absolute").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-absolute")
+        .tempdir()
+        .unwrap();
 
     // Create files with specific dates
     let today_file = tmp_dir.path().join("today.txt");
@@ -264,7 +270,10 @@ async fn test_absolute_dates() {
 
 #[tokio::test]
 async fn test_time_selectors() {
-    let tmp_dir = TempDir::new("detect-temporal-selectors").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-selectors")
+        .tempdir()
+        .unwrap();
 
     // Create test files
     let test_file = tmp_dir.path().join("test.txt");
@@ -334,7 +343,10 @@ async fn test_time_selectors() {
 
 #[tokio::test]
 async fn test_temporal_combined_queries() {
-    let tmp_dir = TempDir::new("detect-temporal-combined").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-combined")
+        .tempdir()
+        .unwrap();
 
     // Create various files
     let files = vec![
@@ -401,7 +413,10 @@ async fn test_temporal_combined_queries() {
 
 #[tokio::test]
 async fn test_greater_less_or_equal_operators() {
-    let tmp_dir = TempDir::new("detect-temporal-gte-lte").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-gte-lte")
+        .tempdir()
+        .unwrap();
 
     // Create files with precise timestamps
     // Using slightly offset times to avoid boundary issues

@@ -425,13 +425,13 @@ impl Typechecker {
     ///
     /// Quotes are transparent (only for shell escaping).
     /// Always tries to parse content as YAML, falls back to string literal.
-    fn build_yaml_rhs(value: &RawValue) -> yaml_rust::Yaml {
+    fn build_yaml_rhs(value: &RawValue) -> yaml_rust2::Yaml {
         let content = value.as_string();
 
-        yaml_rust::YamlLoader::load_from_str(content)
+        yaml_rust2::YamlLoader::load_from_str(content)
             .ok()
             .and_then(|mut docs| docs.pop())
-            .unwrap_or_else(|| yaml_rust::Yaml::String(content.to_string()))
+            .unwrap_or_else(|| yaml_rust2::Yaml::String(content.to_string()))
     }
 
     /// Build a JSON value from RHS, always attempting parse with string fallback
@@ -469,10 +469,10 @@ impl Typechecker {
     }
 
     /// Check if a YAML value is comparable (numeric or date-like)
-    fn is_comparable_yaml(value: &yaml_rust::Yaml) -> bool {
+    fn is_comparable_yaml(value: &yaml_rust2::Yaml) -> bool {
         matches!(
             value,
-            yaml_rust::Yaml::Integer(_) | yaml_rust::Yaml::Real(_)
+            yaml_rust2::Yaml::Integer(_) | yaml_rust2::Yaml::Real(_)
         )
     }
 

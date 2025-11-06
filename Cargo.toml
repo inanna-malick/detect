@@ -4,6 +4,7 @@ description = "Detect files on your filesystem using arbitrary expression langua
 license = "MIT OR Apache-2.0"
 version = "0.3.0"
 edition = "2021"
+rust-version = "1.70"
 repository = "https://github.com/inanna-malick/detect/"
 homepage = "https://github.com/inanna-malick/detect/"
 keywords = ["egrep", "grep", "pattern", "regex", "search"]
@@ -33,7 +34,13 @@ chrono = "0.4"
 thiserror = "2.0"
 miette = { version = "7.6.0", features = ["fancy"] }
 toml = "0.9.8"
-yaml-rust = "0.4.5"
+yaml-rust2 = "0.10.4"
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

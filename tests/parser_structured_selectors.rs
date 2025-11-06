@@ -60,7 +60,7 @@ fn parse_unquoted_number() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("port".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(8080),
+            value: yaml_rust2::Yaml::Integer(8080),
             raw_string: "8080".to_string(),
         },
     );
@@ -80,7 +80,7 @@ fn parse_quoted_number_as_string() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("port".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(8080),
+            value: yaml_rust2::Yaml::Integer(8080),
             raw_string: "8080".to_string(),
         },
     );
@@ -100,7 +100,7 @@ fn parse_unquoted_bool_true() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("enabled".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Boolean(true),
+            value: yaml_rust2::Yaml::Boolean(true),
             raw_string: "true".to_string(),
         },
     );
@@ -120,7 +120,7 @@ fn parse_unquoted_bool_false() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("enabled".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Boolean(false),
+            value: yaml_rust2::Yaml::Boolean(false),
             raw_string: "false".to_string(),
         },
     );
@@ -140,7 +140,7 @@ fn parse_quoted_bool_as_string() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("enabled".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Boolean(true),
+            value: yaml_rust2::Yaml::Boolean(true),
             raw_string: "true".to_string(),
         },
     );
@@ -160,7 +160,7 @@ fn parse_unquoted_string_fallback() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("name".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("api".to_string()),
+            value: yaml_rust2::Yaml::String("api".to_string()),
             raw_string: "api".to_string(),
         },
     );
@@ -184,7 +184,7 @@ fn parse_yaml_format() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("name".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("test".to_string()),
+            value: yaml_rust2::Yaml::String("test".to_string()),
             raw_string: "test".to_string(),
         },
     );
@@ -251,7 +251,7 @@ fn parse_single_key_path() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("name".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("test".to_string()),
+            value: yaml_rust2::Yaml::String("test".to_string()),
             raw_string: "test".to_string(),
         },
     );
@@ -274,7 +274,7 @@ fn parse_nested_keys() {
                 PathComponent::Key("replicas".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(5),
+            value: yaml_rust2::Yaml::Integer(5),
             raw_string: "5".to_string(),
         },
     );
@@ -321,7 +321,7 @@ fn parse_wildcard_array_path() {
                 PathComponent::Key("id".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(42),
+            value: yaml_rust2::Yaml::Integer(42),
             raw_string: "42".to_string(),
         },
     );
@@ -346,7 +346,7 @@ fn parse_complex_path() {
                 PathComponent::Key("image".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("nginx".to_string()),
+            value: yaml_rust2::Yaml::String("nginx".to_string()),
             raw_string: "nginx".to_string(),
         },
     );
@@ -370,7 +370,7 @@ fn parse_comparison_greater() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("count".to_string())],
             operator: StructuredOperator::Greater,
-            value: yaml_rust::Yaml::Integer(5),
+            value: yaml_rust2::Yaml::Integer(5),
             raw_string: "5".to_string(),
         },
     );
@@ -390,7 +390,7 @@ fn parse_comparison_greater_equal() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("count".to_string())],
             operator: StructuredOperator::GreaterOrEqual,
-            value: yaml_rust::Yaml::Integer(10),
+            value: yaml_rust2::Yaml::Integer(10),
             raw_string: "10".to_string(),
         },
     );
@@ -410,7 +410,7 @@ fn parse_comparison_less() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("count".to_string())],
             operator: StructuredOperator::Less,
-            value: yaml_rust::Yaml::Integer(100),
+            value: yaml_rust2::Yaml::Integer(100),
             raw_string: "100".to_string(),
         },
     );
@@ -425,8 +425,7 @@ fn parse_regex_operator() {
     let typed_expr =
         Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
-    let matcher =
-        StringMatcher::Regex(detect::hybrid_regex::HybridRegex::new("test.*").unwrap());
+    let matcher = StringMatcher::Regex(detect::hybrid_regex::HybridRegex::new("test.*").unwrap());
 
     let expected = build_expected_synthetic(
         "yaml",
@@ -490,7 +489,7 @@ fn parse_and_expression() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("kind".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("Deployment".to_string()),
+            value: yaml_rust2::Yaml::String("Deployment".to_string()),
             raw_string: "Deployment".to_string(),
         },
     );
@@ -504,7 +503,7 @@ fn parse_and_expression() {
                 PathComponent::Key("replicas".to_string()),
             ],
             operator: StructuredOperator::Greater,
-            value: yaml_rust::Yaml::Integer(5),
+            value: yaml_rust2::Yaml::Integer(5),
             raw_string: "5".to_string(),
         },
     );
@@ -532,7 +531,7 @@ fn parse_mixed_selectors() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("debug".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Boolean(true),
+            value: yaml_rust2::Yaml::Boolean(true),
             raw_string: "true".to_string(),
         },
     );
@@ -613,7 +612,7 @@ fn parse_negative_number() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("offset".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(-10),
+            value: yaml_rust2::Yaml::Integer(-10),
             raw_string: "-10".to_string(),
         },
     );
@@ -633,7 +632,7 @@ fn parse_zero() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::Key("count".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(0),
+            value: yaml_rust2::Yaml::Integer(0),
             raw_string: "0".to_string(),
         },
     );
@@ -657,7 +656,7 @@ fn parse_simple_recursive_descent() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::RecursiveKey("password".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("secret".to_string()),
+            value: yaml_rust2::Yaml::String("secret".to_string()),
             raw_string: "secret".to_string(),
         },
     );
@@ -677,7 +676,7 @@ fn parse_recursive_debug_flag() {
         StructuredDataPredicate::YamlValue {
             path: vec![PathComponent::RecursiveKey("debug".to_string())],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Boolean(true),
+            value: yaml_rust2::Yaml::Boolean(true),
             raw_string: "true".to_string(),
         },
     );
@@ -700,7 +699,7 @@ fn parse_key_then_recursive() {
                 PathComponent::RecursiveKey("password".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("admin".to_string()),
+            value: yaml_rust2::Yaml::String("admin".to_string()),
             raw_string: "admin".to_string(),
         },
     );
@@ -724,7 +723,7 @@ fn parse_recursive_then_path() {
                 PathComponent::Key("app".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("web".to_string()),
+            value: yaml_rust2::Yaml::String("web".to_string()),
             raw_string: "web".to_string(),
         },
     );
@@ -759,9 +758,8 @@ fn parse_recursive_with_regex() {
     let typed_expr =
         Typechecker::typecheck(raw_expr, input, &detect::RuntimeConfig::default()).unwrap();
 
-    let matcher = StringMatcher::Regex(
-        detect::hybrid_regex::HybridRegex::new(r".*@example\.com").unwrap(),
-    );
+    let matcher =
+        StringMatcher::Regex(detect::hybrid_regex::HybridRegex::new(r".*@example\.com").unwrap());
 
     let expected = build_expected_synthetic(
         "json",
@@ -789,7 +787,7 @@ fn parse_multiple_recursive() {
                 PathComponent::RecursiveKey("database".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("postgres".to_string()),
+            value: yaml_rust2::Yaml::String("postgres".to_string()),
             raw_string: "postgres".to_string(),
         },
     );
@@ -813,7 +811,7 @@ fn parse_recursive_with_array_index() {
                 PathComponent::Key("name".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::String("alice".to_string()),
+            value: yaml_rust2::Yaml::String("alice".to_string()),
             raw_string: "alice".to_string(),
         },
     );
@@ -837,7 +835,7 @@ fn parse_recursive_with_wildcard() {
                 PathComponent::Key("id".to_string()),
             ],
             operator: StructuredOperator::Equals,
-            value: yaml_rust::Yaml::Integer(42),
+            value: yaml_rust2::Yaml::Integer(42),
             raw_string: "42".to_string(),
         },
     );

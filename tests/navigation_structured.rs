@@ -10,45 +10,45 @@ use detect::parser::structured_path::parse_path;
 // ============================================================================
 
 /// Helper to construct YAML integer
-fn yaml_int(i: i64) -> yaml_rust::Yaml {
-    yaml_rust::Yaml::Integer(i)
+fn yaml_int(i: i64) -> yaml_rust2::Yaml {
+    yaml_rust2::Yaml::Integer(i)
 }
 
 /// Helper to construct YAML string
-fn yaml_str(s: &str) -> yaml_rust::Yaml {
-    yaml_rust::Yaml::String(s.to_string())
+fn yaml_str(s: &str) -> yaml_rust2::Yaml {
+    yaml_rust2::Yaml::String(s.to_string())
 }
 
 /// Helper to construct YAML boolean
-fn yaml_bool(b: bool) -> yaml_rust::Yaml {
-    yaml_rust::Yaml::Boolean(b)
+fn yaml_bool(b: bool) -> yaml_rust2::Yaml {
+    yaml_rust2::Yaml::Boolean(b)
 }
 
 /// Helper to construct YAML array
-fn yaml_array(items: Vec<yaml_rust::Yaml>) -> yaml_rust::Yaml {
-    yaml_rust::Yaml::Array(items)
+fn yaml_array(items: Vec<yaml_rust2::Yaml>) -> yaml_rust2::Yaml {
+    yaml_rust2::Yaml::Array(items)
 }
 
 /// Helper to construct YAML hash/object
-fn yaml_hash(pairs: Vec<(&str, yaml_rust::Yaml)>) -> yaml_rust::Yaml {
-    use yaml_rust::yaml::Hash;
+fn yaml_hash(pairs: Vec<(&str, yaml_rust2::Yaml)>) -> yaml_rust2::Yaml {
+    use yaml_rust2::yaml::Hash;
     let mut map = Hash::new();
     for (k, v) in pairs {
-        map.insert(yaml_rust::Yaml::String(k.to_string()), v);
+        map.insert(yaml_rust2::Yaml::String(k.to_string()), v);
     }
-    yaml_rust::Yaml::Hash(map)
+    yaml_rust2::Yaml::Hash(map)
 }
 
 /// YAML navigation test case
 struct YamlNavCase {
     name: &'static str,
-    document: yaml_rust::Yaml,
+    document: yaml_rust2::Yaml,
     path: &'static str,
-    expected: Vec<yaml_rust::Yaml>,
+    expected: Vec<yaml_rust2::Yaml>,
 }
 
 /// Check if two slices contain the same elements (order-insensitive)
-fn yaml_sets_equal(a: &[&yaml_rust::Yaml], b: &[yaml_rust::Yaml]) -> bool {
+fn yaml_sets_equal(a: &[&yaml_rust2::Yaml], b: &[yaml_rust2::Yaml]) -> bool {
     if a.len() != b.len() {
         return false;
     }

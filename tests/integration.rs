@@ -1,7 +1,7 @@
 use std::{env::set_current_dir, fs::create_dir_all};
 
 use slog::{o, Discard, Logger};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 // Test helper functions
 fn test_logger() -> Logger {
@@ -37,7 +37,10 @@ struct Case<'a> {
 
 impl<'a> Case<'a> {
     fn build(&self) -> TempDir {
-        let t = TempDir::new("fileset-expr").unwrap();
+        let t = tempfile::Builder::new()
+            .prefix("fileset-expr")
+            .tempdir()
+            .unwrap();
         let tmp_path = t.path().to_str().unwrap();
         for file in self.files.iter() {
             create_dir_all(format!("{}/{}", tmp_path, file.path)).unwrap();
@@ -391,7 +394,10 @@ async fn test_set_operations() {
 #[tokio::test]
 async fn test_type_selectors() {
     // Type tests need special handling for directories
-    let tmp_dir = TempDir::new("detect-type").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-type")
+        .tempdir()
+        .unwrap();
 
     // Create files and directories
     std::fs::write(tmp_dir.path().join("file1.txt"), "content").unwrap();
@@ -547,7 +553,10 @@ async fn test_complex_queries() {
 
 #[tokio::test]
 async fn test_symlinks() {
-    let tmp_dir = TempDir::new("detect-symlinks").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-symlinks")
+        .tempdir()
+        .unwrap();
 
     // Create target files
     let target = tmp_dir.path().join("target.txt");
@@ -1083,7 +1092,10 @@ async fn test_multi_dot_extensions() {
 
 #[tokio::test]
 async fn test_binary_and_non_utf8_content() {
-    let tmp_dir = TempDir::new("detect-binary").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-binary")
+        .tempdir()
+        .unwrap();
 
     let text_file = tmp_dir.path().join("text.txt");
     std::fs::write(&text_file, "Hello world").unwrap();

@@ -12,9 +12,9 @@ use crate::predicate::StringMatcher;
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
 pub fn navigate_yaml<'a>(
-    root: &'a yaml_rust::Yaml,
+    root: &'a yaml_rust2::Yaml,
     path: &[PathComponent],
-) -> Vec<&'a yaml_rust::Yaml> {
+) -> Vec<&'a yaml_rust2::Yaml> {
     let mut current_values = vec![root];
 
     for component in path {
@@ -38,7 +38,7 @@ pub fn navigate_yaml<'a>(
             PathComponent::Index(idx) => {
                 for value in current_values {
                     // yaml-rust implements Index<usize>: yaml[0] returns &Yaml or BadValue
-                    if let yaml_rust::Yaml::Array(arr) = value {
+                    if let yaml_rust2::Yaml::Array(arr) = value {
                         if let Some(element) = arr.get(*idx) {
                             next_values.push(element);
                         }
@@ -48,7 +48,7 @@ pub fn navigate_yaml<'a>(
 
             PathComponent::WildcardIndex => {
                 for value in current_values {
-                    if let yaml_rust::Yaml::Array(arr) = value {
+                    if let yaml_rust2::Yaml::Array(arr) = value {
                         next_values.extend(arr.iter());
                     }
                 }
@@ -70,17 +70,17 @@ pub fn navigate_yaml<'a>(
 
 /// Iteratively collect all values for a given key in the YAML subtree
 fn collect_recursive_yaml_key<'a>(
-    root: &'a yaml_rust::Yaml,
+    root: &'a yaml_rust2::Yaml,
     key: &str,
-    results: &mut Vec<&'a yaml_rust::Yaml>,
+    results: &mut Vec<&'a yaml_rust2::Yaml>,
 ) {
     let mut work_queue = vec![root];
 
     while let Some(node) = work_queue.pop() {
         match node {
-            yaml_rust::Yaml::Hash(map) => {
+            yaml_rust2::Yaml::Hash(map) => {
                 for (k, v) in map.iter() {
-                    if let yaml_rust::Yaml::String(key_str) = k {
+                    if let yaml_rust2::Yaml::String(key_str) = k {
                         if key_str == key {
                             results.push(v);
                         }
@@ -89,7 +89,7 @@ fn collect_recursive_yaml_key<'a>(
                     work_queue.push(v);
                 }
             }
-            yaml_rust::Yaml::Array(arr) => {
+            yaml_rust2::Yaml::Array(arr) => {
                 // Traverse array elements
                 work_queue.extend(arr.iter());
             }
@@ -271,13 +271,13 @@ fn collect_recursive_toml_key<'a>(
 
 /// Convert YAML value to string for fallback comparison
 /// Returns None for complex types (arrays, objects) that aren't comparable
-fn yaml_to_string(value: &yaml_rust::Yaml) -> Option<String> {
+fn yaml_to_string(value: &yaml_rust2::Yaml) -> Option<String> {
     match value {
-        yaml_rust::Yaml::Integer(i) => Some(i.to_string()),
-        yaml_rust::Yaml::String(s) => Some(s.clone()),
-        yaml_rust::Yaml::Boolean(b) => Some(b.to_string()),
-        yaml_rust::Yaml::Real(s) => Some(s.clone()),
-        yaml_rust::Yaml::Null => Some("null".to_string()),
+        yaml_rust2::Yaml::Integer(i) => Some(i.to_string()),
+        yaml_rust2::Yaml::String(s) => Some(s.clone()),
+        yaml_rust2::Yaml::Boolean(b) => Some(b.to_string()),
+        yaml_rust2::Yaml::Real(s) => Some(s.clone()),
+        yaml_rust2::Yaml::Null => Some("null".to_string()),
         _ => None,
     }
 }
@@ -343,9 +343,9 @@ fn compare_f64(a: f64, b: f64, operator: StructuredOperator) -> bool {
 
 /// Compare a single YAML value with expected value and operator
 fn compare_yaml_value(
-    actual: &yaml_rust::Yaml,
+    actual: &yaml_rust2::Yaml,
     operator: StructuredOperator,
-    expected: &yaml_rust::Yaml,
+    expected: &yaml_rust2::Yaml,
     raw_string: &str,
 ) -> bool {
     match operator {
@@ -364,10 +364,10 @@ fn compare_yaml_value(
 
         // Ordering operators require same types or string fallback
         _ => match (actual, expected) {
-            (yaml_rust::Yaml::Integer(a), yaml_rust::Yaml::Integer(e)) => {
+            (yaml_rust2::Yaml::Integer(a), yaml_rust2::Yaml::Integer(e)) => {
                 compare_i64(*a, *e, operator)
             }
-            (yaml_rust::Yaml::String(a), yaml_rust::Yaml::String(e)) => {
+            (yaml_rust2::Yaml::String(a), yaml_rust2::Yaml::String(e)) => {
                 compare_strings(a, e, operator)
             }
             _ => {
@@ -450,9 +450,9 @@ fn compare_toml_value(
 
 /// Compare YAML values (OR semantics: returns true if ANY value matches)
 pub fn compare_yaml_values(
-    actual_values: &[&yaml_rust::Yaml],
+    actual_values: &[&yaml_rust2::Yaml],
     operator: StructuredOperator,
-    expected: &yaml_rust::Yaml,
+    expected: &yaml_rust2::Yaml,
     raw_string: &str,
 ) -> bool {
     actual_values
@@ -485,7 +485,7 @@ pub fn compare_toml_values(
 }
 
 /// Match YAML values against string matcher (OR semantics)
-pub fn match_yaml_strings(actual_values: &[&yaml_rust::Yaml], matcher: &StringMatcher) -> bool {
+pub fn match_yaml_strings(actual_values: &[&yaml_rust2::Yaml], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
     }
@@ -621,7 +621,7 @@ pub fn eval_structured_predicate(
 /// Lazy parse cache for structured data formats
 /// Ensures each format is only parsed once per file evaluation
 pub struct ParsedDocuments {
-    yaml: Option<Result<Vec<yaml_rust::Yaml>, String>>,
+    yaml: Option<Result<Vec<yaml_rust2::Yaml>, String>>,
     json: Option<Result<serde_json::Value, String>>,
     toml: Option<Result<toml::Value, String>>,
 }
@@ -641,10 +641,10 @@ impl ParsedDocuments {
         }
     }
 
-    pub fn get_or_parse_yaml(&mut self, contents: &str) -> &Result<Vec<yaml_rust::Yaml>, String> {
+    pub fn get_or_parse_yaml(&mut self, contents: &str) -> &Result<Vec<yaml_rust2::Yaml>, String> {
         if self.yaml.is_none() {
             self.yaml = Some(
-                yaml_rust::YamlLoader::load_from_str(contents)
+                yaml_rust2::YamlLoader::load_from_str(contents)
                     .map_err(|e| format!("YAML parse error: {}", e)),
             );
         }
@@ -672,7 +672,7 @@ impl ParsedDocuments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yaml_rust::YamlLoader;
+    use yaml_rust2::YamlLoader;
 
     #[test]
     fn test_navigate_yaml_simple_key() {
@@ -681,7 +681,7 @@ mod tests {
         let results = navigate_yaml(&yaml[0], &path);
 
         assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], yaml_rust::Yaml::Integer(8080)));
+        assert!(matches!(results[0], yaml_rust2::Yaml::Integer(8080)));
     }
 
     #[test]
@@ -694,7 +694,7 @@ mod tests {
         let results = navigate_yaml(&yaml[0], &path);
 
         assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], yaml_rust::Yaml::Integer(3)));
+        assert!(matches!(results[0], yaml_rust2::Yaml::Integer(3)));
     }
 
     #[test]
@@ -707,7 +707,7 @@ mod tests {
         let results = navigate_yaml(&yaml[0], &path);
 
         assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], yaml_rust::Yaml::String(s) if s == "bar"));
+        assert!(matches!(results[0], yaml_rust2::Yaml::String(s) if s == "bar"));
     }
 
     #[test]
@@ -774,7 +774,7 @@ mod tests {
     #[test]
     fn test_yaml_integer_equals() {
         let yaml = YamlLoader::load_from_str("port: 8080").unwrap();
-        let expected = yaml_rust::Yaml::Integer(8080);
+        let expected = yaml_rust2::Yaml::Integer(8080);
         let path = vec![PathComponent::Key("port".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn test_yaml_integer_greater() {
         let yaml = YamlLoader::load_from_str("count: 100").unwrap();
-        let expected = yaml_rust::Yaml::Integer(50);
+        let expected = yaml_rust2::Yaml::Integer(50);
         let path = vec![PathComponent::Key("count".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -804,7 +804,7 @@ mod tests {
     #[test]
     fn test_yaml_integer_less() {
         let yaml = YamlLoader::load_from_str("count: 10").unwrap();
-        let expected = yaml_rust::Yaml::Integer(50);
+        let expected = yaml_rust2::Yaml::Integer(50);
         let path = vec![PathComponent::Key("count".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -819,7 +819,7 @@ mod tests {
     #[test]
     fn test_yaml_string_equals() {
         let yaml = YamlLoader::load_from_str("name: test").unwrap();
-        let expected = yaml_rust::Yaml::String("test".to_string());
+        let expected = yaml_rust2::Yaml::String("test".to_string());
         let path = vec![PathComponent::Key("name".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -834,7 +834,7 @@ mod tests {
     #[test]
     fn test_yaml_string_greater_lexicographic() {
         let yaml = YamlLoader::load_from_str("name: zebra").unwrap();
-        let expected = yaml_rust::Yaml::String("apple".to_string());
+        let expected = yaml_rust2::Yaml::String("apple".to_string());
         let path = vec![PathComponent::Key("name".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -849,7 +849,7 @@ mod tests {
     #[test]
     fn test_yaml_boolean_equals() {
         let yaml = YamlLoader::load_from_str("enabled: true").unwrap();
-        let expected = yaml_rust::Yaml::Boolean(true);
+        let expected = yaml_rust2::Yaml::Boolean(true);
         let path = vec![PathComponent::Key("enabled".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -865,7 +865,7 @@ mod tests {
     fn test_yaml_type_mismatch_fallback() {
         // File has string "8080", query expects integer 8080
         let yaml = YamlLoader::load_from_str("port: \"8080\"").unwrap();
-        let expected = yaml_rust::Yaml::Integer(8080);
+        let expected = yaml_rust2::Yaml::Integer(8080);
         let path = vec![PathComponent::Key("port".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -882,7 +882,7 @@ mod tests {
     fn test_yaml_type_mismatch_no_match() {
         // File has string "wrong", query expects integer 8080
         let yaml = YamlLoader::load_from_str("port: wrong").unwrap();
-        let expected = yaml_rust::Yaml::Integer(8080);
+        let expected = yaml_rust2::Yaml::Integer(8080);
         let path = vec![PathComponent::Key("port".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -898,7 +898,7 @@ mod tests {
     #[test]
     fn test_yaml_null_equals() {
         let yaml = YamlLoader::load_from_str("value: null").unwrap();
-        let expected = yaml_rust::Yaml::Null;
+        let expected = yaml_rust2::Yaml::Null;
         let path = vec![PathComponent::Key("value".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -914,7 +914,7 @@ mod tests {
     fn test_yaml_array_no_match() {
         // Arrays can't be compared with scalars
         let yaml = YamlLoader::load_from_str("items: [1, 2, 3]").unwrap();
-        let expected = yaml_rust::Yaml::Integer(5);
+        let expected = yaml_rust2::Yaml::Integer(5);
         let path = vec![PathComponent::Key("items".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -929,7 +929,7 @@ mod tests {
     #[test]
     fn test_yaml_empty_results_no_match() {
         let yaml = YamlLoader::load_from_str("port: 8080").unwrap();
-        let expected = yaml_rust::Yaml::Integer(8080);
+        let expected = yaml_rust2::Yaml::Integer(8080);
         let path = vec![PathComponent::Key("missing".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -947,7 +947,7 @@ mod tests {
     fn test_yaml_wildcard_or_semantics() {
         // Array with multiple values - ANY match returns true
         let yaml = YamlLoader::load_from_str("ports: [8080, 9090, 3000]").unwrap();
-        let expected = yaml_rust::Yaml::Integer(9090);
+        let expected = yaml_rust2::Yaml::Integer(9090);
         let path = vec![
             PathComponent::Key("ports".to_string()),
             PathComponent::WildcardIndex,
@@ -968,7 +968,7 @@ mod tests {
     fn test_yaml_wildcard_no_match() {
         // Array with multiple values - none match
         let yaml = YamlLoader::load_from_str("ports: [8080, 9090, 3000]").unwrap();
-        let expected = yaml_rust::Yaml::Integer(5000);
+        let expected = yaml_rust2::Yaml::Integer(5000);
         let path = vec![
             PathComponent::Key("ports".to_string()),
             PathComponent::WildcardIndex,
@@ -1106,7 +1106,7 @@ mod tests {
     #[test]
     fn test_yaml_integer_not_equals() {
         let yaml = YamlLoader::load_from_str("port: 8080").unwrap();
-        let expected = yaml_rust::Yaml::Integer(9090);
+        let expected = yaml_rust2::Yaml::Integer(9090);
         let path = vec![PathComponent::Key("port".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -1121,7 +1121,7 @@ mod tests {
     #[test]
     fn test_yaml_string_not_equals() {
         let yaml = YamlLoader::load_from_str("name: foo").unwrap();
-        let expected = yaml_rust::Yaml::String("bar".to_string());
+        let expected = yaml_rust2::Yaml::String("bar".to_string());
         let path = vec![PathComponent::Key("name".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -1136,7 +1136,7 @@ mod tests {
     #[test]
     fn test_yaml_not_equals_type_coercion() {
         let yaml = YamlLoader::load_from_str("port: 8080").unwrap();
-        let expected = yaml_rust::Yaml::String("8080".to_string());
+        let expected = yaml_rust2::Yaml::String("8080".to_string());
         let path = vec![PathComponent::Key("port".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -1181,7 +1181,7 @@ mod tests {
     #[test]
     fn test_yaml_not_equals_null() {
         let yaml = YamlLoader::load_from_str("value: null").unwrap();
-        let expected = yaml_rust::Yaml::String("something".to_string());
+        let expected = yaml_rust2::Yaml::String("something".to_string());
         let path = vec![PathComponent::Key("value".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 
@@ -1326,7 +1326,7 @@ mod tests {
     #[test]
     fn test_yaml_boolean_not_equals() {
         let yaml = YamlLoader::load_from_str("enabled: true").unwrap();
-        let expected = yaml_rust::Yaml::Boolean(false);
+        let expected = yaml_rust2::Yaml::Boolean(false);
         let path = vec![PathComponent::Key("enabled".to_string())];
         let values = navigate_yaml(&yaml[0], &path);
 

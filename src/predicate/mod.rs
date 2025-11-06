@@ -615,11 +615,10 @@ impl NamePredicate {
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s))
             }
-            NamePredicate::FileName(x) => {
-                path.file_name()
-                    .and_then(|os_str| os_str.to_str())
-                    .is_some_and(|s| x.is_match(s))
-            }
+            NamePredicate::FileName(x) => path
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .is_some_and(|s| x.is_match(s)),
             NamePredicate::DirPath(x) => {
                 // If base_path is provided, make the parent path relative to it
                 if let Some(base) = base_path {
@@ -755,7 +754,7 @@ pub enum StructuredDataPredicate {
     YamlValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
-        value: yaml_rust::Yaml,
+        value: yaml_rust2::Yaml,
         raw_string: String,
     },
     YamlString {

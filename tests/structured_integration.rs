@@ -4,7 +4,7 @@
 //! type coercion, and the 2x2 match logic optimization.
 
 use slog::{o, Discard, Logger};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 // Load fixtures at compile time
 const CONFIG_YAML: &str = include_str!("fixtures/structured/config.yaml");
@@ -38,7 +38,10 @@ fn test_logger() -> Logger {
 
 /// Helper to run a structured query test
 async fn run_structured_test(files: Vec<(&str, &str)>, expr: &str, expected_matches: Vec<&str>) {
-    let t = TempDir::new("structured_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("structured_test")
+        .tempdir()
+        .unwrap();
 
     // Write fixture files
     for (filename, content) in files {
@@ -615,7 +618,10 @@ async fn test_binary_yaml_file_no_crash() {
     // Structured predicate should return false gracefully
     let binary_content = include_bytes!("fixtures/structured/binary.yaml");
 
-    let t = TempDir::new("binary_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("binary_test")
+        .tempdir()
+        .unwrap();
     std::fs::write(t.path().join("binary.yaml"), binary_content).unwrap();
 
     let mut matches = Vec::new();
@@ -644,7 +650,10 @@ async fn test_binary_file_content_predicate_works() {
     // Even if structured predicate fails, content predicate on bytes should work
     let binary_content = include_bytes!("fixtures/structured/binary.yaml");
 
-    let t = TempDir::new("binary_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("binary_test")
+        .tempdir()
+        .unwrap();
     std::fs::write(t.path().join("binary.yaml"), binary_content).unwrap();
 
     let mut matches = Vec::new();
@@ -1295,7 +1304,10 @@ async fn test_toml_negative_float() {
 
 #[tokio::test]
 async fn test_structured_skipped_when_file_exceeds_size_limit() {
-    let t = TempDir::new("structured_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("structured_test")
+        .tempdir()
+        .unwrap();
 
     // Write file that would match if parsed
     std::fs::write(t.path().join("large.yaml"), LARGE_CONFIG_YAML).unwrap();
