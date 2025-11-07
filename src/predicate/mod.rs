@@ -20,7 +20,7 @@ use std::{
 use crate::expr::short_circuit::ShortCircuit;
 use crate::predicate_error::PredicateParseError;
 use crate::util::Done;
-use chrono::{DateTime, Duration, Local, NaiveDate};
+use chrono::{DateTime, Local};
 
 /// File type enumeration for type predicates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -129,77 +129,8 @@ impl EnumPredicate for DetectFileType {
     }
 }
 
-fn parse_duration(
-    number: i64,
-    unit: &str,
-    original: &str,
-) -> Result<Duration, PredicateParseError> {
-    match unit {
-        "seconds" | "second" | "secs" | "sec" | "s" => Ok(Duration::seconds(number)),
-        "minutes" | "minute" | "mins" | "min" | "m" => Ok(Duration::minutes(number)),
-        "hours" | "hour" | "hrs" | "hr" | "h" => Ok(Duration::hours(number)),
-        "days" | "day" | "d" => Ok(Duration::days(number)),
-        "weeks" | "week" | "w" => Ok(Duration::weeks(number)),
-        _ => Err(PredicateParseError::Temporal(format!(
-            "{original}: unknown unit: {unit}"
-        ))),
-    }
-}
-
-pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, PredicateParseError> {
-    let (is_negative, stripped) = if let Some(rest) = s.strip_prefix('-') {
-        (true, rest)
-    } else {
-        (false, s)
-    };
-
-    if let Some((num_str, unit)) = stripped.split_once('.') {
-        if let Ok(number) = num_str.parse::<i64>() {
-            let duration = parse_duration(number, unit, s)?;
-            return if is_negative {
-                Ok(Local::now() - duration)
-            } else {
-                Ok(Local::now() + duration)
-            };
-        }
-    }
-
-    let digit_end = stripped.find(|c: char| !c.is_ascii_digit());
-    if let Some(idx) = digit_end {
-        let num_str = &stripped[..idx];
-        let unit = &stripped[idx..];
-
-        if !unit.starts_with('-') {
-            if let Ok(number) = num_str.parse::<i64>() {
-                if !unit.is_empty() {
-                    if let Ok(duration) = parse_duration(number, unit, s) {
-                        return if is_negative {
-                            Ok(Local::now() - duration)
-                        } else {
-                            Ok(Local::now() + duration)
-                        };
-                    }
-                }
-            }
-        }
-    }
-
-    if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        if let Some(time) = date.and_hms_opt(0, 0, 0) {
-            if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
-                return Ok(local_time);
-            }
-        }
-        return Err(PredicateParseError::Temporal(format!("{s}: invalid date")));
-    }
-
-    match DateTime::parse_from_rfc3339(s) {
-        Ok(dt) => Ok(dt.with_timezone(&Local)),
-        Err(e) => Err(PredicateParseError::Temporal(format!(
-            "{s}: invalid date: {e}"
-        ))),
-    }
-}
+// Re-export parse_time_value from parser module
+pub use crate::parser::parse_time_value;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RhsValue {

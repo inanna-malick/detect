@@ -3,6 +3,7 @@ pub mod ast;
 pub mod error;
 pub mod raw;
 pub mod structured_path;
+pub mod time;
 pub mod typechecker;
 pub mod typed;
 
@@ -12,4 +13,5 @@ pub use ast::{test_utils, RawExpr, RawPredicate, RawValue};
 pub use error::RawParseError;
 pub use raw::RawParser;
 pub use structured_path::{parse_path, PathComponent, PathParseError};
+pub use time::parse_time_value;
 pub use typechecker::{TypecheckError, Typechecker};
