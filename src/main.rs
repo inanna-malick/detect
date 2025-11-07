@@ -1,6 +1,6 @@
 use std::{env::current_dir, io::Write, path::PathBuf, str::FromStr};
 
-use clap::{command, Parser};
+use clap::Parser;
 use detect::{parse_and_run_fs, RuntimeConfig};
 use slog::{o, Drain, Level, Logger};
 

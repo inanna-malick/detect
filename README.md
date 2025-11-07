@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/detect.svg)](https://crates.io/crates/detect)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/inanna-malick/detect)
 
-A fast, powerful tool for finding files by name, content, and metadata using an expressive query language. A readable, intuitive replacement for complex `find`/`grep` pipelines.
+Find files using an expression language that combines name, content, metadata, and structured data (YAML/JSON/TOML) predicates.
 
 ```bash
 # Find TypeScript files with async code
@@ -16,7 +16,7 @@ detect 'size > 50kb AND modified > -7d AND content contains TODO'
 detect 'ext in [jsx,tsx] AND content ~= "function \w+\(" AND NOT path contains test'
 ```
 
-## Why detect?
+## Comparison to find/grep
 
 Traditional Unix tools require chaining multiple commands with cryptic syntax:
 
@@ -28,7 +28,7 @@ find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
 ```
 
-One tool, one expression. Query filename, size, timestamps, and content together. Validates queries at parse-time so you catch typos immediately.
+Combines filename, size, timestamp, and content matching in a single expression. Parse-time validation catches typos before execution.
 
 ## Installation
 
@@ -212,7 +212,7 @@ For: `type`
 
 ## Examples
 
-### Getting Started
+### Basic Usage
 
 ```bash
 # All Rust files
@@ -330,7 +330,7 @@ Respects `.gitignore` by default. Traverses directories in parallel. Structured 
 
 Licensed under either of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.

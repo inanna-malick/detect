@@ -74,9 +74,8 @@ pub async fn eval<'dfa>(
         if let Expr::Literal(b) = e {
             debug!(logger, "evaluation finished"; "result" => b);
             return Ok(b);
-        } else {
-            unreachable!("all predicates should be reduced to literals after evaluation")
         }
+        unreachable!("all predicates should be reduced to literals after evaluation")
     }
 
     match (has_structured, has_content) {
@@ -87,77 +86,74 @@ pub async fn eval<'dfa>(
             );
             let bytes = tokio::fs::read(path).await?;
 
-            match std::str::from_utf8(&bytes) {
-                Ok(contents) => {
-                    // UTF-8: evaluate structured predicates first
-                    let mut cache = ParsedDocuments::new();
-                    let e = e.reduce_predicate_and_short_circuit(|p| match p {
-                        Predicate::Structured(s) => {
-                            match eval_structured_predicate(&s, contents, &mut cache) {
-                                Ok(result) => ShortCircuit::Known(result),
-                                Err(_) => ShortCircuit::Known(false),
-                            }
+            if let Ok(contents) = std::str::from_utf8(&bytes) {
+                // UTF-8: evaluate structured predicates first
+                let mut cache = ParsedDocuments::new();
+                let e = e.reduce_predicate_and_short_circuit(|p| match p {
+                    Predicate::Structured(s) => {
+                        match eval_structured_predicate(&s, contents, &mut cache) {
+                            Ok(result) => ShortCircuit::Known(result),
+                            Err(_) => ShortCircuit::Known(false),
                         }
-                        Predicate::Content(c) => ShortCircuit::Unknown(Predicate::Content(c)),
-                        _ => unreachable!("only Structured and Content predicates should remain"),
-                    });
-
-                    if let Expr::Literal(b) = e {
-                        debug!(logger, "short circuit after structured predicates"; "result" => b);
-                        return Ok(b);
                     }
+                    Predicate::Content(c) => ShortCircuit::Unknown(Predicate::Content(c)),
+                    _ => unreachable!("only Structured and Content predicates should remain"),
+                });
 
-                    // Evaluate content predicates using in-memory stream (8KB chunks)
-                    const CHUNK_SIZE: usize = 8192;
-                    let chunks: Vec<Result<Vec<u8>, std::io::Error>> = bytes
-                        .chunks(CHUNK_SIZE)
-                        .map(|chunk| Ok(chunk.to_vec()))
-                        .collect();
-
-                    let e = run_contents_predicate_stream(e, stream::iter(chunks)).await?;
-
-                    if let Expr::Literal(b) = e {
-                        debug!(logger, "evaluation finished"; "result" => b);
-                        Ok(b)
-                    } else {
-                        unreachable!(
-                            "all content predicates should be reduced to literals after streaming"
-                        )
-                    }
+                if let Expr::Literal(b) = e {
+                    debug!(logger, "short circuit after structured predicates"; "result" => b);
+                    return Ok(b);
                 }
-                Err(_) => {
-                    debug!(
-                        logger,
-                        "file is not UTF-8, structured predicates = false, using streaming content"
-                    );
-                    // Non-UTF-8: structured predicates fail, stream content
-                    let e = e.reduce_predicate_and_short_circuit(|p| match p {
-                        Predicate::Structured(_) => ShortCircuit::Known(false),
-                        Predicate::Content(c) => ShortCircuit::Unknown(Predicate::Content(c)),
-                        _ => unreachable!("only Structured and Content predicates should remain"),
-                    });
 
-                    if let Expr::Literal(b) = e {
-                        debug!(logger, "short circuit after structured=false"; "result" => b);
-                        return Ok(b);
-                    }
+                // Evaluate content predicates using in-memory stream (8KB chunks)
+                const CHUNK_SIZE: usize = 8192;
+                let chunks: Vec<Result<Vec<u8>, std::io::Error>> = bytes
+                    .chunks(CHUNK_SIZE)
+                    .map(|chunk| Ok(chunk.to_vec()))
+                    .collect();
 
-                    const CHUNK_SIZE: usize = 8192;
-                    let chunks: Vec<Result<Vec<u8>, std::io::Error>> = bytes
-                        .chunks(CHUNK_SIZE)
-                        .map(|chunk| Ok(chunk.to_vec()))
-                        .collect();
+                let e = run_contents_predicate_stream(e, stream::iter(chunks)).await?;
 
-                    let e = run_contents_predicate_stream(e, stream::iter(chunks)).await?;
+                if let Expr::Literal(b) = e {
+                    debug!(logger, "evaluation finished"; "result" => b);
+                    Ok(b)
+                } else {
+                    unreachable!(
+                        "all content predicates should be reduced to literals after streaming"
+                    )
+                }
+            } else {
+                debug!(
+                    logger,
+                    "file is not UTF-8, structured predicates = false, using streaming content"
+                );
+                // Non-UTF-8: structured predicates fail, stream content
+                let e = e.reduce_predicate_and_short_circuit(|p| match p {
+                    Predicate::Structured(_) => ShortCircuit::Known(false),
+                    Predicate::Content(c) => ShortCircuit::Unknown(Predicate::Content(c)),
+                    _ => unreachable!("only Structured and Content predicates should remain"),
+                });
 
-                    if let Expr::Literal(b) = e {
-                        debug!(logger, "evaluation finished"; "result" => b);
-                        Ok(b)
-                    } else {
-                        unreachable!(
-                            "all content predicates should be reduced to literals after streaming"
-                        )
-                    }
+                if let Expr::Literal(b) = e {
+                    debug!(logger, "short circuit after structured=false"; "result" => b);
+                    return Ok(b);
+                }
+
+                const CHUNK_SIZE: usize = 8192;
+                let chunks: Vec<Result<Vec<u8>, std::io::Error>> = bytes
+                    .chunks(CHUNK_SIZE)
+                    .map(|chunk| Ok(chunk.to_vec()))
+                    .collect();
+
+                let e = run_contents_predicate_stream(e, stream::iter(chunks)).await?;
+
+                if let Expr::Literal(b) = e {
+                    debug!(logger, "evaluation finished"; "result" => b);
+                    Ok(b)
+                } else {
+                    unreachable!(
+                        "all content predicates should be reduced to literals after streaming"
+                    )
                 }
             }
         }

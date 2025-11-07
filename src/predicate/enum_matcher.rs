@@ -18,7 +18,7 @@ pub trait EnumPredicate: Sized + Eq + Hash + Clone + Debug {
     /// Parse from string, checking all aliases.
     ///
     /// Returns error message on failure (not a structured error type,
-    /// since it gets wrapped in DetectError::InvalidValue immediately).
+    /// since it gets wrapped in `DetectError::InvalidValue` immediately).
     fn from_str(s: &str) -> Result<Self, String>;
 
     /// All valid string representations (for error messages)
@@ -49,8 +49,8 @@ impl<E: EnumPredicate> Display for EnumMatcher<E> {
             EnumMatcher::NotEquals(v) => write!(f, "!= {}", v.as_str()),
             EnumMatcher::In(set) => {
                 write!(f, "in [")?;
-                let mut items: Vec<_> = set.iter().map(|v| v.as_str()).collect();
-                items.sort(); // Deterministic display order
+                let mut items: Vec<_> = set.iter().map(EnumPredicate::as_str).collect();
+                items.sort_unstable(); // Deterministic display order
                 write!(f, "{}", items.join(", "))?;
                 write!(f, "]")
             }

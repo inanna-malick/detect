@@ -28,6 +28,7 @@ pub enum RawExpr<'a> {
 
 impl<'a> RawExpr<'a> {
     /// Convert to test-friendly expression without spans
+
     pub fn to_test_expr(&self) -> test_utils::RawTestExpr<'a> {
         match self {
             RawExpr::Not(expr) => test_utils::RawTestExpr::Not(Box::new(expr.to_test_expr())),
@@ -49,6 +50,7 @@ impl<'a> RawExpr<'a> {
 
 impl<'a> RawPredicate<'a> {
     /// Convert to test-friendly predicate without spans
+
     pub fn to_test_predicate(&self) -> test_utils::RawTestPredicate<'a> {
         test_utils::RawTestPredicate {
             selector: self.selector,
@@ -60,6 +62,7 @@ impl<'a> RawPredicate<'a> {
 
 impl<'a> RawValue<'a> {
     /// Get the string value (works for both Quoted and Raw)
+
     pub fn as_string(&self) -> &'a str {
         match self {
             RawValue::Quoted(s) | RawValue::Raw(s) => s,
@@ -67,11 +70,13 @@ impl<'a> RawValue<'a> {
     }
 
     /// Check if this is a quoted value (user explicitly quoted it)
+
     pub fn is_quoted(&self) -> bool {
         matches!(self, RawValue::Quoted(_))
     }
 
     /// Convert to test-friendly value without spans
+
     pub fn to_test_value(&self) -> test_utils::RawTestValue<'a> {
         match self {
             RawValue::Quoted(s) => test_utils::RawTestValue::Quoted(s),
@@ -97,7 +102,7 @@ pub mod test_utils {
     impl std::fmt::Display for RawTestValue<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => write!(f, "{}", s),
+                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => write!(f, "{s}"),
             }
         }
     }
@@ -150,6 +155,7 @@ pub mod test_utils {
         }
 
         #[allow(clippy::should_implement_trait)]
+
         pub fn not(expr: RawTestExpr<'a>) -> Self {
             RawTestExpr::Not(Box::new(expr))
         }

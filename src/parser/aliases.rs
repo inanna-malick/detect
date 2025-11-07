@@ -31,6 +31,7 @@ pub fn resolve_alias(word: &str) -> Result<Predicate, ResolveError> {
 /// Suggest similar aliases for an unknown word
 ///
 /// Uses simple edit distance to find close matches
+
 pub fn suggest_aliases(word: &str) -> Vec<String> {
     let all_aliases = DetectFileType::all_valid_strings();
 
@@ -62,7 +63,7 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
         curr_row[0] = i + 1;
 
         for (j, b_char) in b_chars.iter().enumerate() {
-            let cost = if a_char == b_char { 0 } else { 1 };
+            let cost = usize::from(a_char != b_char);
             curr_row[j + 1] = (curr_row[j] + 1) // insertion
                 .min(prev_row[j + 1] + 1) // deletion
                 .min(prev_row[j] + cost); // substitution

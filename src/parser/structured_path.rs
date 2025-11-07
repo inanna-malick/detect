@@ -3,7 +3,7 @@
 //! Handles paths like:
 //! - `.spec.replicas` → [Key("spec"), Key("replicas")]
 //! - `[0].name` → [Index(0), Key("name")]
-//! - `.items[*].id` → [Key("items"), WildcardIndex, Key("id")]
+//! - `.items[*].id` → [Key("items"), `WildcardIndex`, Key("id")]
 
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;

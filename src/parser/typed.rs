@@ -87,6 +87,7 @@ pub enum StringSelector {
 
 impl StringSelector {
     /// Get canonical name for error messages
+
     pub fn canonical_name(&self) -> &'static str {
         match self {
             StringSelector::Path(PathComponent::Full) => "path",
@@ -337,6 +338,7 @@ pub fn parse_structured_operator(s: &str) -> Result<StructuredOperator, ParseErr
 }
 
 /// Check if operator is a string operation (regex or contains)
+
 pub fn is_string_operator(s: &str) -> bool {
     let s_lower = s.to_lowercase();
     matches!(
@@ -542,6 +544,7 @@ pub fn parse_selector_operator(
 
 impl NumericSelector {
     /// Get canonical name for error messages
+
     pub fn canonical_name(&self) -> &'static str {
         match self {
             NumericSelector::Size => "size",
@@ -552,6 +555,7 @@ impl NumericSelector {
 
 impl TemporalSelector {
     /// Get canonical name for error messages
+
     pub fn canonical_name(&self) -> &'static str {
         match self {
             TemporalSelector::Modified => "modified",

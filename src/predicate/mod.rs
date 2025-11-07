@@ -36,21 +36,23 @@ pub enum DetectFileType {
 
 impl DetectFileType {
     /// Check if a string matches any alias for this file type
+
     pub fn matches(&self, s: &str) -> bool {
         self.aliases().contains(&s)
     }
 
-    /// Create from std::fs::FileType
+    /// Create from `std::fs::FileType`
+
     pub fn from_fs_type(ft: &FileType) -> Option<Self> {
         match () {
-            _ if ft.is_file() => Some(Self::File),
-            _ if ft.is_dir() => Some(Self::Directory),
-            _ if ft.is_symlink() => Some(Self::Symlink),
-            _ if ft.is_socket() => Some(Self::Socket),
-            _ if ft.is_fifo() => Some(Self::Fifo),
-            _ if ft.is_block_device() => Some(Self::BlockDevice),
-            _ if ft.is_char_device() => Some(Self::CharDevice),
-            _ => None,
+            () if ft.is_file() => Some(Self::File),
+            () if ft.is_dir() => Some(Self::Directory),
+            () if ft.is_symlink() => Some(Self::Symlink),
+            () if ft.is_socket() => Some(Self::Socket),
+            () if ft.is_fifo() => Some(Self::Fifo),
+            () if ft.is_block_device() => Some(Self::BlockDevice),
+            () if ft.is_char_device() => Some(Self::CharDevice),
+            () => None,
         }
     }
 
@@ -68,7 +70,7 @@ impl DetectFileType {
     }
 }
 
-/// Implement EnumPredicate trait for parse-time validation
+/// Implement `EnumPredicate` trait for parse-time validation
 impl EnumPredicate for DetectFileType {
     fn from_str(s: &str) -> Result<Self, String> {
         let s_lower = s.to_lowercase();
@@ -139,8 +141,7 @@ fn parse_duration(
         "days" | "day" | "d" => Ok(Duration::days(number)),
         "weeks" | "week" | "w" => Ok(Duration::weeks(number)),
         _ => Err(PredicateParseError::Temporal(format!(
-            "{}: unknown unit: {}",
-            original, unit
+            "{original}: unknown unit: {unit}"
         ))),
     }
 }
@@ -189,17 +190,13 @@ pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, PredicateParseError>
                 return Ok(local_time);
             }
         }
-        return Err(PredicateParseError::Temporal(format!(
-            "{}: invalid date",
-            s
-        )));
+        return Err(PredicateParseError::Temporal(format!("{s}: invalid date")));
     }
 
     match DateTime::parse_from_rfc3339(s) {
         Ok(dt) => Ok(dt.with_timezone(&Local)),
         Err(e) => Err(PredicateParseError::Temporal(format!(
-            "{}: invalid date: {}",
-            s, e
+            "{s}: invalid date: {e}"
         ))),
     }
 }
@@ -223,7 +220,7 @@ pub enum RhsValue {
 
 impl Display for RhsValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -253,6 +250,7 @@ impl StringMatcher {
     }
 
     // Helper constructors for tests and programmatic usage
+
     pub fn eq(s: &str) -> Self {
         Self::Equals(s.to_string())
     }
@@ -337,7 +335,7 @@ pub enum Op {
 
 impl Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -371,8 +369,7 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
             )),
         },
         _ => Err(PredicateParseError::Incompatible(format!(
-            "expected string or set, found {:?}",
-            rhs
+            "expected string or set, found {rhs:?}"
         ))),
     }
 }
@@ -385,8 +382,7 @@ pub fn parse_string_dfa(
         RhsValue::String(s) => s,
         _ => {
             return Err(PredicateParseError::Incompatible(format!(
-                "expected string, found {:?}",
-                rhs
+                "expected string, found {rhs:?}"
             )))
         }
     };
@@ -426,8 +422,7 @@ pub fn parse_numerical(op: &Op, rhs: &RhsValue) -> Result<NumberMatcher, Predica
         RhsValue::Size(bytes) => *bytes,
         _ => {
             return Err(PredicateParseError::Incompatible(format!(
-                "expected number or size value, found {:?}",
-                rhs
+                "expected number or size value, found {rhs:?}"
             )))
         }
     };
@@ -460,8 +455,7 @@ pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateP
         RhsValue::String(s) => s,
         _ => {
             return Err(PredicateParseError::Incompatible(format!(
-                "expected time value, found {:?}",
-                rhs
+                "expected time value, found {rhs:?}"
             )))
         }
     };
@@ -534,10 +528,10 @@ impl<A, B, C: Clone, S: Clone> Clone for Predicate<A, B, C, S> {
 impl<A: Display, B: Display, C: Display, S: std::fmt::Debug> Display for Predicate<A, B, C, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Predicate::Name(x) => write!(f, "{}", x),
-            Predicate::Metadata(x) => write!(f, "{}", x),
-            Predicate::Content(x) => write!(f, "{}", x),
-            Predicate::Structured(x) => write!(f, "{:?}", x),
+            Predicate::Name(x) => write!(f, "{x}"),
+            Predicate::Metadata(x) => write!(f, "{x}"),
+            Predicate::Content(x) => write!(f, "{x}"),
+            Predicate::Structured(x) => write!(f, "{x:?}"),
         }
     }
 }
@@ -748,7 +742,7 @@ impl MetadataPredicate {
 /// Value variants store both:
 /// - `value`: Native parsed type for type-safe comparisons
 /// - `raw_string`: Original RHS string for string coercion fallback in equality checks
-///   (prevents information loss from parse→stringify, e.g., "1_000" → 1000 → "1000")
+///   (prevents information loss from parse→stringify, e.g., "`1_000`" → 1000 → "1000")
 #[derive(Debug, Clone, PartialEq)]
 pub enum StructuredDataPredicate {
     YamlValue {

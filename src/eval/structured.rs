@@ -11,6 +11,7 @@ use crate::predicate::StringMatcher;
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
+
 pub fn navigate_yaml<'a>(
     root: &'a yaml_rust2::Yaml,
     path: &[PathComponent],
@@ -79,7 +80,7 @@ fn collect_recursive_yaml_key<'a>(
     while let Some(node) = work_queue.pop() {
         match node {
             yaml_rust2::Yaml::Hash(map) => {
-                for (k, v) in map.iter() {
+                for (k, v) in map {
                     if let yaml_rust2::Yaml::String(key_str) = k {
                         if key_str == key {
                             results.push(v);
@@ -102,6 +103,7 @@ fn collect_recursive_yaml_key<'a>(
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
+
 pub fn navigate_json<'a>(
     root: &'a serde_json::Value,
     path: &[PathComponent],
@@ -187,6 +189,7 @@ fn collect_recursive_json_key<'a>(
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
+
 pub fn navigate_toml<'a>(root: &'a toml::Value, path: &[PathComponent]) -> Vec<&'a toml::Value> {
     let mut current_values = vec![root];
 
@@ -449,6 +452,7 @@ fn compare_toml_value(
 }
 
 /// Compare YAML values (OR semantics: returns true if ANY value matches)
+
 pub fn compare_yaml_values(
     actual_values: &[&yaml_rust2::Yaml],
     operator: StructuredOperator,
@@ -461,6 +465,7 @@ pub fn compare_yaml_values(
 }
 
 /// Compare JSON values (OR semantics: returns true if ANY value matches)
+
 pub fn compare_json_values(
     actual_values: &[&serde_json::Value],
     operator: StructuredOperator,
@@ -473,6 +478,7 @@ pub fn compare_json_values(
 }
 
 /// Compare TOML values (OR semantics: returns true if ANY value matches)
+
 pub fn compare_toml_values(
     actual_values: &[&toml::Value],
     operator: StructuredOperator,
@@ -485,6 +491,7 @@ pub fn compare_toml_values(
 }
 
 /// Match YAML values against string matcher (OR semantics)
+
 pub fn match_yaml_strings(actual_values: &[&yaml_rust2::Yaml], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
@@ -499,6 +506,7 @@ pub fn match_yaml_strings(actual_values: &[&yaml_rust2::Yaml], matcher: &StringM
 }
 
 /// Match JSON values against string matcher (OR semantics)
+
 pub fn match_json_strings(actual_values: &[&serde_json::Value], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
@@ -513,6 +521,7 @@ pub fn match_json_strings(actual_values: &[&serde_json::Value], matcher: &String
 }
 
 /// Match TOML values against string matcher (OR semantics)
+
 pub fn match_toml_strings(actual_values: &[&toml::Value], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
@@ -527,7 +536,7 @@ pub fn match_toml_strings(actual_values: &[&toml::Value], matcher: &StringMatche
 }
 
 /// Evaluate a structured data predicate against file contents
-/// Uses the ParsedDocuments cache to avoid re-parsing the same format
+/// Uses the `ParsedDocuments` cache to avoid re-parsing the same format
 pub fn eval_structured_predicate(
     predicate: &crate::predicate::StructuredDataPredicate,
     contents: &str,
@@ -645,7 +654,7 @@ impl ParsedDocuments {
         if self.yaml.is_none() {
             self.yaml = Some(
                 yaml_rust2::YamlLoader::load_from_str(contents)
-                    .map_err(|e| format!("YAML parse error: {}", e)),
+                    .map_err(|e| format!("YAML parse error: {e}")),
             );
         }
         self.yaml.as_ref().unwrap()
@@ -653,9 +662,8 @@ impl ParsedDocuments {
 
     pub fn get_or_parse_json(&mut self, contents: &str) -> &Result<serde_json::Value, String> {
         if self.json.is_none() {
-            self.json = Some(
-                serde_json::from_str(contents).map_err(|e| format!("JSON parse error: {}", e)),
-            );
+            self.json =
+                Some(serde_json::from_str(contents).map_err(|e| format!("JSON parse error: {e}")));
         }
         self.json.as_ref().unwrap()
     }
@@ -663,7 +671,7 @@ impl ParsedDocuments {
     pub fn get_or_parse_toml(&mut self, contents: &str) -> &Result<toml::Value, String> {
         if self.toml.is_none() {
             self.toml =
-                Some(toml::from_str(contents).map_err(|e| format!("TOML parse error: {}", e)));
+                Some(toml::from_str(contents).map_err(|e| format!("TOML parse error: {e}")));
         }
         self.toml.as_ref().unwrap()
     }

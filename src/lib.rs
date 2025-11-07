@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 #![warn(clippy::all)]
-#![warn(clippy::pedantic)]
 #![warn(clippy::cargo)]
 
 pub mod eval;
@@ -69,8 +68,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                     !entry
                         .file_name()
                         .to_str()
-                        .map(|s| s == ".git" || s == ".hg" || s == ".svn")
-                        .unwrap_or(false)
+                        .is_some_and(|s| s == ".git" || s == ".hg" || s == ".svn")
                 })
                 .build();
 
@@ -84,7 +82,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
             info!(logger, "parsed expression"; "expr" => %expr);
 
             let mut match_count = 0;
-            for entry in walker.into_iter() {
+            for entry in walker {
                 let entry = entry.map_err(|e| DetectError::from(anyhow::Error::from(e)))?;
                 let path = entry.path();
 
@@ -110,7 +108,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
             }
 
             if match_count == 0 {
-                eprintln!("No files matched the query: {}", original_query);
+                eprintln!("No files matched the query: {original_query}");
                 eprintln!("Searched in: {}", root.display());
                 if respect_gitignore {
                     eprintln!("Hint: Use -i flag to include gitignored files, or try broadening your search criteria");

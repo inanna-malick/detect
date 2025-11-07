@@ -23,7 +23,7 @@ impl StreamingHybridRegex {
                 // Silent fallback to PCRE2
                 match pcre2::bytes::Regex::new(pattern) {
                     Ok(pcre2_re) => Ok(StreamingHybridRegex::Pcre2(pcre2_re)),
-                    Err(pcre2_err) => Err(format!("Invalid regex pattern: {}", pcre2_err)),
+                    Err(pcre2_err) => Err(format!("Invalid regex pattern: {pcre2_err}")),
                 }
             }
         }
@@ -68,7 +68,7 @@ impl HybridRegex {
                 // Silent fallback to PCRE2
                 match pcre2::bytes::Regex::new(pattern) {
                     Ok(pcre2_re) => Ok(HybridRegex::Pcre2(pcre2_re)),
-                    Err(pcre2_err) => Err(regex::Error::Syntax(format!("PCRE2: {}", pcre2_err))),
+                    Err(pcre2_err) => Err(regex::Error::Syntax(format!("PCRE2: {pcre2_err}"))),
                 }
             }
         }

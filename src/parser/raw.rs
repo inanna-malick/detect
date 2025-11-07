@@ -1,6 +1,6 @@
 use pest::{
     iterators::Pair,
-    pratt_parser::{Assoc::*, Op, PrattParser},
+    pratt_parser::{Assoc::Left, Op, PrattParser},
     Parser,
 };
 use pest_derive::Parser;
@@ -46,9 +46,9 @@ impl RawParser {
             .map_err(|e| RawParseError::from_pest(Box::new(e), input.to_string()))?;
 
         let items: Vec<String> = pairs
-            .flat_map(|pair| pair.into_inner()) // set_contents -> set_items or EOI
+            .flat_map(pest::iterators::Pair::into_inner) // set_contents -> set_items or EOI
             .filter(|pair| pair.as_rule() == Rule::set_items)
-            .flat_map(|pair| pair.into_inner()) // set_items -> set_item*
+            .flat_map(pest::iterators::Pair::into_inner) // set_items -> set_item*
             .filter_map(|item_pair| {
                 // set_item -> quoted_string | bare_set_item
                 item_pair.into_inner().next()
@@ -96,8 +96,7 @@ impl RawParser {
             Rule::single_word => Ok(RawExpr::SingleWord(pair.as_span())),
             Rule::expr => Self::parse_expr(pair),
             rule => Err(RawParseError::internal(format!(
-                "Unexpected primary rule: {:?}",
-                rule
+                "Unexpected primary rule: {rule:?}"
             ))),
         }
     }
@@ -111,8 +110,7 @@ impl RawParser {
             Rule::and => Ok(RawExpr::And(Box::new(lhs?), Box::new(rhs?))),
             Rule::or => Ok(RawExpr::Or(Box::new(lhs?), Box::new(rhs?))),
             rule => Err(RawParseError::internal(format!(
-                "Unexpected infix rule: {:?}",
-                rule
+                "Unexpected infix rule: {rule:?}"
             ))),
         }
     }
@@ -124,8 +122,7 @@ impl RawParser {
         match _pair.as_rule() {
             Rule::neg => Ok(RawExpr::Not(Box::new(rhs?))),
             rule => Err(RawParseError::internal(format!(
-                "Unexpected prefix rule: {:?}",
-                rule
+                "Unexpected prefix rule: {rule:?}"
             ))),
         }
     }
@@ -218,8 +215,7 @@ impl RawParser {
                 Ok(RawValue::Raw(pair.as_str()))
             }
             rule => Err(RawParseError::internal(format!(
-                "Unexpected value rule: {:?}",
-                rule
+                "Unexpected value rule: {rule:?}"
             ))),
         }
     }

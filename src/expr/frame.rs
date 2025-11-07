@@ -23,7 +23,7 @@ impl<P> MappableFrame for ExprFrame<PartiallyApplied, P> {
     type Frame<X> = ExprFrame<X, P>;
 
     fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
-        use ExprFrame::*;
+        use ExprFrame::{And, Literal, Not, Or, Predicate};
         match input {
             Not(a) => Not(f(a)),
             And(a, b) => And(f(a), f(b)),
@@ -43,7 +43,7 @@ where
     A: Send + 'a,
     B: Send + 'a,
 {
-    use ExprFrame::*;
+    use ExprFrame::{And, Literal, Not, Or, Predicate};
     match input {
         Not(a) => Ok(Not(f(a).await?)),
         And(a, b) => {
@@ -106,15 +106,15 @@ impl<'a, P> Collapsible for MapPredicateRef<'a, P> {
 impl<P: Display> Display for ExprFrame<(), P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Not(_) => write!(f, "NOT"),
-            Self::And(_, _) => {
+            Self::Not(()) => write!(f, "NOT"),
+            Self::And((), ()) => {
                 write!(f, "AND")
             }
-            Self::Or(_, _) => {
+            Self::Or((), ()) => {
                 write!(f, "OR")
             }
-            Self::Predicate(arg0) => write!(f, "{}", arg0),
-            Self::Literal(arg0) => write!(f, "{}", arg0),
+            Self::Predicate(arg0) => write!(f, "{arg0}"),
+            Self::Literal(arg0) => write!(f, "{arg0}"),
         }
     }
 }

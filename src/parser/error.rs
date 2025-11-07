@@ -252,9 +252,8 @@ fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
     if positives.contains(&Rule::value) {
         if found_eoi {
             return Some("Try adding a value after the operator, like: ext == rs".to_string());
-        } else {
-            return Some("Expected a value here (e.g., a string, number, or [set])".to_string());
         }
+        return Some("Expected a value here (e.g., a string, number, or [set])".to_string());
     }
 
     if (positives.contains(&Rule::expr) || positives.contains(&Rule::predicate)) && found_eoi {
@@ -340,6 +339,7 @@ impl DetectError {
     }
 
     /// Create an invalid escape error
+
     pub fn invalid_escape(char: char, position: usize) -> Self {
         // This is a legacy constructor, we'll need the source to create proper error
         // For now, create without source
@@ -351,6 +351,7 @@ impl DetectError {
     }
 
     /// Create an unterminated escape error
+
     pub fn unterminated_escape() -> Self {
         DetectError::UnterminatedEscape {
             span: (0, 0).into(),
@@ -367,6 +368,7 @@ impl DetectError {
     }
 
     /// Add source code to the error
+
     pub fn with_source(mut self, src: String) -> Self {
         match &mut self {
             DetectError::Syntax { src: s, .. }

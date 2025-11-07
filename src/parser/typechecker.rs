@@ -81,34 +81,33 @@ impl Typechecker {
                 let word = span.as_str();
 
                 // Try to resolve as alias
-                match crate::parser::resolve_alias(word) {
-                    Ok(predicate) => Ok(Expr::Predicate(predicate)),
-                    Err(_) => {
-                        // Generate suggestions
-                        let suggestions = crate::parser::suggest_aliases(word);
-                        let suggestions_msg = if !suggestions.is_empty() {
-                            Some(format!("Did you mean: {}?", suggestions.join(", ")))
-                        } else {
-                            Some(format!(
-                                "Valid aliases: {}",
-                                crate::predicate::DetectFileType::all_valid_strings().join(", ")
-                            ))
-                        };
+                if let Ok(predicate) = crate::parser::resolve_alias(word) {
+                    Ok(Expr::Predicate(predicate))
+                } else {
+                    // Generate suggestions
+                    let suggestions = crate::parser::suggest_aliases(word);
+                    let suggestions_msg = if suggestions.is_empty() {
+                        Some(format!(
+                            "Valid aliases: {}",
+                            crate::predicate::DetectFileType::all_valid_strings().join(", ")
+                        ))
+                    } else {
+                        Some(format!("Did you mean: {}?", suggestions.join(", ")))
+                    };
 
-                        Err(DetectError::UnknownAlias {
-                            word: word.to_string(),
-                            span: span.to_source_span(),
-                            src: source.to_string(),
-                            suggestions: suggestions_msg,
-                        })
-                    }
+                    Err(DetectError::UnknownAlias {
+                        word: word.to_string(),
+                        span: span.to_source_span(),
+                        src: source.to_string(),
+                        suggestions: suggestions_msg,
+                    })
                 }
             }
         }
     }
 
     /// Build synthetic precondition for structured data predicates
-    /// Wraps actual predicate in: (ext in [exts]) AND (size < max) AND actual_predicate
+    /// Wraps actual predicate in: (ext in [exts]) AND (size < max) AND `actual_predicate`
     fn build_synthetic_precondition(
         format: typed::DataFormat,
         config: &crate::RuntimeConfig,
@@ -124,7 +123,7 @@ impl Typechecker {
             DataFormat::Toml => vec!["toml"],
         };
 
-        let ext_set: HashSet<String> = extensions.iter().map(|s| s.to_string()).collect();
+        let ext_set: HashSet<String> = extensions.iter().map(|s| (*s).to_string()).collect();
         let ext_predicate = Predicate::name(NamePredicate::Extension(StringMatcher::In(ext_set)));
 
         let size_predicate = Predicate::meta(MetadataPredicate::Filesize(NumberMatcher::In(
@@ -252,7 +251,7 @@ impl Typechecker {
                     StreamingCompiledContentPredicate::new(pattern).map_err(|e| {
                         DetectError::InvalidValue {
                             expected: "valid regex pattern".to_string(),
-                            found: format!("{:?}", e),
+                            found: format!("{e:?}"),
                             span: value_span.to_source_span(),
                             src: source.to_string(),
                         }
@@ -340,7 +339,7 @@ impl Typechecker {
                 if is_ordering_operator(operator) && !Self::is_comparable_yaml(&yaml_value) {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
-                        found: format!("{:?}", yaml_value),
+                        found: format!("{yaml_value:?}"),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
                     });
@@ -360,7 +359,7 @@ impl Typechecker {
                 if is_ordering_operator(operator) && !Self::is_comparable_json(&json_value) {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
-                        found: format!("{:?}", json_value),
+                        found: format!("{json_value:?}"),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
                     });
@@ -380,7 +379,7 @@ impl Typechecker {
                 if is_ordering_operator(operator) && !Self::is_comparable_toml(&toml_value) {
                     return Err(DetectError::InvalidValue {
                         expected: "numeric or date value".to_string(),
-                        found: format!("{:?}", toml_value),
+                        found: format!("{toml_value:?}"),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
                     });
@@ -449,7 +448,7 @@ impl Typechecker {
         // Try 1: Synthetic document approach
         // Construct synthetic TOML document and parse it
         // This lets TOML parser handle all types (bool, int, float, datetime, arrays, inline tables, etc)
-        let synthetic_doc = format!("_v = {}", content);
+        let synthetic_doc = format!("_v = {content}");
         if let Ok(parsed) = toml::from_str::<toml::Table>(&synthetic_doc) {
             if let Some(value) = parsed.get("_v") {
                 return value.clone();
@@ -507,17 +506,17 @@ impl Typechecker {
 
         // For other operators, use as string pattern (literal or regex)
         match operator {
-            StringOperator::Equals => Ok(StringMatcher::Equals(value_str.to_string())),
-            StringOperator::NotEquals => Ok(StringMatcher::NotEquals(value_str.to_string())),
+            StringOperator::Equals => Ok(StringMatcher::Equals((*value_str).to_string())),
+            StringOperator::NotEquals => Ok(StringMatcher::NotEquals((*value_str).to_string())),
             StringOperator::Matches => {
                 StringMatcher::regex(value_str).map_err(|e| DetectError::InvalidValue {
                     expected: "valid regex pattern".to_string(),
-                    found: format!("{}: {}", value_str, e),
+                    found: format!("{value_str}: {e}"),
                     span: value_span.to_source_span(),
                     src: source.to_string(),
                 })
             }
-            StringOperator::Contains => Ok(StringMatcher::Contains(value_str.to_string())),
+            StringOperator::Contains => Ok(StringMatcher::Contains((*value_str).to_string())),
             StringOperator::In => unreachable!("Handled above"),
         }
     }
@@ -545,7 +544,7 @@ impl Typechecker {
         let items =
             RawParser::parse_set_contents(inner).map_err(|e| DetectError::InvalidValue {
                 expected: "valid set items (e.g., [rs, js] or \"foo, bar\", baz)".to_string(),
-                found: format!("parse error: {}", e),
+                found: format!("parse error: {e}"),
                 span: value_span.to_source_span(),
                 src: source.to_string(),
             })?;
@@ -567,7 +566,7 @@ impl Typechecker {
 
         let pattern = match operator {
             StringOperator::Equals => format!("^{}$", regex::escape(s)),
-            StringOperator::Matches => s.to_string(),
+            StringOperator::Matches => (*s).to_string(),
             StringOperator::Contains => regex::escape(s),
             _ => {
                 return Err(DetectError::Internal {
@@ -591,12 +590,12 @@ impl Typechecker {
             RawValue::Quoted(s) | RawValue::Raw(s) => s,
         };
 
-        if matches!(selector, NumericSelector::Size) && s.chars().any(|c| c.is_alphabetic()) {
+        if matches!(selector, NumericSelector::Size) && s.chars().any(char::is_alphabetic) {
             parse_size_value(s, value_span, source)
         } else {
             s.parse().map_err(|_| DetectError::InvalidValue {
                 expected: "numeric value".to_string(),
-                found: s.to_string(),
+                found: (*s).to_string(),
                 span: value_span.to_source_span(),
                 src: source.to_string(),
             })
@@ -627,7 +626,7 @@ impl Typechecker {
 
         parse_time_value(s).map_err(|e| DetectError::InvalidValue {
             expected: "valid time value".to_string(),
-            found: format!("{}: {:?}", s, e),
+            found: format!("{s}: {e:?}"),
             span: value_span.to_source_span(),
             src: source.to_string(),
         })
@@ -648,7 +647,7 @@ impl Typechecker {
         }
     }
 
-    /// Parse and validate enum values at parse time using the EnumPredicate trait
+    /// Parse and validate enum values at parse time using the `EnumPredicate` trait
     fn parse_enum_value<E: EnumPredicate>(
         value: &RawValue,
         operator: EnumOperator,
@@ -664,7 +663,7 @@ impl Typechecker {
                 let variant =
                     E::from_str(value_str).map_err(|_err_msg| DetectError::InvalidValue {
                         expected: format!("one of: {}", E::all_valid_strings().join(", ")),
-                        found: value_str.to_string(),
+                        found: (*value_str).to_string(),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
                     })?;
@@ -675,7 +674,7 @@ impl Typechecker {
                 let variant =
                     E::from_str(value_str).map_err(|_err_msg| DetectError::InvalidValue {
                         expected: format!("one of: {}", E::all_valid_strings().join(", ")),
-                        found: value_str.to_string(),
+                        found: (*value_str).to_string(),
                         span: value_span.to_source_span(),
                         src: source.to_string(),
                     })?;
