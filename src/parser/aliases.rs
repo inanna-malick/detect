@@ -2,29 +2,41 @@
 //!
 //! Provides shorthand syntax like `dir` instead of `type == dir`,
 //! enabling more natural queries: `dir && depth > 0`
+//!
+//! Also handles structured data selectors like `yaml:.field` as existence predicates.
 
 use std::sync::Arc;
 
 use crate::predicate::{DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate};
-
-/// Error type for alias resolution
-#[derive(Debug, Clone, PartialEq)]
-pub enum ResolveError {
-    /// The alias is unknown/not recognized
-    UnknownAlias(String),
-}
+use super::typed::{AliasError, parse_structured_selector};
 
 /// Resolve a single-word alias to a predicate
 ///
-/// Currently supports file type aliases: `file`, `dir`, `symlink`, etc.
+/// Supports:
+/// - File type aliases: `file`, `dir`, `symlink`, etc.
+/// - Structured data selectors: `yaml:.field`, `json:.path`, `toml:.key` (TODO: existence predicates)
 ///
 /// Example: `resolve_alias("dir")` is equivalent to `type == dir`
-pub fn resolve_alias(word: &str) -> Result<Predicate, ResolveError> {
+pub fn resolve_alias(word: &str) -> Result<Predicate, AliasError> {
+    // Check if it's a structured selector
+    match parse_structured_selector(word) {
+        Ok(Some((_format, _components))) => {
+            unimplemented!("Existence predicates for structured selectors not yet implemented");
+        }
+        Ok(None) => {
+            // Not a structured selector, try file type alias
+        }
+        Err(e) => {
+            return Err(AliasError::Structured(e));
+        }
+    }
+
+    // Try to resolve as file type alias
     match DetectFileType::from_str(word) {
         Ok(file_type) => Ok(Predicate::Metadata(Arc::new(MetadataPredicate::Type(
             EnumMatcher::Equals(file_type),
         )))),
-        Err(_) => Err(ResolveError::UnknownAlias(word.to_string())),
+        Err(_) => Err(AliasError::UnknownAlias(word.to_string())),
     }
 }
 
@@ -100,7 +112,7 @@ mod tests {
     #[test]
     fn test_unknown_alias() {
         let result = resolve_alias("unknown");
-        assert!(matches!(result, Err(ResolveError::UnknownAlias(_))));
+        assert!(matches!(result, Err(AliasError::UnknownAlias(_))));
     }
 
     #[test]

@@ -47,6 +47,18 @@ pub enum DetectError {
         src: String,
     },
 
+    #[error("Unknown structured data format: '{format}'")]
+    #[diagnostic(code(detect::unknown_structured_format))]
+    UnknownStructuredFormat {
+        format: String,
+        #[label("unknown format")]
+        span: SourceSpan,
+        #[source_code]
+        src: String,
+        #[help]
+        suggestions: Option<String>,
+    },
+
     #[error("Unknown operator: {operator}")]
     #[diagnostic(
         code(detect::unknown_operator),
@@ -374,6 +386,7 @@ impl DetectError {
             DetectError::Syntax { src: s, .. }
             | DetectError::UnknownSelector { src: s, .. }
             | DetectError::InvalidStructuredPath { src: s, .. }
+            | DetectError::UnknownStructuredFormat { src: s, .. }
             | DetectError::UnknownOperator { src: s, .. }
             | DetectError::UnknownAlias { src: s, .. }
             | DetectError::IncompatibleOperator { src: s, .. }

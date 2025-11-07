@@ -81,26 +81,46 @@ impl Typechecker {
                 let word = span.as_str();
 
                 // Try to resolve as alias
-                if let Ok(predicate) = crate::parser::resolve_alias(word) {
-                    Ok(Expr::Predicate(predicate))
-                } else {
-                    // Generate suggestions
-                    let suggestions = crate::parser::suggest_aliases(word);
-                    let suggestions_msg = if suggestions.is_empty() {
-                        Some(format!(
-                            "Valid aliases: {}",
-                            crate::predicate::DetectFileType::all_valid_strings().join(", ")
-                        ))
-                    } else {
-                        Some(format!("Did you mean: {}?", suggestions.join(", ")))
-                    };
+                match crate::parser::resolve_alias(word) {
+                    Ok(predicate) => Ok(Expr::Predicate(predicate)),
+                    Err(typed::AliasError::UnknownAlias(_)) => {
+                        // Generate suggestions for file type aliases
+                        let suggestions = crate::parser::suggest_aliases(word);
+                        let suggestions_msg = if suggestions.is_empty() {
+                            Some(format!(
+                                "Valid aliases: {}",
+                                crate::predicate::DetectFileType::all_valid_strings().join(", ")
+                            ))
+                        } else {
+                            Some(format!("Did you mean: {}?", suggestions.join(", ")))
+                        };
 
-                    Err(DetectError::UnknownAlias {
-                        word: word.to_string(),
+                        Err(DetectError::UnknownAlias {
+                            word: word.to_string(),
+                            span: span.to_source_span(),
+                            src: source.to_string(),
+                            suggestions: suggestions_msg,
+                        })
+                    }
+                    Err(typed::AliasError::Structured(typed::StructuredSelectorError::UnknownFormat { format })) => {
+                        Err(DetectError::UnknownStructuredFormat {
+                            format,
+                            span: span.to_source_span(),
+                            src: source.to_string(),
+                            suggestions: Some("Valid formats: yaml, json, toml".to_string()),
+                        })
+                    }
+                    Err(typed::AliasError::Structured(typed::StructuredSelectorError::InvalidPath {
+                        format,
+                        path,
+                        reason,
+                    })) => Err(DetectError::InvalidStructuredPath {
+                        format,
+                        path,
                         span: span.to_source_span(),
+                        reason,
                         src: source.to_string(),
-                        suggestions: suggestions_msg,
-                    })
+                    }),
                 }
             }
         }
@@ -625,7 +645,7 @@ impl Typechecker {
         };
 
         parse_time_value(s).map_err(|e| DetectError::InvalidValue {
-            expected: "valid time value".to_string(),
+            expected: "valid time".to_string(),
             found: format!("{s}: {e:?}"),
             span: value_span.to_source_span(),
             src: source.to_string(),
