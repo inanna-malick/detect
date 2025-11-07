@@ -176,6 +176,11 @@ pub enum DetectError {
     )]
     NotADirectory { path: String },
 
+    // I/O errors
+    #[error("I/O error: {message}")]
+    #[diagnostic(code(detect::io_error))]
+    IoError { message: String },
+
     // Internal errors
     #[error("Internal parser error: {message}")]
     #[diagnostic(code(detect::internal))]
@@ -398,8 +403,10 @@ impl DetectError {
             | DetectError::Internal { src: s, .. } => {
                 *s = src;
             }
-            // Filesystem errors don't have source code
-            DetectError::DirectoryNotFound { .. } | DetectError::NotADirectory { .. } => {}
+            // Filesystem and I/O errors don't have source code
+            DetectError::DirectoryNotFound { .. }
+            | DetectError::NotADirectory { .. }
+            | DetectError::IoError { .. } => {}
         }
         self
     }

@@ -12,11 +12,10 @@ pub mod util;
 
 use std::{path::Path, sync::Arc, time::Instant};
 
-use anyhow::Context;
 use ignore::WalkBuilder;
 use parser::{error::DetectError, RawParser, Typechecker};
 use predicate::Predicate;
-use slog::{debug, info, Logger};
+use slog::{debug, info, warn, Logger};
 
 /// Runtime configuration for detect operations
 #[derive(Debug, Clone)]
@@ -83,7 +82,14 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
             let mut match_count = 0;
             for entry in walker {
-                let entry = entry.map_err(|e| DetectError::from(anyhow::Error::from(e)))?;
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        // Skip entries we can't access (permission denied, etc.)
+                        warn!(logger, "skipping entry due to walker error"; "error" => %e);
+                        continue;
+                    }
+                };
                 let path = entry.path();
 
                 if path == root {
@@ -92,10 +98,19 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
 
                 let start = Instant::now();
 
-                let is_match = eval::fs::eval(&logger, &expr, path, Some(root))
-                    .await
-                    .context(format!("failed to eval for ${path:?}"))
-                    .map_err(DetectError::from)?;
+                let is_match = match eval::fs::eval(&logger, &expr, path, Some(root)).await {
+                    Ok(result) => result,
+                    Err(e) => {
+                        // Handle I/O errors gracefully - skip files we can't access
+                        if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            debug!(logger, "skipping file due to permission denied"; "path" => #?path);
+                            continue;
+                        }
+                        // For other I/O errors, also skip but log at warning level
+                        warn!(logger, "skipping file due to I/O error"; "path" => #?path, "error" => %e);
+                        continue;
+                    }
+                };
 
                 let duration = start.elapsed();
 
