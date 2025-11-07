@@ -755,6 +755,9 @@ pub enum StructuredDataPredicate {
         path: Vec<crate::parser::structured_path::PathComponent>,
         matcher: StringMatcher,
     },
+    YamlExists {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+    },
     JsonValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
@@ -765,6 +768,9 @@ pub enum StructuredDataPredicate {
         path: Vec<crate::parser::structured_path::PathComponent>,
         matcher: StringMatcher,
     },
+    JsonExists {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+    },
     TomlValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
@@ -774,6 +780,9 @@ pub enum StructuredDataPredicate {
     TomlString {
         path: Vec<crate::parser::structured_path::PathComponent>,
         matcher: StringMatcher,
+    },
+    TomlExists {
+        path: Vec<crate::parser::structured_path::PathComponent>,
     },
 }
 

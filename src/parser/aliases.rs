@@ -7,21 +7,28 @@
 
 use std::sync::Arc;
 
-use crate::predicate::{DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate};
-use super::typed::{AliasError, parse_structured_selector};
+use crate::predicate::{DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate, StructuredDataPredicate};
+use super::typed::{AliasError, parse_structured_selector, DataFormat};
 
 /// Resolve a single-word alias to a predicate
 ///
 /// Supports:
 /// - File type aliases: `file`, `dir`, `symlink`, etc.
-/// - Structured data selectors: `yaml:.field`, `json:.path`, `toml:.key` (TODO: existence predicates)
+/// - Structured data selectors: `yaml:.field`, `json:.path`, `toml:.key` (existence check)
 ///
 /// Example: `resolve_alias("dir")` is equivalent to `type == dir`
+/// Example: `resolve_alias("yaml:.spec")` checks if `.spec` exists in YAML file
 pub fn resolve_alias(word: &str) -> Result<Predicate, AliasError> {
     // Check if it's a structured selector
     match parse_structured_selector(word) {
-        Ok(Some((_format, _components))) => {
-            unimplemented!("Existence predicates for structured selectors not yet implemented");
+        Ok(Some((format, components))) => {
+            // Create existence predicate based on format
+            let predicate = match format {
+                DataFormat::Yaml => StructuredDataPredicate::YamlExists { path: components },
+                DataFormat::Json => StructuredDataPredicate::JsonExists { path: components },
+                DataFormat::Toml => StructuredDataPredicate::TomlExists { path: components },
+            };
+            return Ok(Predicate::Structured(predicate));
         }
         Ok(None) => {
             // Not a structured selector, try file type alias

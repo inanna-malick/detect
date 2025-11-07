@@ -624,6 +624,39 @@ pub fn eval_structured_predicate(
             let values = navigate_toml(doc, path);
             Ok(match_toml_strings(&values, matcher))
         }
+
+        StructuredDataPredicate::YamlExists { path } => {
+            let docs = match cache.get_or_parse_yaml(contents) {
+                Ok(docs) => docs,
+                Err(e) => return Err(e.clone()),
+            };
+            // Check all documents with OR semantics (any match = true)
+            for doc in docs {
+                let values = navigate_yaml(doc, path);
+                if !values.is_empty() {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+
+        StructuredDataPredicate::JsonExists { path } => {
+            let doc = match cache.get_or_parse_json(contents) {
+                Ok(doc) => doc,
+                Err(e) => return Err(e.clone()),
+            };
+            let values = navigate_json(doc, path);
+            Ok(!values.is_empty())
+        }
+
+        StructuredDataPredicate::TomlExists { path } => {
+            let doc = match cache.get_or_parse_toml(contents) {
+                Ok(doc) => doc,
+                Err(e) => return Err(e.clone()),
+            };
+            let values = navigate_toml(doc, path);
+            Ok(!values.is_empty())
+        }
     }
 }
 
