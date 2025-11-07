@@ -40,7 +40,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     expr: String,
     config: RuntimeConfig,
     mut on_match: F,
-) -> Result<(), DetectError> {
+) -> Result<usize, DetectError> {
     let original_query = expr.clone();
     let parse_result = RawParser::parse_raw_expr(&expr)
         .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr, &config));
@@ -132,7 +132,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 }
             }
 
-            Ok(())
+            Ok(match_count)
         }
         Err(err) => Err(err),
     }

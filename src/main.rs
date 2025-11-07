@@ -13,7 +13,13 @@ const OPERATORS: &str = include_str!("../docs/operators.md");
     name = "detect",
     author,
     version,
-    about = "Find filesystem entities using expressions"
+    about = "Find filesystem entities using expressions",
+    long_about = "Find filesystem entities using expressions
+
+EXIT CODES:
+  0  Matches found
+  1  No matches found
+  2  Error (parse error, directory not found, etc.)"
 )]
 struct Args {
     /// Show practical examples
@@ -136,10 +142,16 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
 
     match result {
-        Ok(_) => Ok(()),
+        Ok(match_count) => {
+            if match_count > 0 {
+                std::process::exit(0); // Matches found
+            } else {
+                std::process::exit(1); // No matches
+            }
+        }
         Err(e) => {
             eprintln!("{:?}", miette::Report::new(e));
-            std::process::exit(1);
+            std::process::exit(2); // Error
         }
     }
 }

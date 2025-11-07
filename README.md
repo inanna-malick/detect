@@ -320,6 +320,24 @@ detect --max-structured-size 50mb 'yaml:.config'
 detect -l debug 'complex query here'
 ```
 
+## Exit Codes
+
+Compatible with scripting and CI/CD pipelines (same as `grep`/`ripgrep`):
+
+- **0** - Matches found
+- **1** - No matches
+- **2** - Error (parse error, directory not found, etc.)
+
+```bash
+# Use in conditionals
+if detect 'size > 100mb'; then
+    echo "Found large files"
+fi
+
+# CI: fail build if TODOs found
+detect 'path contains src AND content contains TODO' && exit 1
+```
+
 ## Performance
 
 Queries are evaluated in four phases: name → metadata → structured → content. Each phase can eliminate files before more expensive operations. Content is never read unless the file passes all earlier checks.
