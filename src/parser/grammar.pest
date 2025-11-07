@@ -13,11 +13,12 @@ predicate = { selector ~ operator ~ value }
   selector = @{ (ASCII_ALPHANUMERIC | "." | "_" | "[" | "]" | "*" | ":")+ }
   // Parse operators flexibly - validate in typechecker
   // Start with symbols or letters, but not mix arbitrarily
-  operator = @{ 
+  operator = @{
     // Symbol-based operators (can combine symbols)
     ("=" | "!" | ">" | "<" | "~")+ |
     // Word-based operators (alphanumeric with underscores)
-    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+    // But NOT the reserved infix/prefix operators
+    !(^"and" | ^"or" | ^"not") ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
   }
   
   value = { value_content ~ trailing_quote? }

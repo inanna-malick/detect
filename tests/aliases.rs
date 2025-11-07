@@ -83,6 +83,72 @@ fn test_alias_in_boolean_expression() {
 }
 
 #[test]
+fn test_alias_with_word_form_operators() {
+    // Test word-form AND operator
+    let result = parse_and_typecheck("file AND size > 10kb");
+    assert!(
+        result.is_ok(),
+        "Alias with word-form AND should parse, got: {:?}",
+        result.err()
+    );
+
+    // Test word-form OR operator
+    let result = parse_and_typecheck("dir OR file");
+    assert!(
+        result.is_ok(),
+        "Alias with word-form OR should parse, got: {:?}",
+        result.err()
+    );
+
+    // Test case-insensitive word operators
+    let result = parse_and_typecheck("file and size > 1mb");
+    assert!(
+        result.is_ok(),
+        "Alias with lowercase 'and' should parse, got: {:?}",
+        result.err()
+    );
+
+    let result = parse_and_typecheck("file or dir");
+    assert!(
+        result.is_ok(),
+        "Alias with lowercase 'or' should parse, got: {:?}",
+        result.err()
+    );
+
+    // Mixed case
+    let result = parse_and_typecheck("file And size > 1kb");
+    assert!(
+        result.is_ok(),
+        "Alias with mixed-case 'And' should parse, got: {:?}",
+        result.err()
+    );
+
+    // Complex expressions with multiple word operators
+    let result = parse_and_typecheck("file AND size > 1mb OR dir AND depth < 3");
+    assert!(
+        result.is_ok(),
+        "Complex expression with multiple word operators should parse, got: {:?}",
+        result.err()
+    );
+
+    // Parenthesized expressions
+    let result = parse_and_typecheck("(file OR dir) AND size > 100kb");
+    assert!(
+        result.is_ok(),
+        "Parenthesized expression with word operators should parse, got: {:?}",
+        result.err()
+    );
+
+    // With NOT
+    let result = parse_and_typecheck("NOT file AND size > 1kb");
+    assert!(
+        result.is_ok(),
+        "NOT with word-form AND should parse, got: {:?}",
+        result.err()
+    );
+}
+
+#[test]
 fn test_unknown_alias_error() {
     // Unknown aliases should produce helpful errors
     let result = parse_and_typecheck("unknownalias");

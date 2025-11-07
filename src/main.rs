@@ -38,8 +38,8 @@ struct Args {
     /// include gitignored files
     #[arg(short = 'i')]
     visit_gitignored: bool,
-    /// log level (error/warn/info/debug)
-    #[arg(short = 'l', default_value = "warn")]
+    /// log level (trace/debug/info/warning/error/critical)
+    #[arg(short = 'l', default_value = "warning")]
     log_level: String,
     /// Maximum file size for structured data parsing (yaml/json/toml)
     /// Supports units: kb, mb, gb (e.g., "10mb", "500kb")
@@ -80,12 +80,19 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_structured_size,
     };
 
+    let log_level = Level::from_str(&args.log_level).unwrap_or_else(|_| {
+        eprintln!(
+            "Error: Invalid log level '{}'\nValid options: trace, debug, info, warning, error, critical",
+            args.log_level
+        );
+        std::process::exit(1);
+    });
+
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let logger = Logger::root(
         RuntimeLevelFilter {
             drain: slog_term::FullFormat::new(plain).build(),
-            level: Level::from_str(&args.log_level)
-                .unwrap_or_else(|_| panic!("invalid log level {}", args.log_level)),
+            level: log_level,
         }
         .fuse(),
         o!(),
