@@ -102,19 +102,21 @@ impl Typechecker {
                             suggestions: suggestions_msg,
                         })
                     }
-                    Err(typed::AliasError::Structured(typed::StructuredSelectorError::UnknownFormat { format })) => {
-                        Err(DetectError::UnknownStructuredFormat {
-                            format,
-                            span: span.to_source_span(),
-                            src: source.to_string(),
-                            suggestions: Some("Valid formats: yaml, json, toml".to_string()),
-                        })
-                    }
-                    Err(typed::AliasError::Structured(typed::StructuredSelectorError::InvalidPath {
+                    Err(typed::AliasError::Structured(
+                        typed::StructuredSelectorError::UnknownFormat { format },
+                    )) => Err(DetectError::UnknownStructuredFormat {
                         format,
-                        path,
-                        reason,
-                    })) => Err(DetectError::InvalidStructuredPath {
+                        span: span.to_source_span(),
+                        src: source.to_string(),
+                        suggestions: Some("Valid formats: yaml, json, toml".to_string()),
+                    }),
+                    Err(typed::AliasError::Structured(
+                        typed::StructuredSelectorError::InvalidPath {
+                            format,
+                            path,
+                            reason,
+                        },
+                    )) => Err(DetectError::InvalidStructuredPath {
                         format,
                         path,
                         span: span.to_source_span(),

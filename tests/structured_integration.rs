@@ -1447,12 +1447,7 @@ async fn test_exists_multi_doc_yaml() {
 
 #[tokio::test]
 async fn test_exists_empty_file() {
-    run_structured_test(
-        vec![("empty.yaml", EMPTY_YAML)],
-        "yaml:.field",
-        vec![],
-    )
-    .await;
+    run_structured_test(vec![("empty.yaml", EMPTY_YAML)], "yaml:.field", vec![]).await;
 }
 
 #[tokio::test]
@@ -1471,7 +1466,7 @@ async fn test_exists_false_value() {
     // Field exists with false value - should still match
     run_structured_test(
         vec![("config.yaml", CONFIG_YAML)],
-        "yaml:.features[1].enabled",  // This is false in the fixture
+        "yaml:.features[1].enabled", // This is false in the fixture
         vec!["config.yaml"],
     )
     .await;
@@ -1481,10 +1476,7 @@ async fn test_exists_false_value() {
 async fn test_exists_vs_value_comparison() {
     // Test that existence check is different from value comparison
     run_structured_test(
-        vec![
-            ("config.yaml", CONFIG_YAML),
-            ("empty.yaml", EMPTY_YAML),
-        ],
+        vec![("config.yaml", CONFIG_YAML), ("empty.yaml", EMPTY_YAML)],
         "yaml:.server.port",
         vec!["config.yaml"],
     )
@@ -1492,10 +1484,7 @@ async fn test_exists_vs_value_comparison() {
 
     // Value comparison should also work
     run_structured_test(
-        vec![
-            ("config.yaml", CONFIG_YAML),
-            ("empty.yaml", EMPTY_YAML),
-        ],
+        vec![("config.yaml", CONFIG_YAML), ("empty.yaml", EMPTY_YAML)],
         "yaml:.server.port == 8080",
         vec!["config.yaml"],
     )
@@ -1517,10 +1506,7 @@ async fn test_exists_recursive_descent() {
 async fn test_exists_with_boolean_logic() {
     // Test existence checks combined with other predicates
     run_structured_test(
-        vec![
-            ("config.yaml", CONFIG_YAML),
-            ("package.json", PACKAGE_JSON),
-        ],
+        vec![("config.yaml", CONFIG_YAML), ("package.json", PACKAGE_JSON)],
         "yaml:.server OR json:.name",
         vec!["config.yaml", "package.json"],
     )
@@ -1541,4 +1527,3 @@ async fn test_exists_multiple_formats() {
     )
     .await;
 }
-

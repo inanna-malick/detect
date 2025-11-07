@@ -7,8 +7,11 @@
 
 use std::sync::Arc;
 
-use crate::predicate::{DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate, StructuredDataPredicate};
-use super::typed::{AliasError, parse_structured_selector, DataFormat};
+use super::typed::{parse_structured_selector, AliasError, DataFormat};
+use crate::predicate::{
+    DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate,
+    StructuredDataPredicate,
+};
 
 /// Resolve a single-word alias to a predicate
 ///

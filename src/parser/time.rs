@@ -414,4 +414,114 @@ mod tests {
         assert!(parse_time_value("12:00:00").is_err());
         assert!(parse_time_value("7 days ago").is_err());
     }
+
+    #[test]
+    fn test_zero_duration() {
+        // Zero duration should be valid
+        let result = parse_time_value("-0d").unwrap();
+        let expected = Local::now();
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        let result = parse_time_value("0d").unwrap();
+        let expected = Local::now();
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        let result = parse_time_value("0.days").unwrap();
+        let expected = Local::now();
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        let result = parse_time_value("-0hours").unwrap();
+        let expected = Local::now();
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        let result = parse_time_value("0.seconds").unwrap();
+        let expected = Local::now();
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+    }
+
+    #[test]
+    fn test_whitespace_handling() {
+        // Leading whitespace
+        let result = parse_time_value(" -7d").unwrap();
+        let expected = Local::now() - Duration::days(7);
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        // Trailing whitespace
+        let result = parse_time_value("-7d ").unwrap();
+        let expected = Local::now() - Duration::days(7);
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        // Both
+        let result = parse_time_value("  -7d  ").unwrap();
+        let expected = Local::now() - Duration::days(7);
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        // Absolute dates with whitespace
+        let result = parse_time_value(" 2024-12-31 ").unwrap();
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.month(), 12);
+        assert_eq!(result.day(), 31);
+
+        // ISO8601 with whitespace
+        let result = parse_time_value("  2024-12-31T23:59:59  ").unwrap();
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.hour(), 23);
+    }
+
+    #[test]
+    fn test_empty_unit_fails() {
+        // Period without unit should fail
+        let result = parse_time_value("-7.");
+        assert!(result.is_err());
+
+        let result = parse_time_value("7.");
+        assert!(result.is_err());
+
+        // Just period
+        let result = parse_time_value("-.");
+        assert!(result.is_err());
+
+        let result = parse_time_value(".");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_timezone_offset_formats() {
+        // RFC3339 with positive offset
+        let result = parse_time_value("2024-12-31T23:59:59+05:30");
+        assert!(result.is_ok());
+
+        // RFC3339 with negative offset
+        let result = parse_time_value("2024-12-31T23:59:59-08:00");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_fractional_seconds_unsupported() {
+        // Fractional seconds not currently supported - should fail gracefully
+        let result = parse_time_value("2024-12-31T23:59:59.999");
+        assert!(result.is_err());
+
+        let result = parse_time_value("2024-12-31T23:59:59.999Z");
+        // This might work via RFC3339
+        // Just check it doesn't panic
+        let _ = result;
+    }
+
+    #[test]
+    fn test_edge_case_numbers() {
+        // Very large numbers (but not overflow)
+        let result = parse_time_value("-99999d");
+        assert!(result.is_ok());
+
+        // Single digit
+        let result = parse_time_value("-1d").unwrap();
+        let expected = Local::now() - Duration::days(1);
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+
+        // Multiple digits
+        let result = parse_time_value("-365d").unwrap();
+        let expected = Local::now() - Duration::days(365);
+        assert!((result.timestamp() - expected.timestamp()).abs() <= 1);
+    }
 }

@@ -452,4 +452,3 @@ fn test_structured_selector_constructs_exists_predicate() {
         _ => panic!("Expected TomlExists predicate"),
     }
 }
-

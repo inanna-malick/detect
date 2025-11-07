@@ -19,18 +19,14 @@ pub enum ParseError {
         reason: String,
     },
     /// Unknown structured data format (not yaml/json/toml)
-    UnknownStructuredFormat {
-        format: String,
-    },
+    UnknownStructuredFormat { format: String },
 }
 
 /// Error type for parsing structured selectors (yaml:, json:, toml:)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructuredSelectorError {
     /// Unknown structured data format (not yaml/json/toml)
-    UnknownFormat {
-        format: String,
-    },
+    UnknownFormat { format: String },
     /// Invalid structured selector path
     InvalidPath {
         format: String,
@@ -253,8 +249,16 @@ pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
         Err(StructuredSelectorError::UnknownFormat { format }) => {
             return Err(ParseError::UnknownStructuredFormat { format });
         }
-        Err(StructuredSelectorError::InvalidPath { format, path, reason }) => {
-            return Err(ParseError::InvalidStructuredPath { format, path, reason });
+        Err(StructuredSelectorError::InvalidPath {
+            format,
+            path,
+            reason,
+        }) => {
+            return Err(ParseError::InvalidStructuredPath {
+                format,
+                path,
+                reason,
+            });
         }
     }
 
