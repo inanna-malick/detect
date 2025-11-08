@@ -14,7 +14,7 @@ For selectors: `name`, `ext`, `path`, `dir`, `content`
 | `~=`        | Regex pattern matching | `name ~= "test.*\.rs$"` |
 | `in [a,b,c]` | Match any item in set | `ext in [js,ts,jsx,tsx]` |
 
-All string matching is case-sensitive. Regex uses Rust regex syntax with automatic PCRE2 fallback for advanced features. Set membership allows optional spaces: `ext in [rs, toml, md]`.
+All string matching is case-sensitive. Regex uses Rust regex syntax. Set membership allows optional spaces: `ext in [rs, toml, md]`.
 
 ## Numeric Operators
 

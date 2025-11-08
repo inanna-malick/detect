@@ -1,6 +1,5 @@
 use crate::expr::short_circuit::ShortCircuit;
 use crate::expr::Expr;
-use crate::hybrid_regex::StreamingHybridRegex;
 use crate::predicate::{Predicate, StreamingCompiledContentPredicateRef};
 use crate::util::Done;
 use futures::{Stream, StreamExt};
@@ -18,17 +17,12 @@ pub async fn run_contents_predicate_stream(
 
     // Initialize state for DFA patterns
     let mut e: Expr<Predicate<Done, Done, _>> = e.map_predicate(|p| match p {
-        Predicate::Content(pred) => match &pred.inner {
-            StreamingHybridRegex::RustDFA(dfa) => {
+        Predicate::Content(pred) => {
+            let dfa = pred.inner;
                 let s = dfa
                     .start_state(&config)
                     .expect("DFA start_state failed: invalid regex configuration");
-                Predicate::Content((pred, Some(s), Vec::new()))
-            }
-            StreamingHybridRegex::Pcre2(_) => {
-                // PCRE2 patterns accumulate buffer
-                Predicate::Content((pred, None, Vec::new()))
-            }
+                Predicate::Content((dfa, s))
         },
         _ => unreachable!(),
     });
@@ -39,11 +33,9 @@ pub async fn run_contents_predicate_stream(
 
         // advance each pattern appropriately
         e = e.reduce_predicate_and_short_circuit(move |p| match p {
-            Predicate::Content((pred, state, mut buffer)) => {
-                match &pred.inner {
-                    StreamingHybridRegex::RustDFA(dfa) => {
+            Predicate::Content((dfa, state)) => {
                         // DFA streaming processing
-                        let mut next_state = state.unwrap();
+                        let mut next_state = state;
                         let mut iter = bytes.iter();
 
                         loop {
@@ -59,19 +51,11 @@ pub async fn run_contents_predicate_stream(
                                 }
                             } else {
                                 break ShortCircuit::Unknown(Predicate::Content((
-                                    pred,
-                                    Some(next_state),
-                                    buffer,
+                                    dfa,
+                                    next_state,
                                 )));
                             }
                         }
-                    }
-                    StreamingHybridRegex::Pcre2(_) => {
-                        // PCRE2 needs full buffer
-                        buffer.extend_from_slice(&bytes);
-                        ShortCircuit::Unknown(Predicate::Content((pred, None, buffer)))
-                    }
-                }
             }
             _ => unreachable!(),
         });
@@ -79,19 +63,10 @@ pub async fn run_contents_predicate_stream(
 
     // Final evaluation
     let e = e.reduce_predicate_and_short_circuit(|p| match p {
-        Predicate::Content((pred, state, buffer)) => {
-            match &pred.inner {
-                StreamingHybridRegex::RustDFA(dfa) => {
-                    let next_state = dfa.next_eoi_state(state.unwrap());
+        Predicate::Content((dfa, state)) => {
+                    let next_state = dfa.next_eoi_state(state);
                     let matched = dfa.is_match_state(next_state);
                     ShortCircuit::Known(matched)
-                }
-                StreamingHybridRegex::Pcre2(_) => {
-                    // Now check PCRE2 pattern against accumulated buffer
-                    let matched = pred.inner.is_match(&buffer);
-                    ShortCircuit::Known(matched)
-                }
-            }
         }
         _ => unreachable!(),
     });

@@ -784,13 +784,11 @@ fn test_special_regex_characters() {
     use detect::parser::typechecker::Typechecker;
 
     // Test regex patterns with special characters that require proper handling
-    // These patterns test the hybrid regex engine's ability to handle both
-    // Rust regex and PCRE2 patterns correctly
     let cases = vec![
         // Escaped literal characters
         (r#"name ~= "test\\.rs""#, "Escaped dot in regex"),
         (r#"path ~= "src/main\\.rs""#, "Path with escaped dot"),
-        // Word boundaries (PCRE2 feature, should fallback)
+        // Word boundaries
         (r#"content ~= "\\bword\\b""#, "Word boundary anchors"),
         // Character classes and quantifiers
         (

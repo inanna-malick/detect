@@ -2,7 +2,6 @@ mod enum_matcher;
 
 pub use enum_matcher::{EnumMatcher, EnumPredicate};
 
-use crate::hybrid_regex::{HybridRegex, StreamingHybridRegex};
 use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
 use std::fs::FileType;
@@ -166,18 +165,33 @@ pub enum TimeUnit {
 
 pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum StringMatcher {
-    Regex(HybridRegex),
+    Regex(regex::Regex),
     Equals(String),
     NotEquals(String),
     Contains(String),
     In(HashSet<String>),
 }
 
+impl PartialEq for StringMatcher {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Equals(l0), Self::Equals(r0)) => l0 == r0,
+            (Self::NotEquals(l0), Self::NotEquals(r0)) => l0 == r0,
+            (Self::Contains(l0), Self::Contains(r0)) => l0 == r0,
+            (Self::In(l0), Self::In(r0)) => l0 == r0,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for StringMatcher {}
+
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
-        Ok(Self::Regex(HybridRegex::new(s)?))
+        Ok(Self::Regex(regex::Regex::new(s)?))
     }
 
     // Helper constructors for tests and programmatic usage
@@ -719,15 +733,15 @@ pub enum StructuredDataPredicate {
 
 #[derive(Debug)]
 pub struct StreamingCompiledContentPredicate {
-    inner: StreamingHybridRegex,
+    inner: Box<DFA<Vec<u32>>>,
     source: String,
 }
 
 impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
-        match StreamingHybridRegex::new(&source) {
-            Ok(inner) => Ok(Self { inner, source }),
-            Err(e) => Err(PredicateParseError::Dfa(e)),
+        match DFA::new(&source) {
+            Ok(inner) => Ok(Self { inner: Box::new(inner), source }),
+            Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
         }
     }
 
@@ -747,6 +761,6 @@ impl PartialEq for StreamingCompiledContentPredicate {
 
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    pub inner: &'a StreamingHybridRegex,
+    pub inner: &'a Box<DFA<Vec<u32>>>,
     pub source: &'a str,
 }

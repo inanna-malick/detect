@@ -18,7 +18,6 @@ path = "src/main.rs"
 clap = {version = "4.5", features = ["derive"]}
 futures = "0.3.31"
 ignore = "0.4"
-pcre2 = "0.2"
 pest = "2.7.15"
 pest_derive = "2.7.15"
 recursion = {version = "0.5", features = ["experimental"]}
