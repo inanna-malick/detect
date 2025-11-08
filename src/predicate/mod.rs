@@ -562,7 +562,7 @@ impl NamePredicate {
                         false
                     }
                 } else {
-                    // No base path provided, use absolute path (backward compatibility)
+                    // No base path provided, use absolute path
                     path.parent()
                         .and_then(|p| p.as_os_str().to_str())
                         .is_some_and(|s| x.is_match(s))

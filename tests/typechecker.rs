@@ -1,5 +1,5 @@
 use detect::expr::Expr;
-use detect::parser::error::DetectError as TypecheckError;
+use detect::parser::error::DetectError;
 use detect::parser::{RawParser, Typechecker};
 use detect::predicate::{
     parse_time_value, Bound, DetectFileType, EnumMatcher, MetadataPredicate, NamePredicate,
@@ -7,7 +7,7 @@ use detect::predicate::{
 };
 
 /// Helper function to parse and typecheck an expression
-fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, TypecheckError> {
+fn parse_and_typecheck(expr: &str) -> Result<Expr<Predicate>, DetectError> {
     let raw_expr = RawParser::parse_raw_expr(expr).unwrap();
     Typechecker::typecheck(raw_expr, expr, &detect::RuntimeConfig::default())
 }
@@ -42,7 +42,7 @@ fn test_selector_recognition() {
 fn test_unknown_selector() {
     let error = parse_and_typecheck("unknown_selector == foo").unwrap_err();
     assert!(
-        matches!(error, TypecheckError::UnknownSelector { selector, .. } if selector == "unknown_selector")
+        matches!(error, DetectError::UnknownSelector { selector, .. } if selector == "unknown_selector")
     );
 }
 
@@ -53,14 +53,14 @@ fn test_operator_validation() {
 
     // Invalid operator for string selector (numeric operator on string type)
     let error = parse_and_typecheck("name > foo").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 
     // Valid numeric operator
     assert!(parse_and_typecheck("size > 1000").is_ok());
 
     // Invalid operator for numeric selector (string operator on numeric type)
     let error = parse_and_typecheck("size contains foo").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 }
 
 #[test]
@@ -247,7 +247,7 @@ fn test_invalid_regex_patterns_fail_typecheck() {
     for expr in invalid_patterns {
         let result = parse_and_typecheck(expr);
         assert!(
-            matches!(result, Err(TypecheckError::InvalidValue { .. })),
+            matches!(result, Err(DetectError::InvalidValue { .. })),
             "Should fail with InvalidValue error for: {}, got: {:?}",
             expr,
             result
@@ -484,11 +484,11 @@ fn test_invalid_values() {
 
     // Non-numeric value for size
     let error = parse_and_typecheck("size > foo").unwrap_err();
-    assert!(matches!(error, TypecheckError::InvalidValue { .. }));
+    assert!(matches!(error, DetectError::InvalidValue { .. }));
 
     // Set value for content - content doesn't support 'in' operator
     let error = parse_and_typecheck("content in [foo, bar]").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 }
 
 #[test]
@@ -506,34 +506,34 @@ fn test_content_operators() {
 
     // Contents does not support 'in'
     let error = parse_and_typecheck("content in [foo, bar]").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 
     // Contents does not support '!='
     let error = parse_and_typecheck("content != pattern").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 }
 
 #[test]
 fn test_type_safety_enforcement() {
     // String selector with numeric operator should fail
     let error = parse_and_typecheck("name > foo").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 
     // Numeric selector with string operator should fail
     let error = parse_and_typecheck("size contains foo").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 
     // Temporal selector with invalid operator should fail
     let error = parse_and_typecheck("modified contains 2024").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 
     // Contents with 'in' operator should fail (special case)
     let error = parse_and_typecheck("content in [foo, bar]").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 
     // Contents with '!=' operator should fail (special case)
     let error = parse_and_typecheck("content != pattern").unwrap_err();
-    assert!(matches!(error, TypecheckError::IncompatibleOperator { .. }));
+    assert!(matches!(error, DetectError::IncompatibleOperator { .. }));
 }
 
 #[test]
@@ -620,7 +620,7 @@ fn test_truly_unknown_operators() {
         // Should parse now, but fail at typecheck
         let error = parse_and_typecheck(expr).unwrap_err();
         assert!(
-            matches!(error, TypecheckError::UnknownOperator { operator: ref o, .. } if o == op),
+            matches!(error, DetectError::UnknownOperator { operator: ref o, .. } if o == op),
             "Expected UnknownOperator({}) for expression: {}",
             op,
             expr
@@ -657,7 +657,7 @@ fn test_operator_edge_cases() {
     // Verify it fails at typecheck with UnknownOperator
     let typecheck_result = Typechecker::typecheck(result, expr, &detect::RuntimeConfig::default());
     assert!(
-        matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == "!"),
+        matches!(typecheck_result, Err(DetectError::UnknownOperator { operator: ref o, .. }) if o == "!"),
         "Single ! should fail typecheck with UnknownOperator"
     );
 
@@ -688,7 +688,7 @@ fn test_operator_edge_cases() {
     // Verify it fails at typecheck with UnknownOperator
     let typecheck_result = Typechecker::typecheck(result, expr, &detect::RuntimeConfig::default());
     assert!(
-        matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == "==="),
+        matches!(typecheck_result, Err(DetectError::UnknownOperator { operator: ref o, .. }) if o == "==="),
         "Triple equals should fail typecheck with UnknownOperator"
     );
 
@@ -740,7 +740,7 @@ fn test_unknown_operators_parse_but_fail_typecheck() {
         let typecheck_result =
             Typechecker::typecheck(result, expr, &detect::RuntimeConfig::default());
         assert!(
-            matches!(typecheck_result, Err(TypecheckError::UnknownOperator { operator: ref o, .. }) if o == expected_op),
+            matches!(typecheck_result, Err(DetectError::UnknownOperator { operator: ref o, .. }) if o == expected_op),
             "Expected UnknownOperator({}) for '{}', got {:?}",
             expected_op,
             expr,
@@ -877,7 +877,7 @@ fn test_enum_invalid_values() {
     for expr in invalid_cases {
         let error = parse_and_typecheck(expr).unwrap_err();
         assert!(
-            matches!(error, TypecheckError::InvalidValue { ref expected, .. } if expected.contains("file") && expected.contains("dir")),
+            matches!(error, DetectError::InvalidValue { ref expected, .. } if expected.contains("file") && expected.contains("dir")),
             "Expected InvalidValue error with list of valid types for '{}', got: {:?}",
             expr,
             error
@@ -949,7 +949,7 @@ fn test_enum_invalid_value_in_set() {
     // First invalid value in set should cause error
     let error = parse_and_typecheck("type in [file, invalid, dir]").unwrap_err();
     assert!(
-        matches!(error, TypecheckError::InvalidValue { ref found, .. } if found == "invalid"),
+        matches!(error, DetectError::InvalidValue { ref found, .. } if found == "invalid"),
         "Expected InvalidValue error for 'invalid', got: {:?}",
         error
     );
@@ -972,8 +972,7 @@ fn test_enum_incompatible_operators() {
         assert!(
             matches!(
                 error,
-                TypecheckError::IncompatibleOperator { .. }
-                    | TypecheckError::UnknownOperator { .. }
+                DetectError::IncompatibleOperator { .. } | DetectError::UnknownOperator { .. }
             ),
             "Expected IncompatibleOperator or UnknownOperator for '{}', got: {:?}",
             expr,

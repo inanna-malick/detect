@@ -15,7 +15,6 @@ name = "detect"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1"
 clap = {version = "4.5", features = ["derive"]}
 futures = "0.3.31"
 ignore = "0.4"

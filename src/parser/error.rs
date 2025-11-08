@@ -3,7 +3,8 @@ use thiserror::Error;
 
 use super::raw::Rule;
 
-/// Main error type for detect expressions, using miette for beautiful diagnostics
+/// Main error type for detect expressions, using miette for diagnostics
+#[allow(dead_code)] // Fields are used by miette's derive macros
 #[derive(Debug, Clone, Diagnostic, Error)]
 pub enum DetectError {
     // Syntax errors from pest
@@ -191,20 +192,7 @@ pub enum DetectError {
     },
 }
 
-// Legacy type alias for compatibility during migration
-pub type RawParseError = DetectError;
-
-// Implement conversion from anyhow errors for compatibility
-impl From<anyhow::Error> for DetectError {
-    fn from(err: anyhow::Error) -> Self {
-        DetectError::Internal {
-            message: err.to_string(),
-            src: String::new(),
-        }
-    }
-}
-
-// Extension trait for cleaner span location extraction
+// Extension trait for span location extraction
 pub trait SpanExt {
     fn to_location(&self) -> (usize, usize);
     fn to_source_span(&self) -> SourceSpan;
@@ -285,7 +273,7 @@ fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
 }
 
 impl DetectError {
-    /// Create a syntax error from pest error with rich diagnostic information
+    /// Create a syntax error from pest error with diagnostic information
     pub fn from_pest(pest_err: Box<pest::error::Error<Rule>>, src: String) -> Self {
         use pest::error::{ErrorVariant, InputLocation};
 
@@ -352,27 +340,6 @@ impl DetectError {
             expected_msg,
             line,
             col,
-        }
-    }
-
-    /// Create an invalid escape error
-
-    pub fn invalid_escape(char: char, position: usize) -> Self {
-        // This is a legacy constructor, we'll need the source to create proper error
-        // For now, create without source
-        DetectError::InvalidEscape {
-            char,
-            span: (position, 1).into(),
-            src: String::new(),
-        }
-    }
-
-    /// Create an unterminated escape error
-
-    pub fn unterminated_escape() -> Self {
-        DetectError::UnterminatedEscape {
-            span: (0, 0).into(),
-            src: String::new(),
         }
     }
 

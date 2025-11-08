@@ -16,12 +16,9 @@ use crate::{
     },
 };
 
-// Re-export DetectError as TypecheckError for compatibility
-pub use crate::parser::error::DetectError as TypecheckError;
-
 /// Parse size values like "1mb", "100kb", etc. into bytes
-fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64, TypecheckError> {
-    crate::util::parse_size(s).map_err(|err_msg| TypecheckError::InvalidValue {
+fn parse_size_value(s: &str, value_span: pest::Span, source: &str) -> Result<u64, DetectError> {
+    crate::util::parse_size(s).map_err(|err_msg| DetectError::InvalidValue {
         expected: "size with unit (e.g., 1mb, 100kb)".to_string(),
         found: err_msg,
         span: value_span.to_source_span(),
