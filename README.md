@@ -5,32 +5,38 @@
 A modern replacement for find/grep using an intuitive expression language.
 
 - **Readable syntax**: `ext == ts AND size > 50kb` instead of `find . -name "*.ts" -size +50k`
-- **Unified queries**: Combine filename, content, metadata, and structured data (YAML/JSON/TOML)
+- **Unified queries**: Combine filename + content + metadata instead of chaining multiple processes
 - **Lazy evaluation**: Detect checks cheap predicates first (filename, metadata) and short circuits whenever possible
 
 [Quick start](#quick-start) • [Installation](#installation) • [Query language](#query-language) • [Examples](#examples)
 
-```bash
-# Find TypeScript files with async code
-detect 'ext == ts AND content ~= "async "'
-
-# Find large recent files with TODOs
-detect 'size > 50kb AND modified > -7d AND content contains TODO'
-```
-
-## Comparison to find/grep
-
 Traditional Unix tools require chaining multiple commands with cryptic syntax:
 
 ```bash
-# find + grep
-find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
+# Find Rust files importing BOTH tokio and serde
+detect 'ext == rs 
+        AND content contains "use tokio" 
+        AND content contains "use serde"'
 
-# detect
-detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
+# Traditional approach, requiring two passes per matching .rs file
+grep -rl 'use tokio' --include="*.rs" | xargs grep -l 'use serde'
 ```
 
-Detect combines filename, size, timestamp, and content matching in a single expression. Parse-time validation catches typos before execution.
+Detect also supports searches inspecting structured data in YAML, TOML, and JSON files:
+
+```bash
+# Find Cargo.toml files with package edition 2018
+detect 'name == "Cargo.toml" AND toml:.package.edition == 2018'
+
+# using regexes (may result in false positives)
+find . -name "Cargo.toml" -exec grep -q 'edition.*"2018"' {} \; -print
+
+# using cryptaliagy's tomlq crate
+find . -name "Cargo.toml" -exec sh -c '
+  tq -f "$1" -r ".package.edition" 2>/dev/null | grep -q "2018"
+' _ {} \; -print
+```
+
 
 ## Installation
 
@@ -108,7 +114,7 @@ detect 'yaml:.server.port > 8000 AND size < 0.5mb'   # structured data
 Query YAML, JSON, and TOML:
 
 ```bash
-yaml:.server                         # existence check (no operator needed)
+yaml:.server                        # existence check (no operator needed)
 yaml:.server.port == 8080           # nested field value
 toml:.package.edition == "2021"     # value match
 yaml:.features[*].enabled == true   # wildcard - any array element

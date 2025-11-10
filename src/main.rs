@@ -63,7 +63,9 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "list" => {
                 println!("Available help topics:\n");
                 println!("  examples    - Practical usage examples for common tasks");
-                println!("  predicates  - Reference of all selectors (name, size, content, yaml, etc.)");
+                println!(
+                    "  predicates  - Reference of all selectors (name, size, content, yaml, etc.)"
+                );
                 println!("  operators   - Reference of all operators (==, contains, ~=, etc.)");
                 println!("\nUsage: detect --explain <TOPIC>");
                 println!("   or: detect --explain (shows this list)");

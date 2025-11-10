@@ -278,10 +278,7 @@ fn parse_multiple_hyphens() {
 #[test]
 fn parse_slash_in_key() {
     let result = parse_path(".content/type").unwrap();
-    assert_eq!(
-        result,
-        vec![PathComponent::Key("content/type".to_string())]
-    );
+    assert_eq!(result, vec![PathComponent::Key("content/type".to_string())]);
 }
 
 #[test]

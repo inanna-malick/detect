@@ -300,9 +300,9 @@ mod tests {
     }
 
     #[test]
-    fn test_error_invalid_character_in_key() {
-        let result = parse_path(".field-name");
-        assert!(matches!(result, Err(PathParseError::Syntax(_))));
+    fn test_hyphen_in_key() {
+        let result = parse_path(".field-name").unwrap();
+        assert_eq!(result, vec![PathComponent::Key("field-name".to_string())]);
     }
 
     #[test]
