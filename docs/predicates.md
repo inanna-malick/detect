@@ -1,132 +1,73 @@
 # detect Predicates Reference
 
-All available selectors and their data types.
+All selectors and their types. Aliases shown as `primary` / `alias`.
 
-## File Identity Selectors
+## File Identity
 
 | Selector | Type   | Description | Example |
 |----------|--------|-------------|---------|
-| `name`   | String | Full filename with extension | `name == "README.md"` |
-| `basename` | String | Filename without extension | `basename == README` |
-| `ext`    | String | File extension without dot | `ext == rs` |
-| `path`   | String | Full absolute path | `path ~= "/src/"` |
-| `dir`    | String | Parent directory path | `dir == "/usr/bin"` |
+| `name` / `filename` | String | Full filename with extension | `name == "README.md"` |
+| `basename` / `stem` | String | Filename without extension | `basename == README` |
+| `ext` / `extension` | String | File extension without dot | `ext == rs` |
+| `path` | String | Full absolute path | `path ~= "/src/"` |
+| `dir` / `parent` / `directory` | String | Parent directory path | `dir == "/usr/bin"` |
 
-## File Property Selectors
+## File Properties
 
 | Selector | Type    | Description | Example |
 |----------|---------|-------------|---------|
-| `size`   | Numeric | File size in bytes | `size > 1mb` |
-| `type`   | Enum    | File type (validated at parse-time) | `type == file` |
-| `depth`  | Numeric | Directory depth from root | `depth <= 3` |
+| `size` / `filesize` / `bytes` | Numeric | File size in bytes | `size > 1mb` |
+| `type` / `filetype` | Enum    | File type (validated at parse-time) | `type == file` |
+| `depth` | Numeric | Directory depth from root | `depth <= 3` |
 
-**Size Units**: `kb`, `mb`, `gb`, `tb` (e.g., `45kb`, `1.5mb`)
+**Size units:** `kb`, `mb`, `gb`, `tb` (e.g. `45kb`, `1.5mb`)
 
-**Valid File Types** (case-insensitive):
-- `file` - Regular file
-- `dir` / `directory` - Directory
-- `symlink` / `link` - Symbolic link
-- `socket` / `sock` - Unix socket
-- `fifo` / `pipe` - Named pipe (FIFO)
-- `block` / `blockdev` - Block device
-- `char` / `chardev` - Character device
+**Valid types (case-insensitive):** `file`, `dir`/`directory`, `symlink`/`link`, `socket`/`sock`, `fifo`/`pipe`, `block`/`blockdev`, `char`/`chardev`
 
-## Time Selectors
-
-| Selector    | Type     | Description | Example |
-|-------------|----------|-------------|---------|
-| `modified`  | Temporal | Last modification time | `modified > -7d` |
-| `created`   | Temporal | File creation time | `created > 2024-01-01` |
-| `accessed`  | Temporal | Last access time | `accessed < -1h` |
-
-**Time Formats**:
-- Relative: `-7d` / `-7days`, `-2h` / `-2hours`, `-30m` / `-30minutes`, `-1w` / `-1week`
-  - Units: `s`/`sec`/`second`, `m`/`min`/`minute`, `h`/`hr`/`hour`, `d`/`day`, `w`/`week` (+ plurals)
-- Absolute: `2024-01-15`, `2024-01-15T10:30:00`
-
-## Content Selector
-
-| Selector  | Type   | Description | Example |
-|-----------|--------|-------------|---------|
-| `content` | String | File text contents | `content contains TODO` |
-
-## Structured Data Selectors
-
-Query YAML, JSON, and TOML file contents by navigating their structure:
+## Timestamps
 
 | Selector | Type | Description | Example |
 |----------|------|-------------|---------|
-| `yaml:.path` | Structured | YAML navigation | `yaml:.server.port == 8080` |
-| `json:.path` | Structured | JSON navigation | `json:.name == "test"` |
-| `toml:.path` | Structured | TOML navigation | `toml:.dependencies.serde` |
+| `modified` / `mtime` | Temporal | Last modification time | `modified > -7d` |
+| `created` / `ctime` | Temporal | File creation time | `created > 2024-01-01` |
+| `accessed` / `atime` | Temporal | Last access time | `accessed < -1h` |
 
-### Existence Checks (Singleton Predicates)
+**Formats:** Relative `-7d`/`-7days`, `-2h`/`-2hours` (units: `s`, `m`/`min`, `h`/`hr`, `d`/`day`, `w`/`week` + plurals). Absolute `2024-01-15`, `2024-01-15T10:30:00`.
 
-Use structured selectors alone to check if a field exists:
+## Content
 
-```bash
-# Find files with a 'port' field anywhere in any format
-detect 'yaml:..port OR json:..port OR toml:..port'
+| Selector | Type | Description | Example |
+|----------|------|-------------|---------|
+| `content` / `text` / `contents` | String | File text contents | `content contains TODO` |
 
-# Find YAML files with a 'server' field
-detect 'yaml:.server'
-```
+## Structured Data
 
-**Navigation Syntax:**
-- `.field` - Access object field
-- `.nested.field` - Access nested fields
-- `[0]` - Access array element by index
-- `[*]` - Wildcard - all array elements
-- `..field` - Recursive descent - all fields at any depth
+Query YAML, JSON, TOML by navigating structure:
 
-**Operators:** `==`, `!=`, `>`, `<`, `>=`, `<=`, `contains`, `~=`
+| Selector | Description | Example |
+|----------|-------------|---------|
+| `yaml:.path` | YAML navigation | `yaml:.server.port == 8080` |
+| `json:.path` | JSON navigation | `json:.items[0].name == "test"` |
+| `toml:.path` | TOML navigation | `toml:.package.edition == "2021"` |
 
-**Type Coercion:** Falls back to strings on type mismatch
-- `yaml:.port == 8080` matches both integer 8080 and string "8080"
-- `json:.version == "1.0"` matches both string "1.0" and number 1.0
-- Applies to all comparison and string matching operators
+**Navigation syntax:**
 
-**Examples:**
-```bash
-# Simple field access
-yaml:.server.port == 8080
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `.field` | Object field access | `yaml:.server` |
+| `.nested.field` | Nested fields | `json:.meta.author` |
+| `[0]` | Array index | `yaml:.items[0]` |
+| `[*]` | Wildcard - any element | `yaml:.features[*].enabled` |
+| `..field` | Recursive - any depth | `toml:..password` |
 
-# Nested fields
-json:.dependencies.react == "18.0.0"
+**Operators:** `==`, `!=`, `>`, `<`, `>=`, `<=`, `contains`, `~=` (same as other selectors)
 
-# Array indexing
-yaml:.features[0].name == "auth"
+**Type coercion:** Numbers/booleans convert to strings - `yaml:.port == 8080` matches both `8080` and `"8080"`
 
-# Wildcards - all array elements
-yaml:.features[*].enabled == true
-
-# Recursive descent
-yaml:..password contains "prod"
-
-# Numeric comparisons
-json:.spec.replicas > 3
-
-# Type coercion
-yaml:.port == "8080"  # matches port: 8080 or port: "8080"
-```
+**Existence check:** Use selector alone without operator - `yaml:.server` checks if field exists
 
 **Limitations:**
 - Files > 10MB skipped (configurable: `--max-structured-size`)
 - Non-UTF8 files skip structured evaluation
 - Invalid YAML/JSON/TOML returns false (no error)
 - Multi-document YAML: matches if ANY document matches
-
-## Selector Aliases
-
-Alternative names for convenience:
-
-- `name` = `filename`
-- `stem` = `basename`
-- `ext` = `extension`
-- `dir` = `parent` = `directory`
-- `size` = `filesize` = `bytes`
-- `type` = `filetype`
-- `modified` = `mtime`
-- `created` = `ctime`
-- `accessed` = `atime`
-- `content` = `text` = `contents`

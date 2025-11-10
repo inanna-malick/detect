@@ -22,20 +22,20 @@ EXIT CODES:
   2  Error (parse error, directory not found, etc.)"
 )]
 struct Args {
-    /// Show practical examples
-    #[arg(long = "examples")]
-    examples: bool,
-
-    /// Show available predicates/selectors
-    #[arg(long = "predicates")]
-    predicates: bool,
-
-    /// Show operator reference
-    #[arg(long = "operators")]
-    operators: bool,
+    /// Show help on specific topics: examples, predicates, operators
+    ///
+    /// Without argument, lists available topics
+    #[arg(
+        long = "explain",
+        value_name = "TOPIC",
+        num_args = 0..=1,
+        default_missing_value = "list",
+        require_equals = false,
+    )]
+    explain: Option<String>,
 
     /// filtering expr
-    #[clap(index = 1, required_unless_present_any = ["examples", "predicates", "operators"])]
+    #[clap(index = 1, required_unless_present = "explain")]
     expr: Option<String>,
 
     /// target dir
@@ -57,24 +57,33 @@ struct Args {
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    if args.examples {
-        println!("{}", EXAMPLES);
-        return Ok(());
-    }
-
-    if args.predicates {
-        println!("{}", PREDICATES);
-        return Ok(());
-    }
-
-    if args.operators {
-        println!("{}", OPERATORS);
+    // Handle --explain flag
+    if let Some(topic) = args.explain {
+        match topic.to_lowercase().as_str() {
+            "list" => {
+                println!("Available help topics:\n");
+                println!("  examples    - Practical usage examples for common tasks");
+                println!("  predicates  - Reference of all selectors (name, size, content, yaml, etc.)");
+                println!("  operators   - Reference of all operators (==, contains, ~=, etc.)");
+                println!("\nUsage: detect --explain <TOPIC>");
+                println!("   or: detect --explain (shows this list)");
+            }
+            "examples" => println!("{}", EXAMPLES),
+            "predicates" | "selectors" => println!("{}", PREDICATES),
+            "operators" | "ops" => println!("{}", OPERATORS),
+            _ => {
+                eprintln!("Error: Unknown topic '{}'\n", topic);
+                eprintln!("Available topics: examples, predicates, operators");
+                eprintln!("Run 'detect --explain' to see all topics");
+                std::process::exit(2);
+            }
+        }
         return Ok(());
     }
 
     let expr = args
         .expr
-        .expect("Expression required when above flags aren't set, should be present");
+        .expect("Expression required when --explain isn't used, should be present");
 
     let max_structured_size =
         detect::util::parse_size(&args.max_structured_size).unwrap_or_else(|e| {
