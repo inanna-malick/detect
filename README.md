@@ -6,7 +6,7 @@ A modern replacement for find/grep using an intuitive expression language.
 
 - **Readable syntax**: `ext == ts AND size > 50kb` instead of `find . -name "*.ts" -size +50k`
 - **Unified queries**: Combine filename, content, metadata, and structured data (YAML/JSON/TOML)
-- **Parse-time validation**: Catches typos before execution with Levenshtein suggestions
+- **Lazy evaluation**: Detect checks cheap predicates first (filename, metadata) and short circuits whenever possible
 
 [Quick start](#quick-start) • [Installation](#installation) • [Query language](#query-language) • [Examples](#examples)
 
@@ -16,9 +16,6 @@ detect 'ext == ts AND content ~= "async "'
 
 # Find large recent files with TODOs
 detect 'size > 50kb AND modified > -7d AND content contains TODO'
-
-# Find React components outside test directories
-detect 'ext in [jsx,tsx] AND content ~= "function \w+\(" AND NOT path contains test'
 ```
 
 ## Comparison to find/grep
@@ -33,7 +30,7 @@ find . -name "*.ts" -type f -size +5k -mtime -7 -exec grep -l "TODO" {} \;
 detect 'ext == ts AND size > 5kb AND modified > -7d AND content contains TODO'
 ```
 
-Combines filename, size, timestamp, and content matching in a single expression. Parse-time validation catches typos before execution.
+Detect combines filename, size, timestamp, and content matching in a single expression. Parse-time validation catches typos before execution.
 
 ## Installation
 
@@ -65,7 +62,7 @@ detect 'ext in [rs,toml] AND size > 1mb'             # sets, AND, numeric
 detect 'ext == ts AND modified > -7d'                 # temporal predicates
 detect 'ext == ts AND content ~= "class.*Service"'   # content, regex
 detect '(file OR dir) AND NOT path ~= test'          # aliases, grouping, NOT
-detect 'yaml:.server.port > 8000 AND size < 100kb'   # structured data
+detect 'yaml:.server.port > 8000 AND size < 0.5mb'   # structured data
 ```
 
 ## Query language
@@ -115,7 +112,7 @@ yaml:.server                         # existence check (no operator needed)
 yaml:.server.port == 8080           # nested field value
 toml:.package.edition == "2021"     # value match
 yaml:.features[*].enabled == true   # wildcard - any array element
-yaml:..password contains prod       # recursive - any depth
+json:..password contains prod       # recursive - any depth
 ```
 
 Navigate with `.field`, `.nested.field`, `[0]`, `[*]`, `..field`. Auto-converts between numbers and strings (`yaml:.port == 8080` matches both `8080` and `"8080"`). Default max file size: 10MB (configurable with `--max-structured-size`).
@@ -160,7 +157,7 @@ find . -name "*.ts" -size +1M -mtime -7  →  detect 'ext == ts AND size > 1mb A
 # CLI options
 detect 'ext == rs' ./src                              # search specific directory
 detect -i 'content contains SECRET'                   # include gitignored files
-detect --max-structured-size 50mb 'yaml:.config'      # configure size limit
+detect --max-structured-size 50mb 'yaml:.config'      # configure size limit for structured files
 ```
 
 **More examples:** `detect --examples`

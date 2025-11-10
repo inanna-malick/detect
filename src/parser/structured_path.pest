@@ -12,7 +12,7 @@ recursive_key = { ".." ~ identifier }
 
 // Key access: .fieldname
 key_access = { "." ~ identifier }
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-" | "/")* }
 
 // Array index: [42]
 index_access = { "[" ~ number ~ "]" }
