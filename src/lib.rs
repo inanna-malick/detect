@@ -1,10 +1,9 @@
 #![doc = include_str!("../README.md")]
+#![warn(clippy::all)]
+#![warn(clippy::cargo)]
 
 pub mod eval;
 pub mod expr;
-pub mod hybrid_regex;
-#[cfg(feature = "mcp")]
-pub mod mcp_server;
 pub mod parser;
 pub mod predicate;
 mod predicate_error;
@@ -12,11 +11,10 @@ pub mod util;
 
 use std::{path::Path, sync::Arc, time::Instant};
 
-use anyhow::Context;
 use ignore::WalkBuilder;
 use parser::{error::DetectError, RawParser, Typechecker};
 use predicate::Predicate;
-use slog::{debug, info, Logger};
+use slog::{debug, info, warn, Logger};
 
 /// Runtime configuration for detect operations
 #[derive(Debug, Clone)]
@@ -41,15 +39,13 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
     expr: String,
     config: RuntimeConfig,
     mut on_match: F,
-) -> Result<(), DetectError> {
-    // Use parser: parse then typecheck
+) -> Result<usize, DetectError> {
     let original_query = expr.clone();
     let parse_result = RawParser::parse_raw_expr(&expr)
         .and_then(|raw_expr| Typechecker::typecheck(raw_expr, &expr, &config));
 
     match parse_result {
         Ok(parsed_expr) => {
-            // Validate root path exists and is a directory
             if !root.exists() {
                 return Err(DetectError::DirectoryNotFound {
                     path: root.display().to_string(),
@@ -70,8 +66,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                     !entry
                         .file_name()
                         .to_str()
-                        .map(|s| s == ".git" || s == ".hg" || s == ".svn")
-                        .unwrap_or(false)
+                        .is_some_and(|s| s == ".git" || s == ".hg" || s == ".svn")
                 })
                 .build();
 
@@ -85,16 +80,36 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
             info!(logger, "parsed expression"; "expr" => %expr);
 
             let mut match_count = 0;
-            for entry in walker.into_iter() {
-                let entry = entry.map_err(|e| DetectError::from(anyhow::Error::from(e)))?;
+            for entry in walker {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        // Skip entries we can't access (permission denied, etc.)
+                        warn!(logger, "skipping entry due to walker error"; "error" => %e);
+                        continue;
+                    }
+                };
                 let path = entry.path();
+
+                if path == root {
+                    continue;
+                }
 
                 let start = Instant::now();
 
-                let is_match = eval::fs::eval(&logger, &expr, path, Some(root))
-                    .await
-                    .context(format!("failed to eval for ${path:?}"))
-                    .map_err(DetectError::from)?;
+                let is_match = match eval::fs::eval(&logger, &expr, path, Some(root)).await {
+                    Ok(result) => result,
+                    Err(e) => {
+                        // Handle I/O errors gracefully - skip files we can't access
+                        if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            debug!(logger, "skipping file due to permission denied"; "path" => #?path);
+                            continue;
+                        }
+                        // For other I/O errors, also skip but log at warning level
+                        warn!(logger, "skipping file due to I/O error"; "path" => #?path, "error" => %e);
+                        continue;
+                    }
+                };
 
                 let duration = start.elapsed();
 
@@ -106,9 +121,8 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 }
             }
 
-            // Provide helpful feedback when no matches are found
             if match_count == 0 {
-                eprintln!("No files matched the query: {}", original_query);
+                eprintln!("No files matched the query: {original_query}");
                 eprintln!("Searched in: {}", root.display());
                 if respect_gitignore {
                     eprintln!("Hint: Use -i flag to include gitignored files, or try broadening your search criteria");
@@ -117,7 +131,7 @@ pub async fn parse_and_run_fs<F: FnMut(&Path)>(
                 }
             }
 
-            Ok(())
+            Ok(match_count)
         }
         Err(err) => Err(err),
     }

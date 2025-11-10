@@ -1,13 +1,13 @@
 use pest::{
     iterators::Pair,
-    pratt_parser::{Assoc::*, Op, PrattParser},
+    pratt_parser::{Assoc::Left, Op, PrattParser},
     Parser,
 };
 use pest_derive::Parser;
 
 use super::{
     ast::{RawExpr, RawPredicate, RawValue},
-    error::{RawParseError, SpanExt},
+    error::{DetectError, SpanExt},
 };
 
 #[derive(Parser)]
@@ -16,18 +16,18 @@ pub struct RawParser;
 
 impl RawParser {
     /// Parse an expression from input string into a Raw AST
-    pub fn parse_raw_expr(input: &str) -> Result<RawExpr<'_>, RawParseError> {
+    pub fn parse_raw_expr(input: &str) -> Result<RawExpr<'_>, DetectError> {
         let mut pairs = Self::parse(Rule::program, input)
-            .map_err(|e| RawParseError::from_pest(Box::new(e), input.to_string()))?;
+            .map_err(|e| DetectError::from_pest(Box::new(e), input.to_string()))?;
 
         let program_pair = pairs
             .next()
-            .ok_or_else(|| RawParseError::internal("Grammar guarantees program exists"))?;
+            .ok_or_else(|| DetectError::internal("Grammar guarantees program exists"))?;
 
         let expr_pair = program_pair
             .into_inner()
             .next()
-            .ok_or_else(|| RawParseError::internal("Grammar guarantees program contains expr"))?;
+            .ok_or_else(|| DetectError::internal("Grammar guarantees program contains expr"))?;
 
         Self::parse_expr(expr_pair).map_err(|e| e.with_source(input.to_string()))
     }
@@ -41,14 +41,14 @@ impl RawParser {
     /// - Mixed: `foo, "bar baz", qux`
     /// - Trailing commas: `rs, js,`
     /// - Empty sets: ``
-    pub fn parse_set_contents(input: &str) -> Result<Vec<String>, RawParseError> {
+    pub fn parse_set_contents(input: &str) -> Result<Vec<String>, DetectError> {
         let pairs = Self::parse(Rule::set_contents, input)
-            .map_err(|e| RawParseError::from_pest(Box::new(e), input.to_string()))?;
+            .map_err(|e| DetectError::from_pest(Box::new(e), input.to_string()))?;
 
         let items: Vec<String> = pairs
-            .flat_map(|pair| pair.into_inner()) // set_contents -> set_items or EOI
+            .flat_map(pest::iterators::Pair::into_inner) // set_contents -> set_items or EOI
             .filter(|pair| pair.as_rule() == Rule::set_items)
-            .flat_map(|pair| pair.into_inner()) // set_items -> set_item*
+            .flat_map(pest::iterators::Pair::into_inner) // set_items -> set_item*
             .filter_map(|item_pair| {
                 // set_item -> quoted_string | bare_set_item
                 item_pair.into_inner().next()
@@ -77,7 +77,7 @@ impl RawParser {
         Ok(items)
     }
 
-    fn parse_expr(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, RawParseError> {
+    fn parse_expr(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, DetectError> {
         let pratt = PrattParser::new()
             .op(Op::infix(Rule::or, Left))
             .op(Op::infix(Rule::and, Left))
@@ -90,65 +90,62 @@ impl RawParser {
             .parse(pair.into_inner())
     }
 
-    fn parse_primary(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, RawParseError> {
+    fn parse_primary(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, DetectError> {
         match pair.as_rule() {
             Rule::predicate => Self::parse_predicate(pair),
             Rule::single_word => Ok(RawExpr::SingleWord(pair.as_span())),
             Rule::expr => Self::parse_expr(pair),
-            rule => Err(RawParseError::internal(format!(
-                "Unexpected primary rule: {:?}",
-                rule
+            rule => Err(DetectError::internal(format!(
+                "Unexpected primary rule: {rule:?}"
             ))),
         }
     }
 
     fn parse_infix<'a>(
-        lhs: Result<RawExpr<'a>, RawParseError>,
+        lhs: Result<RawExpr<'a>, DetectError>,
         _pair: Pair<'a, Rule>,
-        rhs: Result<RawExpr<'a>, RawParseError>,
-    ) -> Result<RawExpr<'a>, RawParseError> {
+        rhs: Result<RawExpr<'a>, DetectError>,
+    ) -> Result<RawExpr<'a>, DetectError> {
         match _pair.as_rule() {
             Rule::and => Ok(RawExpr::And(Box::new(lhs?), Box::new(rhs?))),
             Rule::or => Ok(RawExpr::Or(Box::new(lhs?), Box::new(rhs?))),
-            rule => Err(RawParseError::internal(format!(
-                "Unexpected infix rule: {:?}",
-                rule
+            rule => Err(DetectError::internal(format!(
+                "Unexpected infix rule: {rule:?}"
             ))),
         }
     }
 
     fn parse_prefix<'a>(
         _pair: Pair<'a, Rule>,
-        rhs: Result<RawExpr<'a>, RawParseError>,
-    ) -> Result<RawExpr<'a>, RawParseError> {
+        rhs: Result<RawExpr<'a>, DetectError>,
+    ) -> Result<RawExpr<'a>, DetectError> {
         match _pair.as_rule() {
             Rule::neg => Ok(RawExpr::Not(Box::new(rhs?))),
-            rule => Err(RawParseError::internal(format!(
-                "Unexpected prefix rule: {:?}",
-                rule
+            rule => Err(DetectError::internal(format!(
+                "Unexpected prefix rule: {rule:?}"
             ))),
         }
     }
 
-    fn parse_predicate(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, RawParseError> {
+    fn parse_predicate(pair: Pair<'_, Rule>) -> Result<RawExpr<'_>, DetectError> {
         let span = pair.as_span();
         let mut inner = pair.into_inner();
 
         let selector_pair = inner
             .next()
-            .ok_or_else(|| RawParseError::internal("Grammar guarantees predicate has selector"))?;
+            .ok_or_else(|| DetectError::internal("Grammar guarantees predicate has selector"))?;
         let selector = selector_pair.as_str();
         let selector_span = selector_pair.as_span();
 
         let operator_pair = inner
             .next()
-            .ok_or_else(|| RawParseError::internal("Grammar guarantees predicate has operator"))?;
+            .ok_or_else(|| DetectError::internal("Grammar guarantees predicate has operator"))?;
         let operator = operator_pair.as_str();
         let operator_span = operator_pair.as_span();
 
         let value_pair = inner
             .next()
-            .ok_or_else(|| RawParseError::internal("Grammar guarantees predicate has value"))?;
+            .ok_or_else(|| DetectError::internal("Grammar guarantees predicate has value"))?;
         let value_span = value_pair.as_span();
         let value = Self::parse_value(value_pair)?;
 
@@ -163,22 +160,22 @@ impl RawParser {
         }))
     }
 
-    fn parse_value(pair: Pair<'_, Rule>) -> Result<RawValue<'_>, RawParseError> {
+    fn parse_value(pair: Pair<'_, Rule>) -> Result<RawValue<'_>, DetectError> {
         match pair.as_rule() {
             Rule::value => {
                 // value = { value_content ~ trailing_quote? }
                 // Check if there's a trailing quote error
                 let mut inner = pair.into_inner();
-                let value_content = inner.next().ok_or_else(|| {
-                    RawParseError::internal("Grammar guarantees value has content")
-                })?;
+                let value_content = inner
+                    .next()
+                    .ok_or_else(|| DetectError::internal("Grammar guarantees value has content"))?;
 
                 // Check for trailing quote
                 if let Some(trailing) = inner.next() {
                     if trailing.as_rule() == Rule::trailing_quote {
                         let span = trailing.as_span();
                         let quote = span.as_str().chars().next().unwrap_or('"');
-                        return Err(RawParseError::StrayQuote {
+                        return Err(DetectError::StrayQuote {
                             span: span.to_source_span(),
                             quote,
                             src: String::new(), // Will be filled by with_source()
@@ -192,7 +189,7 @@ impl RawParser {
             Rule::quoted_string => {
                 // Grammar already parsed inner content without quotes
                 let inner = pair.into_inner().next().ok_or_else(|| {
-                    RawParseError::internal("Grammar guarantees quoted_string has inner content")
+                    DetectError::internal("Grammar guarantees quoted_string has inner content")
                 })?;
                 Ok(RawValue::Quoted(inner.as_str()))
             }
@@ -207,7 +204,7 @@ impl RawParser {
                 let length = text.len().min(10); // Show first 10 chars max
                 let error_span = (start, length).into();
 
-                Err(RawParseError::UnterminatedString {
+                Err(DetectError::UnterminatedString {
                     span: error_span,
                     quote,
                     src: String::new(), // Will be filled by with_source()
@@ -217,9 +214,8 @@ impl RawParser {
                 // All raw tokens stored as-is, typechecker decides meaning based on operator
                 Ok(RawValue::Raw(pair.as_str()))
             }
-            rule => Err(RawParseError::internal(format!(
-                "Unexpected value rule: {:?}",
-                rule
+            rule => Err(DetectError::internal(format!(
+                "Unexpected value rule: {rule:?}"
             ))),
         }
     }

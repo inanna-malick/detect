@@ -4,7 +4,6 @@
 //! type coercion, and the 2x2 match logic optimization.
 
 use slog::{o, Discard, Logger};
-use tempdir::TempDir;
 
 // Load fixtures at compile time
 const CONFIG_YAML: &str = include_str!("fixtures/structured/config.yaml");
@@ -38,7 +37,10 @@ fn test_logger() -> Logger {
 
 /// Helper to run a structured query test
 async fn run_structured_test(files: Vec<(&str, &str)>, expr: &str, expected_matches: Vec<&str>) {
-    let t = TempDir::new("structured_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("structured_test")
+        .tempdir()
+        .unwrap();
 
     // Write fixture files
     for (filename, content) in files {
@@ -615,7 +617,10 @@ async fn test_binary_yaml_file_no_crash() {
     // Structured predicate should return false gracefully
     let binary_content = include_bytes!("fixtures/structured/binary.yaml");
 
-    let t = TempDir::new("binary_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("binary_test")
+        .tempdir()
+        .unwrap();
     std::fs::write(t.path().join("binary.yaml"), binary_content).unwrap();
 
     let mut matches = Vec::new();
@@ -644,7 +649,10 @@ async fn test_binary_file_content_predicate_works() {
     // Even if structured predicate fails, content predicate on bytes should work
     let binary_content = include_bytes!("fixtures/structured/binary.yaml");
 
-    let t = TempDir::new("binary_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("binary_test")
+        .tempdir()
+        .unwrap();
     std::fs::write(t.path().join("binary.yaml"), binary_content).unwrap();
 
     let mut matches = Vec::new();
@@ -1295,7 +1303,10 @@ async fn test_toml_negative_float() {
 
 #[tokio::test]
 async fn test_structured_skipped_when_file_exceeds_size_limit() {
-    let t = TempDir::new("structured_test").unwrap();
+    let t = tempfile::Builder::new()
+        .prefix("structured_test")
+        .tempdir()
+        .unwrap();
 
     // Write file that would match if parsed
     std::fs::write(t.path().join("large.yaml"), LARGE_CONFIG_YAML).unwrap();
@@ -1326,4 +1337,192 @@ async fn test_structured_skipped_when_file_exceeds_size_limit() {
 
     // File should NOT match because it exceeds size limit
     assert_eq!(matches.len(), 0, "File should be skipped due to size limit");
+}
+
+// ============================================================================
+// Group: Existence Predicate Tests (Single-Word Structured Selectors)
+// ============================================================================
+
+#[tokio::test]
+async fn test_yaml_exists_field_present() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.server.port",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_exists_field_absent() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.nonexistent",
+        vec![],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_exists_nested_field() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.database.credentials.username",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_exists_array_field() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.features[0].name",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_yaml_exists_array_wildcard() {
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.features[*].enabled",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_json_exists_field() {
+    run_structured_test(
+        vec![("package.json", PACKAGE_JSON)],
+        "json:.name",
+        vec!["package.json"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_json_exists_nested() {
+    run_structured_test(
+        vec![("package.json", PACKAGE_JSON)],
+        "json:.scripts.test",
+        vec!["package.json"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_exists_field() {
+    run_structured_test(
+        vec![("Cargo.toml", CARGO_TOML)],
+        "toml:.package.name",
+        vec!["Cargo.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_toml_exists_table() {
+    run_structured_test(
+        vec![("Cargo.toml", CARGO_TOML)],
+        "toml:.dependencies",
+        vec!["Cargo.toml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_multi_doc_yaml() {
+    // Test OR semantics: matches if ANY document has the field
+    run_structured_test(
+        vec![("multi.yaml", MULTI_DOC_YAML)],
+        "yaml:.service",
+        vec!["multi.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_empty_file() {
+    run_structured_test(vec![("empty.yaml", EMPTY_YAML)], "yaml:.field", vec![]).await;
+}
+
+#[tokio::test]
+async fn test_exists_null_value() {
+    // Field exists but has null value - should still match (existence, not truthiness)
+    run_structured_test(
+        vec![("null.yaml", NULL_BOOLEAN_EDGE_CASES_YAML)],
+        "yaml:.null_value",
+        vec!["null.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_false_value() {
+    // Field exists with false value - should still match
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:.features[1].enabled", // This is false in the fixture
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_vs_value_comparison() {
+    // Test that existence check is different from value comparison
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML), ("empty.yaml", EMPTY_YAML)],
+        "yaml:.server.port",
+        vec!["config.yaml"],
+    )
+    .await;
+
+    // Value comparison should also work
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML), ("empty.yaml", EMPTY_YAML)],
+        "yaml:.server.port == 8080",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_recursive_descent() {
+    // Test recursive descent (..) with existence check
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML)],
+        "yaml:..username",
+        vec!["config.yaml"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_with_boolean_logic() {
+    // Test existence checks combined with other predicates
+    run_structured_test(
+        vec![("config.yaml", CONFIG_YAML), ("package.json", PACKAGE_JSON)],
+        "yaml:.server OR json:.name",
+        vec!["config.yaml", "package.json"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_exists_multiple_formats() {
+    // Test that each format checks independently
+    run_structured_test(
+        vec![
+            ("config.yaml", CONFIG_YAML),
+            ("package.json", PACKAGE_JSON),
+            ("Cargo.toml", CARGO_TOML),
+        ],
+        "yaml:.server.port OR json:.version OR toml:.package.name",
+        vec!["Cargo.toml", "config.yaml", "package.json"],
+    )
+    .await;
 }

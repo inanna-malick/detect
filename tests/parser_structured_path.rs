@@ -266,6 +266,60 @@ fn parse_multiple_underscores() {
     assert_eq!(result, vec![PathComponent::Key("__proto__".to_string())]);
 }
 
+#[test]
+fn parse_multiple_hyphens() {
+    let result = parse_path(".dev-dependencies").unwrap();
+    assert_eq!(
+        result,
+        vec![PathComponent::Key("dev-dependencies".to_string())]
+    );
+}
+
+#[test]
+fn parse_slash_in_key() {
+    let result = parse_path(".content/type").unwrap();
+    assert_eq!(result, vec![PathComponent::Key("content/type".to_string())]);
+}
+
+#[test]
+fn parse_nested_hyphenated_keys() {
+    let result = parse_path(".dev-dependencies.async-stream").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::Key("dev-dependencies".to_string()),
+            PathComponent::Key("async-stream".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_hyphen_and_underscore() {
+    let result = parse_path(".my-field_name").unwrap();
+    assert_eq!(
+        result,
+        vec![PathComponent::Key("my-field_name".to_string())]
+    );
+}
+
+#[test]
+fn parse_real_world_toml_key() {
+    let result = parse_path(".build-dependencies.cc").unwrap();
+    assert_eq!(
+        result,
+        vec![
+            PathComponent::Key("build-dependencies".to_string()),
+            PathComponent::Key("cc".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn parse_hyphenated_with_numbers() {
+    let result = parse_path(".utf-8").unwrap();
+    assert_eq!(result, vec![PathComponent::Key("utf-8".to_string())]);
+}
+
 // ============================================================================
 // Error Cases
 // ============================================================================
@@ -319,9 +373,9 @@ fn error_space_in_key() {
 }
 
 #[test]
-fn error_hyphen_in_key() {
-    let result = parse_path(".my-field");
-    assert!(matches!(result, Err(PathParseError::Syntax(_))));
+fn parse_hyphen_in_key() {
+    let result = parse_path(".my-field").unwrap();
+    assert_eq!(result, vec![PathComponent::Key("my-field".to_string())]);
 }
 
 #[test]

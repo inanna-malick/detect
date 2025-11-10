@@ -94,10 +94,10 @@ pub mod test_utils {
         Raw(&'a str),    // Raw token (bare word, [brackets], (parens), {curlies})
     }
 
-    impl<'a> std::fmt::Display for RawTestValue<'a> {
+    impl std::fmt::Display for RawTestValue<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => write!(f, "{}", s),
+                RawTestValue::Quoted(s) | RawTestValue::Raw(s) => write!(f, "{s}"),
             }
         }
     }
@@ -112,7 +112,6 @@ pub mod test_utils {
     }
 
     impl<'a> RawTestExpr<'a> {
-        /// Helper constructor for creating a raw token predicate
         pub fn string_predicate(selector: &'a str, operator: &'a str, value: &'a str) -> Self {
             RawTestExpr::Predicate(RawTestPredicate {
                 selector,
@@ -121,7 +120,6 @@ pub mod test_utils {
             })
         }
 
-        /// Helper constructor for creating a quoted value predicate
         pub fn quoted_predicate(selector: &'a str, operator: &'a str, value: &'a str) -> Self {
             RawTestExpr::Predicate(RawTestPredicate {
                 selector,
@@ -130,9 +128,7 @@ pub mod test_utils {
             })
         }
 
-        /// Helper constructor for creating a set predicate (now just raw token with brackets)
         pub fn set_predicate(selector: &'a str, operator: &'a str, values: Vec<&'a str>) -> Self {
-            // Format as bracketed list
             let value = format!("[{}]", values.join(","));
             RawTestExpr::Predicate(RawTestPredicate {
                 selector,
@@ -141,22 +137,18 @@ pub mod test_utils {
             })
         }
 
-        /// Helper constructor for creating a single-word expression
         pub fn single_word(word: &'a str) -> Self {
             RawTestExpr::SingleWord(word)
         }
 
-        /// Helper constructor for creating an AND expression
         pub fn and(left: RawTestExpr<'a>, right: RawTestExpr<'a>) -> Self {
             RawTestExpr::And(Box::new(left), Box::new(right))
         }
 
-        /// Helper constructor for creating an OR expression
         pub fn or(left: RawTestExpr<'a>, right: RawTestExpr<'a>) -> Self {
             RawTestExpr::Or(Box::new(left), Box::new(right))
         }
 
-        /// Helper constructor for creating a NOT expression
         #[allow(clippy::should_implement_trait)]
         pub fn not(expr: RawTestExpr<'a>) -> Self {
             RawTestExpr::Not(Box::new(expr))

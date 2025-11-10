@@ -2,7 +2,6 @@ mod enum_matcher;
 
 pub use enum_matcher::{EnumMatcher, EnumPredicate};
 
-use crate::hybrid_regex::{HybridRegex, HybridStringRegex};
 use regex_automata::dfa::dense::DFA;
 use std::collections::HashSet;
 use std::fs::FileType;
@@ -20,7 +19,7 @@ use std::{
 use crate::expr::short_circuit::ShortCircuit;
 use crate::predicate_error::PredicateParseError;
 use crate::util::Done;
-use chrono::{DateTime, Duration, Local, NaiveDate};
+use chrono::{DateTime, Local};
 
 /// File type enumeration for type predicates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,48 +34,21 @@ pub enum DetectFileType {
 }
 
 impl DetectFileType {
-    /// Primary string representation for this file type
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DetectFileType::File => "file",
-            DetectFileType::Directory => "dir",
-            DetectFileType::Symlink => "symlink",
-            DetectFileType::Socket => "socket",
-            DetectFileType::Fifo => "fifo",
-            DetectFileType::BlockDevice => "block",
-            DetectFileType::CharDevice => "char",
-        }
-    }
-
-    /// All aliases that match this file type
-    pub fn aliases(&self) -> &'static [&'static str] {
-        match self {
-            DetectFileType::File => &["file"],
-            DetectFileType::Directory => &["dir", "directory"],
-            DetectFileType::Symlink => &["symlink", "link"],
-            DetectFileType::Socket => &["socket", "sock"],
-            DetectFileType::Fifo => &["fifo", "pipe"],
-            DetectFileType::BlockDevice => &["block", "blockdev"],
-            DetectFileType::CharDevice => &["char", "chardev"],
-        }
-    }
-
     /// Check if a string matches any alias for this file type
     pub fn matches(&self, s: &str) -> bool {
         self.aliases().contains(&s)
     }
 
-    /// Create from std::fs::FileType
     pub fn from_fs_type(ft: &FileType) -> Option<Self> {
         match () {
-            _ if ft.is_file() => Some(Self::File),
-            _ if ft.is_dir() => Some(Self::Directory),
-            _ if ft.is_symlink() => Some(Self::Symlink),
-            _ if ft.is_socket() => Some(Self::Socket),
-            _ if ft.is_fifo() => Some(Self::Fifo),
-            _ if ft.is_block_device() => Some(Self::BlockDevice),
-            _ if ft.is_char_device() => Some(Self::CharDevice),
-            _ => None,
+            () if ft.is_file() => Some(Self::File),
+            () if ft.is_dir() => Some(Self::Directory),
+            () if ft.is_symlink() => Some(Self::Symlink),
+            () if ft.is_socket() => Some(Self::Socket),
+            () if ft.is_fifo() => Some(Self::Fifo),
+            () if ft.is_block_device() => Some(Self::BlockDevice),
+            () if ft.is_char_device() => Some(Self::CharDevice),
+            () => None,
         }
     }
 
@@ -94,12 +66,10 @@ impl DetectFileType {
     }
 }
 
-/// Implement EnumPredicate trait for parse-time validation
+/// Implement `EnumPredicate` trait for parse-time validation
 impl EnumPredicate for DetectFileType {
     fn from_str(s: &str) -> Result<Self, String> {
-        // Case-insensitive comparison
         let s_lower = s.to_lowercase();
-        // Check all variants and their aliases
         for variant in Self::all_variants() {
             if variant.aliases().contains(&s_lower.as_str()) {
                 return Ok(*variant);
@@ -131,7 +101,6 @@ impl EnumPredicate for DetectFileType {
     }
 
     fn as_str(&self) -> &'static str {
-        // Delegate to existing method
         match self {
             DetectFileType::File => "file",
             DetectFileType::Directory => "dir",
@@ -144,7 +113,6 @@ impl EnumPredicate for DetectFileType {
     }
 
     fn aliases(&self) -> &'static [&'static str] {
-        // Delegate to existing method
         match self {
             DetectFileType::File => &["file"],
             DetectFileType::Directory => &["dir", "directory"],
@@ -157,98 +125,8 @@ impl EnumPredicate for DetectFileType {
     }
 }
 
-fn parse_duration(
-    number: i64,
-    unit: &str,
-    original: &str,
-) -> Result<Duration, PredicateParseError> {
-    match unit {
-        "seconds" | "second" | "secs" | "sec" | "s" => Ok(Duration::seconds(number)),
-        "minutes" | "minute" | "mins" | "min" | "m" => Ok(Duration::minutes(number)),
-        "hours" | "hour" | "hrs" | "hr" | "h" => Ok(Duration::hours(number)),
-        "days" | "day" | "d" => Ok(Duration::days(number)),
-        "weeks" | "week" | "w" => Ok(Duration::weeks(number)),
-        _ => Err(PredicateParseError::Temporal(format!(
-            "{}: unknown unit: {}",
-            original, unit
-        ))),
-    }
-}
-
-fn naive_date_to_local(date: NaiveDate) -> Result<DateTime<Local>, PredicateParseError> {
-    date.and_hms_opt(0, 0, 0)
-        .and_then(|time| match time.and_local_timezone(Local) {
-            chrono::LocalResult::Single(lt) => Some(lt),
-            _ => None,
-        })
-        .ok_or_else(|| PredicateParseError::Temporal("invalid date".to_string()))
-}
-
-pub fn parse_time_value(s: &str) -> Result<DateTime<Local>, PredicateParseError> {
-    let (is_negative, stripped) = if let Some(rest) = s.strip_prefix('-') {
-        (true, rest)
-    } else {
-        (false, s)
-    };
-
-    if let Some((num_str, unit)) = stripped.split_once('.') {
-        if let Ok(number) = num_str.parse::<i64>() {
-            let duration = parse_duration(number, unit, s)?;
-            return if is_negative {
-                Ok(Local::now() - duration)
-            } else {
-                Ok(Local::now() + duration)
-            };
-        }
-    }
-
-    let digit_end = stripped.find(|c: char| !c.is_ascii_digit());
-    if let Some(idx) = digit_end {
-        let num_str = &stripped[..idx];
-        let unit = &stripped[idx..];
-
-        if !unit.starts_with('-') {
-            if let Ok(number) = num_str.parse::<i64>() {
-                if !unit.is_empty() {
-                    if let Ok(duration) = parse_duration(number, unit, s) {
-                        return if is_negative {
-                            Ok(Local::now() - duration)
-                        } else {
-                            Ok(Local::now() + duration)
-                        };
-                    }
-                }
-            }
-        }
-    }
-
-    match s {
-        "now" => return Ok(Local::now()),
-        "today" => return naive_date_to_local(Local::now().date_naive()),
-        "yesterday" => return naive_date_to_local(Local::now().date_naive() - Duration::days(1)),
-        _ => {}
-    }
-
-    if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        if let Some(time) = date.and_hms_opt(0, 0, 0) {
-            if let chrono::LocalResult::Single(local_time) = time.and_local_timezone(Local) {
-                return Ok(local_time);
-            }
-        }
-        return Err(PredicateParseError::Temporal(format!(
-            "{}: invalid date",
-            s
-        )));
-    }
-
-    match DateTime::parse_from_rfc3339(s) {
-        Ok(dt) => Ok(dt.with_timezone(&Local)),
-        Err(e) => Err(PredicateParseError::Temporal(format!(
-            "{}: invalid date: {}",
-            s, e
-        ))),
-    }
-}
+// Re-export parse_time_value from parser module
+pub use crate::parser::parse_time_value;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RhsValue {
@@ -269,7 +147,7 @@ pub enum RhsValue {
 
 impl Display for RhsValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -286,7 +164,7 @@ pub type CompiledMatcher<'a> = DFA<&'a [u32]>;
 
 #[derive(Clone, Debug)]
 pub enum StringMatcher {
-    Regex(HybridStringRegex),
+    Regex(regex::Regex),
     Equals(String),
     NotEquals(String),
     Contains(String),
@@ -310,10 +188,11 @@ impl Eq for StringMatcher {}
 
 impl StringMatcher {
     pub fn regex(s: &str) -> Result<Self, regex::Error> {
-        Ok(Self::Regex(HybridStringRegex::new(s)?))
+        Ok(Self::Regex(regex::Regex::new(s)?))
     }
 
     // Helper constructors for tests and programmatic usage
+
     pub fn eq(s: &str) -> Self {
         Self::Equals(s.to_string())
     }
@@ -348,7 +227,7 @@ pub enum NumberMatcher {
     NotEquals(u64),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TimeMatcher {
     Before(DateTime<Local>),
     After(DateTime<Local>),
@@ -376,22 +255,6 @@ impl TimeMatcher {
     }
 }
 
-impl PartialEq for TimeMatcher {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (TimeMatcher::Before(a), TimeMatcher::Before(b)) => a == b,
-            (TimeMatcher::After(a), TimeMatcher::After(b)) => a == b,
-            (TimeMatcher::BeforeOrEqual(a), TimeMatcher::BeforeOrEqual(b)) => a == b,
-            (TimeMatcher::AfterOrEqual(a), TimeMatcher::AfterOrEqual(b)) => a == b,
-            (TimeMatcher::Equals(a), TimeMatcher::Equals(b)) => a == b,
-            (TimeMatcher::NotEquals(a), TimeMatcher::NotEquals(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for TimeMatcher {}
-
 impl NumberMatcher {
     pub fn is_match(&self, x: u64) -> bool {
         match self {
@@ -414,7 +277,7 @@ pub enum Op {
 
 impl Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -423,6 +286,7 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
         RhsValue::String(s) => {
             Ok(match op {
                 Op::Matches => {
+                    // treat '*' as match-all, for convenience
                     let pattern = if s == "*" { ".*" } else { s };
                     StringMatcher::regex(pattern)?
                 }
@@ -447,8 +311,7 @@ pub fn parse_string(op: &Op, rhs: &RhsValue) -> Result<StringMatcher, PredicateP
             )),
         },
         _ => Err(PredicateParseError::Incompatible(format!(
-            "expected string or set, found {:?}",
-            rhs
+            "expected string or set, found {rhs:?}"
         ))),
     }
 }
@@ -461,8 +324,7 @@ pub fn parse_string_dfa(
         RhsValue::String(s) => s,
         _ => {
             return Err(PredicateParseError::Incompatible(format!(
-                "expected string, found {:?}",
-                rhs
+                "expected string, found {rhs:?}"
             )))
         }
     };
@@ -502,8 +364,7 @@ pub fn parse_numerical(op: &Op, rhs: &RhsValue) -> Result<NumberMatcher, Predica
         RhsValue::Size(bytes) => *bytes,
         _ => {
             return Err(PredicateParseError::Incompatible(format!(
-                "expected number or size value, found {:?}",
-                rhs
+                "expected number or size value, found {rhs:?}"
             )))
         }
     };
@@ -536,8 +397,7 @@ pub fn parse_temporal(op: &Op, rhs: &RhsValue) -> Result<TimeMatcher, PredicateP
         RhsValue::String(s) => s,
         _ => {
             return Err(PredicateParseError::Incompatible(format!(
-                "expected time value, found {:?}",
-                rhs
+                "expected time value, found {rhs:?}"
             )))
         }
     };
@@ -610,25 +470,16 @@ impl<A, B, C: Clone, S: Clone> Clone for Predicate<A, B, C, S> {
 impl<A: Display, B: Display, C: Display, S: std::fmt::Debug> Display for Predicate<A, B, C, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Predicate::Name(x) => write!(f, "{}", x),
-            Predicate::Metadata(x) => write!(f, "{}", x),
-            Predicate::Content(x) => write!(f, "{}", x),
-            Predicate::Structured(x) => write!(f, "{:?}", x),
+            Predicate::Name(x) => write!(f, "{x}"),
+            Predicate::Metadata(x) => write!(f, "{x}"),
+            Predicate::Content(x) => write!(f, "{x}"),
+            Predicate::Structured(x) => write!(f, "{x:?}"),
         }
     }
 }
 
 impl<A, B, S> Predicate<NamePredicate, A, B, S> {
-    pub fn eval_name_predicate(self, path: &Path) -> ShortCircuit<Predicate<Done, A, B, S>> {
-        match self {
-            Predicate::Name(p) => ShortCircuit::Known(p.is_match(path)),
-            Predicate::Metadata(x) => ShortCircuit::Unknown(Predicate::Metadata(x)),
-            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
-        }
-    }
-
-    pub fn eval_name_predicate_with_base(
+    pub fn eval_name_predicate(
         self,
         path: &Path,
         base_path: Option<&Path>,
@@ -654,22 +505,6 @@ impl<A, B, S> Predicate<A, MetadataPredicate, B, S> {
             Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
         }
     }
-
-    pub fn eval_metadata_predicate_with_path(
-        self,
-        metadata: &Metadata,
-        path: &Path,
-        base_path: Option<&Path>,
-    ) -> ShortCircuit<Predicate<A, Done, B, S>> {
-        match self {
-            Predicate::Metadata(p) => {
-                ShortCircuit::Known(p.is_match_with_path(metadata, Some(path), base_path))
-            }
-            Predicate::Content(x) => ShortCircuit::Unknown(Predicate::Content(x)),
-            Predicate::Name(x) => ShortCircuit::Unknown(Predicate::Name(x)),
-            Predicate::Structured(x) => ShortCircuit::Unknown(Predicate::Structured(x)),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -680,10 +515,10 @@ pub enum NamePredicate {
     FullPath(StringMatcher),  // complete path including filename
     Extension(StringMatcher), // file extension
     ParentDir(StringMatcher), // immediate parent directory name
+    Depth(NumberMatcher),     // directory depth from base path
 }
 
 impl NamePredicate {
-    // Helper constructors for common patterns
     pub fn file_eq(name: &str) -> Self {
         Self::FileName(StringMatcher::eq(name))
     }
@@ -716,21 +551,17 @@ impl NamePredicate {
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s))
             }
-            NamePredicate::FileName(x) => {
-                // Match against complete filename with extension
-                path.file_name()
-                    .and_then(|os_str| os_str.to_str())
-                    .is_some_and(|s| x.is_match(s))
-            }
+            NamePredicate::FileName(x) => path
+                .file_name()
+                .and_then(|os_str| os_str.to_str())
+                .is_some_and(|s| x.is_match(s)),
             NamePredicate::DirPath(x) => {
-                // Match against directory path only (parent)
                 // If base_path is provided, make the parent path relative to it
                 if let Some(base) = base_path {
                     if let Some(parent) = path.parent() {
                         // Try to make parent relative to base
                         match parent.strip_prefix(base) {
                             Ok(relative) => {
-                                // Use relative path
                                 relative.as_os_str().to_str().is_some_and(|s| x.is_match(s))
                             }
                             Err(_) => {
@@ -742,14 +573,13 @@ impl NamePredicate {
                         false
                     }
                 } else {
-                    // No base path provided, use absolute path (backward compatibility)
+                    // No base path provided, use absolute path
                     path.parent()
                         .and_then(|p| p.as_os_str().to_str())
                         .is_some_and(|s| x.is_match(s))
                 }
             }
             NamePredicate::FullPath(x) => {
-                // Match against complete path including filename
                 // If base_path is provided, make it relative
                 if let Some(base) = base_path {
                     match path.strip_prefix(base) {
@@ -766,7 +596,6 @@ impl NamePredicate {
                 }
             }
             NamePredicate::Extension(x) => {
-                // Match against extension without dot
                 // Handle empty extension case for files without extensions
                 match path.extension() {
                     Some(ext) => ext.to_str().is_some_and(|s| x.is_match(s)),
@@ -777,12 +606,23 @@ impl NamePredicate {
                 }
             }
             NamePredicate::ParentDir(x) => {
-                // Match against immediate parent directory name only
                 // e.g., for "src/utils/helper.rs", parent_dir would be "utils"
                 path.parent()
                     .and_then(|p| p.file_name())
                     .and_then(|os_str| os_str.to_str())
                     .is_some_and(|s| x.is_match(s))
+            }
+            NamePredicate::Depth(matcher) => {
+                // Calculate depth from base path (or from root if no base)
+                let depth = if let Some(base) = base_path {
+                    match path.strip_prefix(base) {
+                        Ok(relative) => relative.components().count() as u64,
+                        Err(_) => path.components().count() as u64,
+                    }
+                } else {
+                    path.components().count() as u64
+                };
+                matcher.is_match(depth)
             }
         }
     }
@@ -806,48 +646,25 @@ impl Bound {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MetadataPredicate {
     Filesize(NumberMatcher),
     Type(EnumMatcher<DetectFileType>), // file type with parse-time validation
     Modified(TimeMatcher),
     Created(TimeMatcher),
     Accessed(TimeMatcher),
-    Depth(NumberMatcher), // Directory depth from base path
 }
-
-impl PartialEq for MetadataPredicate {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (MetadataPredicate::Filesize(a), MetadataPredicate::Filesize(b)) => a == b,
-            (MetadataPredicate::Type(a), MetadataPredicate::Type(b)) => a == b,
-            (MetadataPredicate::Modified(a), MetadataPredicate::Modified(b)) => a == b,
-            (MetadataPredicate::Created(a), MetadataPredicate::Created(b)) => a == b,
-            (MetadataPredicate::Accessed(a), MetadataPredicate::Accessed(b)) => a == b,
-            (MetadataPredicate::Depth(a), MetadataPredicate::Depth(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for MetadataPredicate {}
 
 impl MetadataPredicate {
     pub fn is_match(&self, metadata: &Metadata) -> bool {
-        self.is_match_with_path(metadata, None, None)
+        self.is_match_with_path(metadata)
     }
 
-    pub fn is_match_with_path(
-        &self,
-        metadata: &Metadata,
-        path: Option<&Path>,
-        base_path: Option<&Path>,
-    ) -> bool {
+    pub fn is_match_with_path(&self, metadata: &Metadata) -> bool {
         match self {
             MetadataPredicate::Filesize(range) => range.is_match(metadata.size()),
             MetadataPredicate::Type(enum_matcher) => {
                 let ft: FileType = metadata.file_type();
-                // Convert filesystem type to DetectFileType and match
                 if let Some(detect_type) = DetectFileType::from_fs_type(&ft) {
                     enum_matcher.is_match(&detect_type)
                 } else {
@@ -857,21 +674,6 @@ impl MetadataPredicate {
             MetadataPredicate::Modified(matcher) => matcher.is_match(metadata.mtime()),
             MetadataPredicate::Created(matcher) => matcher.is_match(metadata.ctime()),
             MetadataPredicate::Accessed(matcher) => matcher.is_match(metadata.atime()),
-            MetadataPredicate::Depth(matcher) => {
-                if let Some(path) = path {
-                    let depth = if let Some(base) = base_path {
-                        match path.strip_prefix(base) {
-                            Ok(relative) => relative.components().count() as u64,
-                            Err(_) => path.components().count() as u64,
-                        }
-                    } else {
-                        path.components().count() as u64
-                    };
-                    matcher.is_match(depth)
-                } else {
-                    false
-                }
-            }
         }
     }
 }
@@ -882,18 +684,21 @@ impl MetadataPredicate {
 /// Value variants store both:
 /// - `value`: Native parsed type for type-safe comparisons
 /// - `raw_string`: Original RHS string for string coercion fallback in equality checks
-///   (prevents information loss from parse→stringify, e.g., "1_000" → 1000 → "1000")
+///   (prevents information loss from parse→stringify, e.g., "`1_000`" → 1000 → "1000")
 #[derive(Debug, Clone, PartialEq)]
 pub enum StructuredDataPredicate {
     YamlValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
-        value: yaml_rust::Yaml,
+        value: yaml_rust2::Yaml,
         raw_string: String,
     },
     YamlString {
         path: Vec<crate::parser::structured_path::PathComponent>,
         matcher: StringMatcher,
+    },
+    YamlExists {
+        path: Vec<crate::parser::structured_path::PathComponent>,
     },
     JsonValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
@@ -905,6 +710,9 @@ pub enum StructuredDataPredicate {
         path: Vec<crate::parser::structured_path::PathComponent>,
         matcher: StringMatcher,
     },
+    JsonExists {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+    },
     TomlValue {
         path: Vec<crate::parser::structured_path::PathComponent>,
         operator: crate::parser::typed::StructuredOperator,
@@ -915,19 +723,25 @@ pub enum StructuredDataPredicate {
         path: Vec<crate::parser::structured_path::PathComponent>,
         matcher: StringMatcher,
     },
+    TomlExists {
+        path: Vec<crate::parser::structured_path::PathComponent>,
+    },
 }
 
 #[derive(Debug)]
 pub struct StreamingCompiledContentPredicate {
-    inner: HybridRegex,
+    inner: Box<DFA<Vec<u32>>>,
     source: String,
 }
 
 impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
-        match HybridRegex::new(&source) {
-            Ok(inner) => Ok(Self { inner, source }),
-            Err(e) => Err(PredicateParseError::Dfa(e)),
+        match DFA::new(&source) {
+            Ok(inner) => Ok(Self {
+                inner: Box::new(inner),
+                source,
+            }),
+            Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
         }
     }
 
@@ -947,6 +761,6 @@ impl PartialEq for StreamingCompiledContentPredicate {
 
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    pub inner: &'a HybridRegex,
+    pub inner: &'a DFA<Vec<u32>>,
     pub source: &'a str,
 }

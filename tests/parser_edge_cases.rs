@@ -371,8 +371,12 @@ fn test_selector_edge_cases() {
     let result = RawParser::parse_raw_expr("na$me == foo");
     assert!(result.is_err(), "Selector with $ should fail");
 
+    // Selector with hyphen (now supported for TOML/YAML/JSON keys)
     let result = RawParser::parse_raw_expr("na-me == foo");
-    assert!(result.is_err(), "Selector with - should fail");
+    assert_eq!(
+        result.unwrap().to_test_expr(),
+        RawTestExpr::string_predicate("na-me", "==", "foo")
+    );
 
     // Very long selector
     let long_selector = "a".repeat(1000);

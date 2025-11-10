@@ -2,34 +2,51 @@
 //!
 //! Provides shorthand syntax like `dir` instead of `type == dir`,
 //! enabling more natural queries: `dir && depth > 0`
+//!
+//! Also handles structured data selectors like `yaml:.field` as existence predicates.
 
 use std::sync::Arc;
 
-use crate::predicate::{DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate};
-
-/// Error type for alias resolution
-#[derive(Debug, Clone, PartialEq)]
-pub enum ResolveError {
-    /// The alias is unknown/not recognized
-    UnknownAlias(String),
-}
+use super::typed::{parse_structured_selector, AliasError, DataFormat};
+use crate::predicate::{
+    DetectFileType, EnumMatcher, EnumPredicate, MetadataPredicate, Predicate,
+    StructuredDataPredicate,
+};
 
 /// Resolve a single-word alias to a predicate
 ///
-/// Currently supports file type aliases: `file`, `dir`, `symlink`, etc.
+/// Supports:
+/// - File type aliases: `file`, `dir`, `symlink`, etc.
+/// - Structured data selectors: `yaml:.field`, `json:.path`, `toml:.key` (existence check)
 ///
-/// # Examples
-/// ```ignore
-/// let pred = resolve_alias("dir").unwrap();
-/// // Equivalent to: type == dir
-/// ```
-pub fn resolve_alias(word: &str) -> Result<Predicate, ResolveError> {
-    // Try file type aliases
+/// Example: `resolve_alias("dir")` is equivalent to `type == dir`
+/// Example: `resolve_alias("yaml:.spec")` checks if `.spec` exists in YAML file
+pub fn resolve_alias(word: &str) -> Result<Predicate, AliasError> {
+    // Check if it's a structured selector
+    match parse_structured_selector(word) {
+        Ok(Some((format, components))) => {
+            // Create existence predicate based on format
+            let predicate = match format {
+                DataFormat::Yaml => StructuredDataPredicate::YamlExists { path: components },
+                DataFormat::Json => StructuredDataPredicate::JsonExists { path: components },
+                DataFormat::Toml => StructuredDataPredicate::TomlExists { path: components },
+            };
+            return Ok(Predicate::Structured(predicate));
+        }
+        Ok(None) => {
+            // Not a structured selector, try file type alias
+        }
+        Err(e) => {
+            return Err(AliasError::Structured(e));
+        }
+    }
+
+    // Try to resolve as file type alias
     match DetectFileType::from_str(word) {
         Ok(file_type) => Ok(Predicate::Metadata(Arc::new(MetadataPredicate::Type(
             EnumMatcher::Equals(file_type),
         )))),
-        Err(_) => Err(ResolveError::UnknownAlias(word.to_string())),
+        Err(_) => Err(AliasError::UnknownAlias(word.to_string())),
     }
 }
 
@@ -67,7 +84,7 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
         curr_row[0] = i + 1;
 
         for (j, b_char) in b_chars.iter().enumerate() {
-            let cost = if a_char == b_char { 0 } else { 1 };
+            let cost = usize::from(a_char != b_char);
             curr_row[j + 1] = (curr_row[j] + 1) // insertion
                 .min(prev_row[j + 1] + 1) // deletion
                 .min(prev_row[j] + cost); // substitution
@@ -104,7 +121,7 @@ mod tests {
     #[test]
     fn test_unknown_alias() {
         let result = resolve_alias("unknown");
-        assert!(matches!(result, Err(ResolveError::UnknownAlias(_))));
+        assert!(matches!(result, Err(AliasError::UnknownAlias(_))));
     }
 
     #[test]

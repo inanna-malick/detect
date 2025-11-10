@@ -1,6 +1,6 @@
 use slog::{o, Discard, Logger};
 use std::{fs, time::SystemTime};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 // Shared helper to run temporal test cases
 async fn run_temporal_test(
@@ -44,7 +44,10 @@ async fn run_temporal_test(
 
 #[tokio::test]
 async fn test_relative_time_operations() {
-    let tmp_dir = TempDir::new("detect-temporal-relative").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-relative")
+        .tempdir()
+        .unwrap();
 
     // Create files with different ages
     let files = vec![
@@ -183,8 +186,11 @@ async fn test_relative_time_operations() {
 }
 
 #[tokio::test]
-async fn test_absolute_dates_and_keywords() {
-    let tmp_dir = TempDir::new("detect-temporal-absolute").unwrap();
+async fn test_absolute_dates() {
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-absolute")
+        .tempdir()
+        .unwrap();
 
     // Create files with specific dates
     let today_file = tmp_dir.path().join("today.txt");
@@ -228,41 +234,6 @@ async fn test_absolute_dates_and_keywords() {
         .set_modified(year_2023)
         .unwrap();
 
-    // Test keyword-based queries
-    run_temporal_test(
-        &tmp_dir,
-        "modified >= today",
-        vec!["today.txt"],
-        vec!["yesterday.txt", "week_old.txt"],
-    )
-    .await;
-    run_temporal_test(
-        &tmp_dir,
-        "modified == today",
-        vec!["today.txt"],
-        vec!["yesterday.txt"],
-    )
-    .await;
-    run_temporal_test(
-        &tmp_dir,
-        "modified >= yesterday",
-        vec!["today.txt", "yesterday.txt"],
-        vec!["week_old.txt"],
-    )
-    .await;
-    run_temporal_test(
-        &tmp_dir,
-        "modified < today",
-        vec![
-            "yesterday.txt",
-            "week_old.txt",
-            "year_2020.txt",
-            "year_2023.txt",
-        ],
-        vec!["today.txt"],
-    )
-    .await;
-
     // Test absolute date queries (quoted and unquoted)
     run_temporal_test(
         &tmp_dir,
@@ -295,50 +266,14 @@ async fn test_absolute_dates_and_keywords() {
         vec!["year_2023.txt", "today.txt"],
     )
     .await;
-
-    // Test midnight boundary
-    use chrono::{Local, NaiveTime};
-
-    let before_midnight = tmp_dir.path().join("before_midnight.txt");
-    let after_midnight = tmp_dir.path().join("after_midnight.txt");
-
-    std::fs::write(&before_midnight, "before").unwrap();
-    std::fs::write(&after_midnight, "after").unwrap();
-
-    let now = Local::now();
-    let today_start = now
-        .date_naive()
-        .and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap());
-    let yesterday_end = now
-        .date_naive()
-        .pred_opt()
-        .unwrap()
-        .and_time(NaiveTime::from_hms_opt(23, 59, 59).unwrap());
-
-    let today_start_systime: SystemTime = today_start.and_local_timezone(Local).unwrap().into();
-    let yesterday_end_systime: SystemTime = yesterday_end.and_local_timezone(Local).unwrap().into();
-
-    fs::File::open(&after_midnight)
-        .unwrap()
-        .set_modified(today_start_systime)
-        .unwrap();
-    fs::File::open(&before_midnight)
-        .unwrap()
-        .set_modified(yesterday_end_systime)
-        .unwrap();
-
-    run_temporal_test(
-        &tmp_dir,
-        "modified >= today",
-        vec!["today.txt", "after_midnight.txt"],
-        vec!["before_midnight.txt"],
-    )
-    .await;
 }
 
 #[tokio::test]
 async fn test_time_selectors() {
-    let tmp_dir = TempDir::new("detect-temporal-selectors").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-selectors")
+        .tempdir()
+        .unwrap();
 
     // Create test files
     let test_file = tmp_dir.path().join("test.txt");
@@ -404,21 +339,14 @@ async fn test_time_selectors() {
     .await
     .unwrap();
     // Just verify syntax works
-
-    // Test equality operators
-    run_temporal_test(
-        &tmp_dir,
-        "modified == today",
-        vec!["test.txt"],
-        vec!["old.txt"],
-    )
-    .await;
-    run_temporal_test(&tmp_dir, "modified != yesterday", vec!["test.txt"], vec![]).await;
 }
 
 #[tokio::test]
 async fn test_temporal_combined_queries() {
-    let tmp_dir = TempDir::new("detect-temporal-combined").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-combined")
+        .tempdir()
+        .unwrap();
 
     // Create various files
     let files = vec![
@@ -485,7 +413,10 @@ async fn test_temporal_combined_queries() {
 
 #[tokio::test]
 async fn test_greater_less_or_equal_operators() {
-    let tmp_dir = TempDir::new("detect-temporal-gte-lte").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("detect-temporal-gte-lte")
+        .tempdir()
+        .unwrap();
 
     // Create files with precise timestamps
     // Using slightly offset times to avoid boundary issues

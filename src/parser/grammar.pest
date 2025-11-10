@@ -10,14 +10,15 @@ expr = { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
   primary = _{ predicate | single_word | "(" ~ expr ~ ")" }
 
 predicate = { selector ~ operator ~ value }
-  selector = @{ (ASCII_ALPHANUMERIC | "." | "_" | "[" | "]" | "*" | ":")+ }
+  selector = @{ (ASCII_ALPHANUMERIC | "." | "_" | "-" | "/" | "[" | "]" | "*" | ":")+ }
   // Parse operators flexibly - validate in typechecker
   // Start with symbols or letters, but not mix arbitrarily
-  operator = @{ 
+  operator = @{
     // Symbol-based operators (can combine symbols)
     ("=" | "!" | ">" | "<" | "~")+ |
     // Word-based operators (alphanumeric with underscores)
-    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+    // But NOT the reserved infix/prefix operators
+    !(^"and" | ^"or" | ^"not") ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
   }
   
   value = { value_content ~ trailing_quote? }
@@ -56,7 +57,12 @@ predicate = { selector ~ operator ~ value }
   
   escaped = { "\\" ~ ("\"" | "'" | "\\" | "n" | "t" | "r") }
 
-single_word = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+single_word = @{
+    // Structured data selectors: word:.path (validated at typecheck)
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* ~ ":" ~ (ASCII_ALPHANUMERIC | "." | "_" | "-" | "/" | "[" | "]" | "*")+ |
+    // Regular word aliases
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+}
 
 // Separate entry point for parsing set contents
 // Used by typechecker when operator is 'in'

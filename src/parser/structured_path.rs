@@ -3,7 +3,7 @@
 //! Handles paths like:
 //! - `.spec.replicas` → [Key("spec"), Key("replicas")]
 //! - `[0].name` → [Index(0), Key("name")]
-//! - `.items[*].id` → [Key("items"), WildcardIndex, Key("id")]
+//! - `.items[*].id` → [Key("items"), `WildcardIndex`, Key("id")]
 
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
@@ -300,9 +300,9 @@ mod tests {
     }
 
     #[test]
-    fn test_error_invalid_character_in_key() {
-        let result = parse_path(".field-name");
-        assert!(matches!(result, Err(PathParseError::Syntax(_))));
+    fn test_hyphen_in_key() {
+        let result = parse_path(".field-name").unwrap();
+        assert_eq!(result, vec![PathComponent::Key("field-name".to_string())]);
     }
 
     #[test]

@@ -1,9 +1,11 @@
+#![allow(unused_assignments)] // Fields are used by miette's derive macros
+
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use super::raw::Rule;
 
-/// Main error type for detect expressions, using miette for beautiful diagnostics
+/// Main error type for detect expressions, using miette for diagnostics
 #[derive(Debug, Clone, Diagnostic, Error)]
 pub enum DetectError {
     // Syntax errors from pest
@@ -45,6 +47,18 @@ pub enum DetectError {
         reason: String,
         #[source_code]
         src: String,
+    },
+
+    #[error("Unknown structured data format: '{format}'")]
+    #[diagnostic(code(detect::unknown_structured_format))]
+    UnknownStructuredFormat {
+        format: String,
+        #[label("unknown format")]
+        span: SourceSpan,
+        #[source_code]
+        src: String,
+        #[help]
+        suggestions: Option<String>,
     },
 
     #[error("Unknown operator: {operator}")]
@@ -164,6 +178,11 @@ pub enum DetectError {
     )]
     NotADirectory { path: String },
 
+    // I/O errors
+    #[error("I/O error: {message}")]
+    #[diagnostic(code(detect::io_error))]
+    IoError { message: String },
+
     // Internal errors
     #[error("Internal parser error: {message}")]
     #[diagnostic(code(detect::internal))]
@@ -174,20 +193,7 @@ pub enum DetectError {
     },
 }
 
-// Legacy type alias for compatibility during migration
-pub type RawParseError = DetectError;
-
-// Implement conversion from anyhow errors for compatibility
-impl From<anyhow::Error> for DetectError {
-    fn from(err: anyhow::Error) -> Self {
-        DetectError::Internal {
-            message: err.to_string(),
-            src: String::new(),
-        }
-    }
-}
-
-// Extension trait for cleaner span location extraction
+// Extension trait for span location extraction
 pub trait SpanExt {
     fn to_location(&self) -> (usize, usize);
     fn to_source_span(&self) -> SourceSpan;
@@ -252,9 +258,8 @@ fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
     if positives.contains(&Rule::value) {
         if found_eoi {
             return Some("Try adding a value after the operator, like: ext == rs".to_string());
-        } else {
-            return Some("Expected a value here (e.g., a string, number, or [set])".to_string());
         }
+        return Some("Expected a value here (e.g., a string, number, or [set])".to_string());
     }
 
     if (positives.contains(&Rule::expr) || positives.contains(&Rule::predicate)) && found_eoi {
@@ -269,7 +274,7 @@ fn generate_help_text(positives: &[Rule], found_eoi: bool) -> Option<String> {
 }
 
 impl DetectError {
-    /// Create a syntax error from pest error with rich diagnostic information
+    /// Create a syntax error from pest error with diagnostic information
     pub fn from_pest(pest_err: Box<pest::error::Error<Rule>>, src: String) -> Self {
         use pest::error::{ErrorVariant, InputLocation};
 
@@ -339,25 +344,6 @@ impl DetectError {
         }
     }
 
-    /// Create an invalid escape error
-    pub fn invalid_escape(char: char, position: usize) -> Self {
-        // This is a legacy constructor, we'll need the source to create proper error
-        // For now, create without source
-        DetectError::InvalidEscape {
-            char,
-            span: (position, 1).into(),
-            src: String::new(),
-        }
-    }
-
-    /// Create an unterminated escape error
-    pub fn unterminated_escape() -> Self {
-        DetectError::UnterminatedEscape {
-            span: (0, 0).into(),
-            src: String::new(),
-        }
-    }
-
     /// Create an internal error
     pub fn internal(msg: impl Into<String>) -> Self {
         DetectError::Internal {
@@ -372,6 +358,7 @@ impl DetectError {
             DetectError::Syntax { src: s, .. }
             | DetectError::UnknownSelector { src: s, .. }
             | DetectError::InvalidStructuredPath { src: s, .. }
+            | DetectError::UnknownStructuredFormat { src: s, .. }
             | DetectError::UnknownOperator { src: s, .. }
             | DetectError::UnknownAlias { src: s, .. }
             | DetectError::IncompatibleOperator { src: s, .. }
@@ -383,8 +370,10 @@ impl DetectError {
             | DetectError::Internal { src: s, .. } => {
                 *s = src;
             }
-            // Filesystem errors don't have source code
-            DetectError::DirectoryNotFound { .. } | DetectError::NotADirectory { .. } => {}
+            // Filesystem and I/O errors don't have source code
+            DetectError::DirectoryNotFound { .. }
+            | DetectError::NotADirectory { .. }
+            | DetectError::IoError { .. } => {}
         }
         self
     }

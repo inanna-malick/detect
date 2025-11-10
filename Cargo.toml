@@ -1,9 +1,10 @@
 [package]
 name = "detect"
-description = "Detect files on your filesystem using arbitrary expression language criteria"
+description = "Expression-based file search combining name, content, metadata, and structured data predicates"
 license = "MIT OR Apache-2.0"
 version = "0.3.0"
 edition = "2021"
+rust-version = "1.70"
 repository = "https://github.com/inanna-malick/detect/"
 homepage = "https://github.com/inanna-malick/detect/"
 keywords = ["egrep", "grep", "pattern", "regex", "search"]
@@ -13,33 +14,31 @@ categories = ["command-line-utilities", "filesystem"]
 name = "detect"
 path = "src/main.rs"
 
-
-[features]
-default = ["mcp"]
-mcp = ["dep:serde", "dep:serde_json"]
-
 [dependencies]
-anyhow = "1"
-clap = {version = "4.4", features = ["derive"]}
-futures = "0.3.23"
+clap = {version = "4.5", features = ["derive"]}
+futures = "0.3.31"
 ignore = "0.4"
-pcre2 = "0.2"
 pest = "2.7.15"
 pest_derive = "2.7.15"
 recursion = {version = "0.5", features = ["experimental"]}
-regex = "1.6.0"
-regex-automata = "0.4.7"
+regex = "1.12"
+regex-automata = "0.4.13"
 slog-term = "2.9"
 slog = "2.7"
-tokio = {version = "1.19", features = ["rt", "rt-multi-thread", "fs", "macros"]}
-tokio-util = {version ="0.7.11", features = ["io"] }
-serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json = { version = "1.0", optional = true }
+tokio = {version = "1.48", features = ["rt", "rt-multi-thread", "fs", "macros"]}
+tokio-util = {version ="0.7.17", features = ["io"] }
+serde_json = "1.0"
 chrono = "0.4"
 thiserror = "2.0"
 miette = { version = "7.6.0", features = ["fancy"] }
 toml = "0.9.8"
-yaml-rust = "0.4.5"
+yaml-rust2 = "0.10.4"
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

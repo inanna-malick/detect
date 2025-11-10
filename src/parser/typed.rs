@@ -1,9 +1,9 @@
-/// Type-safe selector and operator system for the v2 parser
+use super::error::DetectError;
+/// Type-safe selector and operator system
 ///
 /// This module provides strongly-typed enums for selectors and operators,
 /// ensuring that only valid combinations can be constructed at compile time.
 use super::structured_path::PathComponent as StructuredPathComponent;
-use super::typechecker::TypecheckError;
 
 /// Error type for parsing selectors and operators
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +18,30 @@ pub enum ParseError {
         path: String,
         reason: String,
     },
+    /// Unknown structured data format (not yaml/json/toml)
+    UnknownStructuredFormat { format: String },
+}
+
+/// Error type for parsing structured selectors (yaml:, json:, toml:)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StructuredSelectorError {
+    /// Unknown structured data format (not yaml/json/toml)
+    UnknownFormat { format: String },
+    /// Invalid structured selector path
+    InvalidPath {
+        format: String,
+        path: String,
+        reason: String,
+    },
+}
+
+/// Error type for resolving aliases (single-word expressions)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AliasError {
+    /// Unknown alias (not a file type or structured selector)
+    UnknownAlias(String),
+    /// Structured selector error
+    Structured(StructuredSelectorError),
 }
 
 // ============================================================================
@@ -171,50 +195,70 @@ pub enum StructuredOperator {
 // Parsing Functions
 // ============================================================================
 
+/// Parse structured data selector prefix (yaml:, json:, toml:)
+///
+/// Returns `Some((format, components))` if the selector has a structured data prefix,
+/// `None` otherwise.
+///
+/// # Errors
+/// Returns `StructuredSelectorError` if the format is unknown or path is invalid.
+pub fn parse_structured_selector(
+    s: &str,
+) -> Result<Option<(DataFormat, Vec<StructuredPathComponent>)>, StructuredSelectorError> {
+    let Some((prefix, path_str)) = s.split_once(':') else {
+        return Ok(None);
+    };
+
+    let (format_name, format) = match prefix.to_lowercase().as_str() {
+        "yaml" => ("yaml", DataFormat::Yaml),
+        "json" => ("json", DataFormat::Json),
+        "toml" => ("toml", DataFormat::Toml),
+        _ => {
+            // Has a colon but not a known format
+            return Err(StructuredSelectorError::UnknownFormat {
+                format: prefix.to_string(),
+            });
+        }
+    };
+
+    let components = super::structured_path::parse_path(path_str).map_err(|e| {
+        StructuredSelectorError::InvalidPath {
+            format: format_name.to_string(),
+            path: path_str.to_string(),
+            reason: e.to_string(),
+        }
+    })?;
+
+    Ok(Some((format, components)))
+}
+
 /// Parse a selector string into a typed selector category
 ///
 /// # Errors
 /// Returns `ParseError::UnknownSelector` if the selector name is not recognized.
 pub fn recognize_selector(s: &str) -> Result<SelectorCategory, ParseError> {
     // Check for structured data prefix first
-    if let Some(path_str) = s.strip_prefix("yaml:") {
-        let components = super::structured_path::parse_path(path_str).map_err(|e| {
-            ParseError::InvalidStructuredPath {
-                format: "yaml".to_string(),
-                path: path_str.to_string(),
-                reason: e.to_string(),
-            }
-        })?;
-        return Ok(SelectorCategory::StructuredData(
-            DataFormat::Yaml,
-            components,
-        ));
-    }
-    if let Some(path_str) = s.strip_prefix("json:") {
-        let components = super::structured_path::parse_path(path_str).map_err(|e| {
-            ParseError::InvalidStructuredPath {
-                format: "json".to_string(),
-                path: path_str.to_string(),
-                reason: e.to_string(),
-            }
-        })?;
-        return Ok(SelectorCategory::StructuredData(
-            DataFormat::Json,
-            components,
-        ));
-    }
-    if let Some(path_str) = s.strip_prefix("toml:") {
-        let components = super::structured_path::parse_path(path_str).map_err(|e| {
-            ParseError::InvalidStructuredPath {
-                format: "toml".to_string(),
-                path: path_str.to_string(),
-                reason: e.to_string(),
-            }
-        })?;
-        return Ok(SelectorCategory::StructuredData(
-            DataFormat::Toml,
-            components,
-        ));
+    match parse_structured_selector(s) {
+        Ok(Some((format, components))) => {
+            return Ok(SelectorCategory::StructuredData(format, components));
+        }
+        Ok(None) => {
+            // Not a structured selector, continue to standard matching
+        }
+        Err(StructuredSelectorError::UnknownFormat { format }) => {
+            return Err(ParseError::UnknownStructuredFormat { format });
+        }
+        Err(StructuredSelectorError::InvalidPath {
+            format,
+            path,
+            reason,
+        }) => {
+            return Err(ParseError::InvalidStructuredPath {
+                format,
+                path,
+                reason,
+            });
+        }
     }
 
     // Standard selector matching
@@ -348,28 +392,34 @@ pub fn is_string_operator(s: &str) -> bool {
 /// Parse selector and operator together, ensuring type compatibility
 ///
 /// # Errors
-/// Returns `TypecheckError` for unknown selectors, unknown operators, or incompatible selector-operator combinations.
+/// Returns `DetectError` for unknown selectors, unknown operators, or incompatible selector-operator combinations.
 pub fn parse_selector_operator(
     selector_str: &str,
     selector_span: pest::Span,
     operator_str: &str,
     operator_span: pest::Span,
     source: &str,
-) -> Result<TypedSelector, TypecheckError> {
+) -> Result<TypedSelector, DetectError> {
     use crate::parser::error::SpanExt;
     let selector_category = recognize_selector(selector_str).map_err(|e| match e {
         ParseError::InvalidStructuredPath {
             format,
             path,
             reason,
-        } => TypecheckError::InvalidStructuredPath {
+        } => DetectError::InvalidStructuredPath {
             format,
             path,
             span: selector_span.to_source_span(),
             reason,
             src: source.to_string(),
         },
-        ParseError::UnknownSelector(_) => TypecheckError::UnknownSelector {
+        ParseError::UnknownStructuredFormat { format } => DetectError::UnknownStructuredFormat {
+            format,
+            span: selector_span.to_source_span(),
+            src: source.to_string(),
+            suggestions: Some("Valid formats: yaml, json, toml".to_string()),
+        },
+        ParseError::UnknownSelector(_) => DetectError::UnknownSelector {
             selector: selector_str.to_string(),
             span: selector_span.to_source_span(),
             src: source.to_string(),
@@ -390,7 +440,7 @@ pub fn parse_selector_operator(
         SelectorCategory::Enum(selector) => {
             let operator = parse_enum_operator(operator_str).map_err(|_| {
                 if is_known_operator {
-                    TypecheckError::IncompatibleOperator {
+                    DetectError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
                         selector_span: selector_span.to_source_span(),
@@ -398,7 +448,7 @@ pub fn parse_selector_operator(
                         src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator {
+                    DetectError::UnknownOperator {
                         operator: operator_str.to_string(),
                         span: operator_span.to_source_span(),
                         src: source.to_string(),
@@ -411,7 +461,7 @@ pub fn parse_selector_operator(
         SelectorCategory::String(selector) => {
             let operator = parse_string_operator(operator_str).map_err(|_| {
                 if is_known_operator {
-                    TypecheckError::IncompatibleOperator {
+                    DetectError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
                         selector_span: selector_span.to_source_span(),
@@ -419,7 +469,7 @@ pub fn parse_selector_operator(
                         src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator {
+                    DetectError::UnknownOperator {
                         operator: operator_str.to_string(),
                         span: operator_span.to_source_span(),
                         src: source.to_string(),
@@ -431,7 +481,7 @@ pub fn parse_selector_operator(
             if matches!(selector, StringSelector::Contents) {
                 match operator {
                     StringOperator::In | StringOperator::NotEquals => {
-                        return Err(TypecheckError::IncompatibleOperator {
+                        return Err(DetectError::IncompatibleOperator {
                             selector: selector_str.to_string(),
                             operator: operator_str.to_string(),
                             selector_span: selector_span.to_source_span(),
@@ -449,7 +499,7 @@ pub fn parse_selector_operator(
         SelectorCategory::Numeric(selector) => {
             let operator = parse_numeric_operator(operator_str).map_err(|_| {
                 if is_known_operator {
-                    TypecheckError::IncompatibleOperator {
+                    DetectError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
                         selector_span: selector_span.to_source_span(),
@@ -457,7 +507,7 @@ pub fn parse_selector_operator(
                         src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator {
+                    DetectError::UnknownOperator {
                         operator: operator_str.to_string(),
                         span: operator_span.to_source_span(),
                         src: source.to_string(),
@@ -470,7 +520,7 @@ pub fn parse_selector_operator(
         SelectorCategory::Temporal(selector) => {
             let operator = parse_temporal_operator(operator_str).map_err(|_| {
                 if is_known_operator {
-                    TypecheckError::IncompatibleOperator {
+                    DetectError::IncompatibleOperator {
                         selector: selector_str.to_string(),
                         operator: operator_str.to_string(),
                         selector_span: selector_span.to_source_span(),
@@ -478,7 +528,7 @@ pub fn parse_selector_operator(
                         src: source.to_string(),
                     }
                 } else {
-                    TypecheckError::UnknownOperator {
+                    DetectError::UnknownOperator {
                         operator: operator_str.to_string(),
                         span: operator_span.to_source_span(),
                         src: source.to_string(),
@@ -493,7 +543,7 @@ pub fn parse_selector_operator(
             if is_string_operator(operator_str) {
                 let string_op = parse_string_operator(operator_str).map_err(|_| {
                     if is_known_operator {
-                        TypecheckError::IncompatibleOperator {
+                        DetectError::IncompatibleOperator {
                             selector: selector_str.to_string(),
                             operator: operator_str.to_string(),
                             selector_span: selector_span.to_source_span(),
@@ -501,7 +551,7 @@ pub fn parse_selector_operator(
                             src: source.to_string(),
                         }
                     } else {
-                        TypecheckError::UnknownOperator {
+                        DetectError::UnknownOperator {
                             operator: operator_str.to_string(),
                             span: operator_span.to_source_span(),
                             src: source.to_string(),
@@ -515,7 +565,7 @@ pub fn parse_selector_operator(
                 // Value operator (==, >, <, etc)
                 let operator = parse_structured_operator(operator_str).map_err(|_| {
                     if is_known_operator {
-                        TypecheckError::IncompatibleOperator {
+                        DetectError::IncompatibleOperator {
                             selector: selector_str.to_string(),
                             operator: operator_str.to_string(),
                             selector_span: selector_span.to_source_span(),
@@ -523,7 +573,7 @@ pub fn parse_selector_operator(
                             src: source.to_string(),
                         }
                     } else {
-                        TypecheckError::UnknownOperator {
+                        DetectError::UnknownOperator {
                             operator: operator_str.to_string(),
                             span: operator_span.to_source_span(),
                             src: source.to_string(),
