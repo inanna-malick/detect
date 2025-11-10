@@ -4,7 +4,6 @@
 //! type coercion, and the 2x2 match logic optimization.
 
 use slog::{o, Discard, Logger};
-use tempfile::TempDir;
 
 // Load fixtures at compile time
 const CONFIG_YAML: &str = include_str!("fixtures/structured/config.yaml");

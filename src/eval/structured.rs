@@ -11,7 +11,6 @@ use crate::predicate::StringMatcher;
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
-
 pub fn navigate_yaml<'a>(
     root: &'a yaml_rust2::Yaml,
     path: &[PathComponent],
@@ -103,7 +102,6 @@ fn collect_recursive_yaml_key<'a>(
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
-
 pub fn navigate_json<'a>(
     root: &'a serde_json::Value,
     path: &[PathComponent],
@@ -189,7 +187,6 @@ fn collect_recursive_json_key<'a>(
 ///
 /// Returns all matching values (may be multiple due to wildcards or recursive descent).
 /// Uses iterative work queue algorithm - no recursion, no clones.
-
 pub fn navigate_toml<'a>(root: &'a toml::Value, path: &[PathComponent]) -> Vec<&'a toml::Value> {
     let mut current_values = vec![root];
 
@@ -452,7 +449,6 @@ fn compare_toml_value(
 }
 
 /// Compare YAML values (OR semantics: returns true if ANY value matches)
-
 pub fn compare_yaml_values(
     actual_values: &[&yaml_rust2::Yaml],
     operator: StructuredOperator,
@@ -465,7 +461,6 @@ pub fn compare_yaml_values(
 }
 
 /// Compare JSON values (OR semantics: returns true if ANY value matches)
-
 pub fn compare_json_values(
     actual_values: &[&serde_json::Value],
     operator: StructuredOperator,
@@ -478,7 +473,6 @@ pub fn compare_json_values(
 }
 
 /// Compare TOML values (OR semantics: returns true if ANY value matches)
-
 pub fn compare_toml_values(
     actual_values: &[&toml::Value],
     operator: StructuredOperator,
@@ -491,7 +485,6 @@ pub fn compare_toml_values(
 }
 
 /// Match YAML values against string matcher (OR semantics)
-
 pub fn match_yaml_strings(actual_values: &[&yaml_rust2::Yaml], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
@@ -506,7 +499,6 @@ pub fn match_yaml_strings(actual_values: &[&yaml_rust2::Yaml], matcher: &StringM
 }
 
 /// Match JSON values against string matcher (OR semantics)
-
 pub fn match_json_strings(actual_values: &[&serde_json::Value], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;
@@ -521,7 +513,6 @@ pub fn match_json_strings(actual_values: &[&serde_json::Value], matcher: &String
 }
 
 /// Match TOML values against string matcher (OR semantics)
-
 pub fn match_toml_strings(actual_values: &[&toml::Value], matcher: &StringMatcher) -> bool {
     if actual_values.is_empty() {
         return false;

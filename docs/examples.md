@@ -43,6 +43,9 @@ detect 'content contains TODO AND NOT path ~= test'
 Query configuration file contents with path-based selectors:
 
 ```bash
+# Find any config file with a 'port' field (existence check)
+detect 'yaml:..port OR json:..port OR toml:..port'
+
 # Find YAML files with specific port
 detect 'yaml:.server.port == 8080'
 

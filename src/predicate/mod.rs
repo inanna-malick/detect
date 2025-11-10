@@ -35,12 +35,9 @@ pub enum DetectFileType {
 
 impl DetectFileType {
     /// Check if a string matches any alias for this file type
-
     pub fn matches(&self, s: &str) -> bool {
         self.aliases().contains(&s)
     }
-
-    /// Create from `std::fs::FileType`
 
     pub fn from_fs_type(ft: &FileType) -> Option<Self> {
         match () {
@@ -740,7 +737,10 @@ pub struct StreamingCompiledContentPredicate {
 impl StreamingCompiledContentPredicate {
     pub fn new(source: String) -> Result<Self, PredicateParseError> {
         match DFA::new(&source) {
-            Ok(inner) => Ok(Self { inner: Box::new(inner), source }),
+            Ok(inner) => Ok(Self {
+                inner: Box::new(inner),
+                source,
+            }),
             Err(e) => Err(PredicateParseError::Dfa(e.to_string())),
         }
     }
@@ -761,6 +761,6 @@ impl PartialEq for StreamingCompiledContentPredicate {
 
 #[derive(Clone, Debug)]
 pub struct StreamingCompiledContentPredicateRef<'a> {
-    pub inner: &'a Box<DFA<Vec<u32>>>,
+    pub inner: &'a DFA<Vec<u32>>,
     pub source: &'a str,
 }

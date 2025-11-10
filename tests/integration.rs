@@ -715,7 +715,6 @@ async fn test_regex_escaped_parentheses() {
     run_test_cases(cases).await;
 }
 
-
 #[tokio::test]
 async fn test_regex_shorthand_class_quantifiers() {
     // CRITICAL: Curly brace quantifiers on \d, \w, \s should work
@@ -806,7 +805,6 @@ async fn test_regex_unicode_properties() {
 
     run_test_cases(cases).await;
 }
-
 
 #[tokio::test]
 async fn test_depth_predicate() {

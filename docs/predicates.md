@@ -60,6 +60,18 @@ Query YAML, JSON, and TOML file contents by navigating their structure:
 | `json:.path` | Structured | JSON navigation | `json:.name == "test"` |
 | `toml:.path` | Structured | TOML navigation | `toml:.dependencies.serde` |
 
+### Existence Checks (Singleton Predicates)
+
+Use structured selectors alone to check if a field exists:
+
+```bash
+# Find files with a 'port' field anywhere in any format
+detect 'yaml:..port OR json:..port OR toml:..port'
+
+# Find YAML files with a 'server' field
+detect 'yaml:.server'
+```
+
 **Navigation Syntax:**
 - `.field` - Access object field
 - `.nested.field` - Access nested fields

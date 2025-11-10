@@ -53,7 +53,6 @@ pub fn resolve_alias(word: &str) -> Result<Predicate, AliasError> {
 /// Suggest similar aliases for an unknown word
 ///
 /// Uses simple edit distance to find close matches
-
 pub fn suggest_aliases(word: &str) -> Vec<String> {
     let all_aliases = DetectFileType::all_valid_strings();
 

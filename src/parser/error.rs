@@ -1,10 +1,11 @@
+#![allow(unused_assignments)] // Fields are used by miette's derive macros
+
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use super::raw::Rule;
 
 /// Main error type for detect expressions, using miette for diagnostics
-#[allow(dead_code)] // Fields are used by miette's derive macros
 #[derive(Debug, Clone, Diagnostic, Error)]
 pub enum DetectError {
     // Syntax errors from pest
@@ -352,7 +353,6 @@ impl DetectError {
     }
 
     /// Add source code to the error
-
     pub fn with_source(mut self, src: String) -> Self {
         match &mut self {
             DetectError::Syntax { src: s, .. }
