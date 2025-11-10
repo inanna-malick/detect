@@ -139,7 +139,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(s)
                 .to_string_lossy();
 
-            if let Err(e) = writeln!(output, "{}", display_path) {
+            if let Err(e) = writeln!(output, "./{}", display_path) {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     // Unix convention: exit 0 on SIGPIPE/BrokenPipe
                     std::process::exit(0);

@@ -18,7 +18,7 @@ detect 'ext == rs
         AND content contains "use tokio" 
         AND content contains "use serde"'
 
-# Traditional approach, requiring two passes per matching .rs file
+# Traditional approach - scan all .rs files, then scan matches a second time
 grep -rl 'use tokio' --include="*.rs" | xargs grep -l 'use serde'
 ```
 
